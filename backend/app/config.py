@@ -26,7 +26,19 @@ class Settings(BaseSettings):
     var_dir: Path = BACKEND_DIR / "var"
     policy_dir: Path = BACKEND_DIR / "data" / "policy"
     web_dist: Path = REPO_DIR / "web" / "dist"
-    public_web_url: str = "http://localhost:8000"
+    public_web_url: str | None = None  # unset: links and the PDF's QR use the request's own origin
+    trust_proxy: bool = False  # honour X-Forwarded-* only when a proxy we control sets them
+
+    # Off by default (build contract, addendum 8): the verdict and its text are deterministic.
+    llm_polish: bool = False  # narrative, testimony polish and surveyor rephrase
+    llm_planner: bool = False  # the planner can move the image search, and through it the level
+
+    rate_investigations_per_hour: int = 12
+    rate_verify_per_hour: int = 3
+    rate_asks_per_hour: int = 60
+    rate_cases_per_hour: int = 60
+    rate_pdf_renders_per_hour: int = 60
+    max_queued_runs: int = 8
 
     scheduler_token: str | None = None
     enable_scheduler: bool = True

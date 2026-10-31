@@ -28,6 +28,7 @@ MATCH_WINDOW_DAYS = 3
 MAX_NEW_PER_RUN = 40  # the feed has about 100 items and rate-limits, so a backlog spreads over ticks
 MAX_WORKERS = 2
 HTTP_TIMEOUT_S = 15.0
+MAX_PLACE_CHARS = 120
 # Weather and flood hazards bear on crops. Other categories (health, for instance) do not.
 _NOT_CROP_RELEVANT = re.compile(r"(?i)covid|health|fire safety|road|earthquake|tsunami")
 
@@ -174,7 +175,8 @@ def clean_district(name: str | None) -> str | None:
 
 
 def match(district: str | None, event_date: date, event_type: str | None = None) -> list[Alert]:
-    """Archived alerts naming this district within three days of the event."""
+    """Archived alerts naming this district within three days of the event. All of them are shown;
+    only those whose hazard matches the reported event corroborate (rubric.matching_alerts)."""
     district = clean_district(district)
     if not district or event_type in ("pest", "drought"):
         return []
@@ -194,7 +196,7 @@ def match(district: str | None, event_date: date, event_type: str | None = None)
             continue
         out.append(Alert(
             source=f"NDMA SACHET ({row.sender})" if row.sender else "NDMA SACHET",
-            identifier=row.identifier, issued=row.sent, area=row.area_desc,
+            identifier=row.identifier, issued=row.sent, area=row.area_desc, event=row.event,
             headline=row.headline, severity=row.severity, url=row.url,
         ))
     return sorted(out, key=lambda a: a.issued or datetime.min.replace(tzinfo=UTC))[:10]
@@ -220,9 +222,9 @@ def locate(lat: float, lon: float) -> dict:
         log.warning("reverse geocoding failed: %s", exc)
         return {}
     place = {
-        "district": clean_district(address.get("state_district") or address.get("county")
-                                   or address.get("city")),
-        "state": address.get("state"),
+        "district": (clean_district(address.get("state_district") or address.get("county")
+                                    or address.get("city")) or "")[:MAX_PLACE_CHARS] or None,
+        "state": (address.get("state") or "")[:MAX_PLACE_CHARS] or None,
         "country_code": address.get("country_code"),
         "source": "OpenStreetMap Nominatim",
     }

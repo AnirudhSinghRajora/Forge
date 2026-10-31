@@ -9,8 +9,9 @@ import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
+from app import errors
 from app.agent.trace import Tracer
 from app.config import get_settings
 from app.db import Case, EvidenceRow, Run, RunEvent, new_id, session_scope, utcnow
@@ -20,6 +21,10 @@ log = logging.getLogger(__name__)
 ACTIVE = ("queued", "running")
 _lock = threading.Lock()
 _executor: ThreadPoolExecutor | None = None
+
+
+class QueueFull(RuntimeError):
+    """Too many runs are already waiting for a worker."""
 
 
 def _pool() -> ThreadPoolExecutor:
@@ -41,12 +46,21 @@ def active_run_id(case_id: str) -> str | None:
         )
 
 
+def _check_queue() -> None:
+    with session_scope() as s:
+        queued = s.scalar(select(func.count()).select_from(Run).where(Run.status == "queued")) or 0
+    if queued >= get_settings().max_queued_runs:
+        raise QueueFull(f"{queued} runs are waiting")
+
+
 def start_run(case_id: str, trigger: str = "user") -> tuple[str, bool]:
-    """Returns (run_id, created). Idempotent while a run is active, including concurrent callers."""
+    """Returns (run_id, created). Idempotent while a run is active, including concurrent callers.
+    Raises QueueFull when too many runs are already waiting."""
     with _lock:
         existing = active_run_id(case_id)
         if existing:
             return existing, False
+        _check_queue()
         run_id = new_id()
         with session_scope() as s:
             s.add(Run(id=run_id, case_id=case_id, trigger=trigger, status="queued"))
@@ -55,10 +69,12 @@ def start_run(case_id: str, trigger: str = "user") -> tuple[str, bool]:
 
 
 def start_retry(case_id: str, name: str) -> str | None:
-    """A retry is a small run of its own. None if another run is active on this case."""
+    """A retry is a small run of its own. None if another run is active on this case. Raises
+    QueueFull when too many runs are already waiting."""
     with _lock:
         if active_run_id(case_id):
             return None
+        _check_queue()
         run_id = new_id()
         with session_scope() as s:
             s.add(Run(id=run_id, case_id=case_id, trigger="retry", status="queued"))
@@ -75,11 +91,12 @@ def _execute_retry(run_id: str, case_id: str, name: str) -> None:
 
         finish_run(run_id, retry_exhibit(run_id, case_id, name, tracer))
     except Exception as exc:
-        log.exception("retry %s failed", run_id)
-        tracer.emit("error", "exhibits", "दोबारा कोशिश नहीं हो सकी", f"The retry failed: {exc}",
-                    error=f"{type(exc).__name__}: {exc}")
+        ref = errors.report(log, f"retry {run_id} failed", exc)
+        tracer.emit("error", "exhibits", f"दोबारा कोशिश नहीं हो सकी (संदर्भ {ref})",
+                    f"The retry could not finish (ref {ref}).", error_ref=ref)
         tracer.emit("done", "exhibits", "समाप्त", "Finished", status="failed", exhibit=name)
-        finish_run(run_id, "failed", f"{type(exc).__name__}: {exc}")
+        finish_run(run_id, "failed", f"{errors.RUN_STOPPED} (ref {ref})")
+        settle_case(case_id, "the retry stopped unexpectedly; it can be tried again")
 
 
 def _next_seq(run_id: str) -> int:
@@ -107,23 +124,58 @@ def _execute(run_id: str, case_id: str) -> None:
         status = run_investigation(run_id, case_id, tracer)
         finish_run(run_id, status)
     except Exception as exc:  # the last line of defence: a run must always reach a terminal state
-        log.exception("run %s failed", run_id)
+        ref = errors.report(log, f"run {run_id} failed", exc)
         tracer.emit(
             "error", "runner",
-            "जाँच बीच में रुक गई। अब तक जो सबूत मिले वे सुरक्षित हैं।",
-            "The investigation stopped unexpectedly. Evidence gathered so far is kept.",
-            error=f"{type(exc).__name__}: {exc}",
+            f"जाँच बीच में रुक गई। अब तक जो सबूत मिले वे सुरक्षित हैं। (संदर्भ {ref})",
+            f"The investigation stopped unexpectedly. Evidence gathered so far is kept. (ref {ref})",
+            error_ref=ref,
         )
         tracer.emit("done", "runner", "जाँच समाप्त", "Investigation ended", status="failed")
-        finish_run(run_id, "failed", f"{type(exc).__name__}: {exc}")
+        finish_run(run_id, "failed", f"{errors.RUN_STOPPED} (ref {ref})")
+        settle_case(case_id, "the run stopped unexpectedly; please run it again")
+
+
+def _interrupted_verdict(data: dict) -> dict:
+    """A verdict saying "still computing" is false once the work behind it has died."""
+    from app.agent import explain, rubric, testimony
+    from app.evidence.schema import Evidence
+
+    ev = Evidence.model_validate(data)
+    ev.verdict.reasons = [rubric.RUN_INTERRUPTED]
+    ev.verdict.headline_hi, ev.verdict.headline_en, ev.verdict.headline_te = explain.INTERRUPTED_HEADLINES
+    explain.fill_templates(ev)
+    testimony.fill_templates(ev)
+    return ev.model_dump(mode="json")
+
+
+def settle_case(case_id: str, reason: str) -> None:
+    """No run is left to finish this case's work, so nothing of it may go on saying it is coming.
+    A retry's exhibits live on the original run's row, so this looks at every row of the case."""
+    from app.agent import rubric
+
+    with session_scope() as s:
+        for row in s.scalars(select(EvidenceRow).where(EvidenceRow.case_id == case_id)).all():
+            if row.exhibits and any(e.get("status") == "pending" for e in row.exhibits.values()):
+                row.exhibits = {
+                    name: {**entry, "status": "failed", "reason": reason}
+                    if entry.get("status") == "pending" else entry
+                    for name, entry in row.exhibits.items()
+                }
+            verdict = (row.json or {}).get("verdict") or {}
+            if rubric.STILL_COMPUTING in (verdict.get("reasons") or []):
+                try:
+                    row.json = _interrupted_verdict(row.json)
+                except Exception:  # noqa: BLE001  a stored record it cannot read keeps its other repairs
+                    log.exception("could not rewrite the interrupted verdict on run %s", row.run_id)
 
 
 def recover_interrupted() -> int:
     """A restart kills in-flight threads. Close those runs so that no SSE client waits forever."""
     with session_scope() as s:
         stuck = s.scalars(select(Run).where(Run.status.in_(ACTIVE))).all()
-        ids = [r.id for r in stuck]
-    for run_id in ids:
+        items = [(r.id, r.case_id) for r in stuck]
+    for run_id, case_id in items:
         tracer = Tracer(run_id, _next_seq(run_id))
         tracer.emit(
             "error", "runner",
@@ -132,15 +184,8 @@ def recover_interrupted() -> int:
         )
         tracer.emit("done", "runner", "जाँच समाप्त", "Investigation ended", status="interrupted")
         finish_run(run_id, "interrupted", "server restarted during the run")
-        with session_scope() as s:
-            row = s.scalar(select(EvidenceRow).where(EvidenceRow.run_id == run_id))
-            if row is not None and row.exhibits:
-                row.exhibits = {
-                    name: {**entry, "status": "failed", "reason": "the server restarted"}
-                    if entry.get("status") == "pending" else entry
-                    for name, entry in row.exhibits.items()
-                }
-    return len(ids)
+        settle_case(case_id, "the server restarted; it can be tried again")
+    return len(items)
 
 
 def set_case_status(case_id: str, status: str) -> None:

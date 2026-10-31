@@ -12,6 +12,10 @@ from zoneinfo import ZoneInfo
 
 IST = ZoneInfo("Asia/Kolkata")
 
+MAX_TEXT_CHARS = 5000  # every regex here is linear, and this bounds the work they can be given
+EARLIEST_EVENT_DATE = date(2015, 6, 23)  # Sentinel-2's launch: no image from before it can exist
+_CLOCK_TIME = re.compile(r"([01]\d|2[0-3]):[0-5]\d")
+
 _DIGITS = str.maketrans("०१२३४५६७८९౦౧౨౩౪౫౬౭౮౯", "01234567890123456789")
 
 # (canonical name, latin words matched on word boundaries, Indic stems matched as substrings)
@@ -111,6 +115,35 @@ def today_ist() -> date:
     return datetime.now(IST).date()
 
 
+def event_date_problem(when: date, today: date | None = None) -> str | None:
+    """"future", "too_early" or None. Outside these limits no satellite window can be built."""
+    if when > (today or today_ist()):
+        return "future"
+    return "too_early" if when < EARLIEST_EVENT_DATE else None
+
+
+EVENT_DATE_MESSAGES = {
+    "future": {
+        "code": "event_date_future",
+        "message_hi": "यह तारीख़ अभी आई नहीं है। कृपया बीती हुई तारीख़ चुनें।",
+        "message_en": "That date is in the future. Please pick a date that has passed.",
+        # NEEDS NATIVE REVIEW
+        "message_te": "ఈ తేదీ ఇంకా రాలేదు. దయచేసి గడిచిన తేదీ ఎంచుకోండి.",
+    },
+    "too_early": {
+        "code": "event_date_too_early",
+        "message_hi": "यह तारीख़ 23 जून 2015 से पहले की है। उससे पहले की सैटेलाइट तस्वीरें नहीं हैं, इसलिए जाँच नहीं हो सकती।",
+        "message_en": "That date is before 23 June 2015. We have no satellite images from before then, so it cannot be checked.",
+        # NEEDS NATIVE REVIEW
+        "message_te": "ఈ తేదీ 23 జూన్ 2015 కంటే ముందుది. అంతకు ముందు ఉపగ్రహ చిత్రాలు లేవు, కాబట్టి పరిశీలించలేం.",
+    },
+}
+
+
+def valid_clock_time(value: object) -> bool:
+    return isinstance(value, str) and _CLOCK_TIME.fullmatch(value) is not None
+
+
 def normalize_digits(text: str) -> str:
     return text.translate(_DIGITS)
 
@@ -190,7 +223,7 @@ def extract_date(text: str, today: date | None = None) -> tuple[date | None, str
         return None, None
     if found > today:
         return None, f"future_date_refused:{found.isoformat()}"
-    if (today - found).days > 365 * 5:
+    if found < EARLIEST_EVENT_DATE or (today - found).days > 365 * 5:
         return None, f"too_old_refused:{found.isoformat()}"
     return found, None
 
@@ -215,7 +248,7 @@ def extract_time(text: str) -> str | None:
     if m := re.search(r"(?<!\d)(\d{1,2})(?::(\d{2}))?\s*(am|pm|a\.m\.|p\.m\.)", norm):
         hour = int(m[1]) % 12 + (12 if m[3].startswith("p") else 0)
         minute = int(m[2] or 0)
-    elif m := re.search(r"(सुबह|दोपहर|शाम|रात|subah|dopahar|shaam|sham|raat)?\s*"
+    elif m := re.search(r"(?:(सुबह|दोपहर|शाम|रात|subah|dopahar|shaam|sham|raat)\s*)?"
                         r"(?<!\d)(\d{1,2})(?::(\d{2}))?\s*(?:बजे|baje)", norm):
         hour = int(m[2])
         minute = int(m[3] or 0)
@@ -230,7 +263,7 @@ def extract_time(text: str) -> str | None:
 
 
 def parse_text(text: str | None, today: date | None = None) -> ParsedReport:
-    report = ParsedReport(transcript=(text or "").strip() or None)
+    report = ParsedReport(transcript=(text or "")[:MAX_TEXT_CHARS].strip() or None)
     if not report.transcript:
         return report
     source = report.transcript

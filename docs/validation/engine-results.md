@@ -102,7 +102,7 @@ These are design data. The far test and the post-scene rule were designed after 
 
 ### 3e. Distribution across in-band plots (`geo_band_distribution.py`)
 
-40 plots with centres drawn at random from the band mask, with at least 80% WorldCover cropland (67 tried). **The pre-event NDVI >= 0.5 filter I intended was not applied**, so some plots may not have been green. That may explain a minimum plot change of -0.005.
+40 plots with centres drawn at random from the band mask, with at least 80% WorldCover cropland (67 tried). **The pre-event NDVI >= 0.5 filter I intended was not applied to this set**, so some plots may not have been green. The rerun below applies it, and the minimum of -0.005 goes away.
 
 | Measure (per plot) | Min | p25 | Median | p75 | Max |
 |---|---|---|---|---|---|
@@ -125,6 +125,22 @@ These are design data. The far test and the post-scene rule were designed after 
 2. **The two Draw scenarios are bounds, not an estimate.** Across plots the all-cropland average has a median of -0.069 and the only-dropped average a median of -0.245, with a sampling spread of about 0.07 within each. Parcels in the second scenario are at or below -0.15 by construction, so its average must be too, and the gap between the scenarios is partly built in. It is not a measured effect of who reports. The real intimation list lies somewhere between, and we do not know where.
 
 **Typical demo plot, by rule (median of the 40 by plot change):** 28.715212 N, 76.231138 E, 104.7 m square. Plot change -0.1259. Blocks: -0.1233 (100 m), -0.1196 (500 m), -0.1300 (1 km), -0.0811 (3 km). Draw, all cropland: -0.0654 (p05 -0.1067, p95 -0.0335). Draw, only dropped: -0.2382 (p05 -0.2653, p95 -0.2141), from 37 parcels. Affected share 0.2034.
+
+**Rerun with the pre-event filter (pre NDVI >= 0.5), 40 plots, 72 tried; 37 are the same locations.** The distributions barely move, but the median plot does.
+
+| Measure (per plot) | Min | p25 | Median | p75 | Max |
+|---|---|---|---|---|---|
+| Plot change | -0.342 | -0.156 | -0.127 | -0.117 | -0.079 |
+| Block 100 m | -0.340 | -0.178 | -0.142 | -0.125 | -0.090 |
+| Block 500 m | -0.265 | -0.163 | -0.137 | -0.119 | -0.092 |
+| Block 1 km | -0.160 | -0.133 | -0.128 | -0.121 | -0.093 |
+| Block 3 km | -0.109 | -0.092 | -0.084 | -0.079 | -0.071 |
+| Draw, all cropland: average | -0.100 | -0.072 | -0.069 | -0.065 | -0.040 |
+| Draw, only visibly dropped: average | -0.269 | -0.256 | -0.248 | -0.242 | -0.229 |
+| Share of draws under half the plot's drop | 0.036 | 0.327 | 0.481 | 0.649 | 0.993 |
+| Affected share within 3 km | 0.105 | 0.122 | 0.136 | 0.190 | 0.265 |
+
+No Draw was insufficient, 6 of 40 had too few dropped parcels, and 92.5% of plots moved at least -0.10. **The median plot is now 28.710543 N, 76.228524 E, 117.2 m square, change -0.1283** (blocks -0.1293, -0.1792, -0.1422, -0.0918; Draw -0.0648, only dropped -0.2592 from 72 parcels; affected share 0.1047). The earlier typical plot passes the filter (pre NDVI 0.65) and stays in the set, but it is no longer the median of it. Its numbers in this document were computed as the median of the unfiltered set.
 
 The Draw draws from cropland, not the real intimation list. It uses a satellite index, not assessed loss. Its share is an indicator, not the legal 25% test. Random sampling is unbiased on average: the Draw shows how far one average can move, never that the rule is unfair.
 

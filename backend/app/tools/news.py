@@ -1,8 +1,8 @@
-"""News corroboration through Gemini Search grounding, cached per district and date.
+"""Related reports through Gemini Search grounding, cached per district, event type and date.
 
 Only URLs the API attached as grounding citations are returned, never text the model wrote. With no
-key, or on any failure, this returns [] and the verdict simply goes without news. News is supporting
-only, and never proof about an individual plot.
+key, or on any failure, this returns []. These are shown as related reports and never affect the
+verdict: a search hit carries no reliable date, place or peril check.
 """
 from __future__ import annotations
 
@@ -38,7 +38,7 @@ def search(district: str | None, state: str | None, event_type: str | None, even
            ) -> list[NewsItem]:
     if not llm.available() or not district:
         return []
-    key = f"news:{district}:{event_date.isoformat()}".lower()
+    key = f"news:{district}:{event_type or 'unknown'}:{event_date.isoformat()}".lower()
     hit = cache_get(key)
     if hit:
         fetched = hit.fetched_at if hit.fetched_at.tzinfo else hit.fetched_at.replace(tzinfo=UTC)
@@ -54,7 +54,7 @@ def search(district: str | None, state: str | None, event_type: str | None, even
     if sources is None:
         return []
     items = [
-        NewsItem(title=src["title"], url=_resolve(src["url"]), date=None, snippet=src.get("snippet"))
+        NewsItem(title=src["title"], url=_resolve(src["url"]), date=None)
         for src in sources[:6]
     ]
     cache_put(key, "gemini-search-grounding", None, [i.model_dump(mode="json") for i in items])

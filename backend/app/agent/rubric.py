@@ -12,12 +12,21 @@ Interpretation notes where the contract leaves a choice:
 - A conceded wrong_plot objection caps the verdict at weak: if no crop was visible before the
   event, no signal can be read as crop loss. This is stricter than the contract table.
 - A suspect post scene only counts toward moderate if the corrupt_scene objection was rebutted.
+
+Corroboration (addendum 8) is the weather model or an official alert whose hazard matches the reported
+event. Cited news is shown as related reports and never moves a level, because search hits carry no
+reliable date, place or peril check.
 """
 from __future__ import annotations
 
+import hashlib
+import json
+import re
 from dataclasses import dataclass
+from datetime import date, timedelta
 
-from app.evidence.schema import Evidence, Objection, PlaceboTest, VerdictLevel
+from app.agent.parse import today_ist
+from app.evidence.schema import Alert, Evidence, Objection, PlaceboTest, VerdictLevel
 
 RUBRIC_VERSION = "v3"
 MIN_PLACEBOS = 30
@@ -32,6 +41,22 @@ MIN_DAYS_AFTER_EVENT = 5  # hail damage develops, so an earlier image may show t
 NEW_WATER_MIN = 0.2
 STILL_COMPUTING = "the satellite comparison is still computing; this result will update when it lands"
 ARCHIVE_UNREACHABLE = "the satellite archive could not be reached in this run; it will be retried soon"
+RUN_INTERRUPTED = "the run was interrupted by a server restart before the comparison finished; please run it again"
+NO_SUPPORT = (
+    "the weather model shows no signal and no official alert for this hazard covers it, so this stays "
+    "weak; related reports do not change the level"
+)
+RECHECK_WINDOW_DAYS = 30  # the search never looks further than this after the event
+# Which official alerts speak to which reported event. A "Light" alert speaks to none of them, and
+# the feed is full of those. An event with no named hazard has nothing an alert could match.
+_HAZARD = {
+    "hail": re.compile(r"(?i)\bhail"),
+    "unseasonal_rain": re.compile(r"(?i)\brain"),
+    "flood": re.compile(r"(?i)flood|inundat|waterlog|cloud\s?burst|heavy rain"),
+    "cyclone": re.compile(r"(?i)cyclon|depression|storm surge"),
+    "wind": re.compile(r"(?i)\bwinds?\b|squall|\bgale|dust\s?storm|cyclon"),
+}
+_LIGHT = re.compile(r"(?i)^\s*light\b")
 
 
 @dataclass(frozen=True)
@@ -110,6 +135,7 @@ def comparison_incomplete(ev: Evidence) -> bool:
         return False
     if ev.verdict is not None and (
         ARCHIVE_UNREACHABLE in ev.verdict.reasons or STILL_COMPUTING in ev.verdict.reasons
+        or RUN_INTERRUPTED in ev.verdict.reasons
     ):
         return True
     return any(q.status == "accepted" and q.date > ev.event.date for q in ev.optical.scenes_considered)
@@ -119,16 +145,72 @@ def accepted_optical_pair(ev: Evidence) -> bool:
     return pre_status(ev) == "accepted" and post_status(ev) == "accepted"
 
 
+def alert_matches(alert: Alert, event_type: str) -> bool:
+    """Whether this alert's own hazard is the one reported. The CAP event name decides when there
+    is one; a record from before that field was kept falls back on the headline."""
+    pattern = _HAZARD.get(event_type)
+    text = (alert.event or alert.headline or "").strip()
+    return bool(pattern and text and not _LIGHT.match(text) and pattern.search(text))
+
+
+def matching_alerts(ev: Evidence) -> list[Alert]:
+    return [a for a in ev.alerts if alert_matches(a, ev.event.type)]
+
+
 def corroboration(ev: Evidence) -> list[str]:
     """Which independent sources corroborate. Weather absence never refutes; it is just absent."""
     sources = []
     if ev.weather is not None and ev.weather.corroborated:
         sources.append("weather")
-    if ev.alerts:
+    if matching_alerts(ev):
         sources.append("official_alert")
-    if ev.news:
-        sources.append("news")
     return sources
+
+
+def verdict_digest(ev: Evidence) -> str | None:
+    """Sealed with the numbers. The level and weather are not recomputed by the public check, so this
+    is how a later change to them is detected."""
+    if ev.verdict is None:
+        return None
+    w = ev.weather
+    payload = {
+        "level": ev.verdict.level,
+        "rubric_version": ev.verdict.rubric_version,
+        "event_type": ev.event.type,
+        "corroborated_by": corroboration(ev),
+        "weather": None if w is None else {
+            "source": w.source, "corroborated": w.corroborated, "max_daily_mm": w.max_daily_mm,
+            "precip_mm_event_window": w.precip_mm_event_window, "hail_code_hours": w.hail_code_hours,
+            "thunder_hours": w.thunder_hours, "max_gust_kmh": w.max_gust_kmh,
+            "fallback_used": w.fallback_used,
+        },
+        "alerts": sorted(a.identifier for a in matching_alerts(ev)),
+    }
+    text = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
+def recheck_window_open(ev: Evidence, today: date | None = None) -> bool:
+    """A later pass can still land inside the window the search looks at."""
+    return (today or today_ist()) <= ev.event.date + timedelta(days=RECHECK_WINDOW_DAYS)
+
+
+def recheck_possible(ev: Evidence, today: date | None = None) -> bool:
+    """A slow archive can be retried at any age. A new image can only help inside the window."""
+    return comparison_incomplete(ev) or recheck_window_open(ev, today)
+
+
+def retry_blocker(ev: Evidence, name: str) -> str | None:
+    """Why this exhibit cannot be run again on this record, if it cannot."""
+    pair = ev.optical.pre is not None and ev.optical.post is not None
+    usable_sar = ev.sar is not None and ev.sar.usable and ev.sar.pre_scene_id and ev.sar.post_scene_id
+    if name == "history" and (ev.optical.pre is None or ev.optical.plot_delta_ndvi is None):
+        return "there is no optical comparison on this record to compare past years with"
+    if name == "chips" and not pair:
+        return "there is no image pair on this record to render"
+    if name in ("village", "scale_fade") and not (pair or usable_sar):
+        return "there is no trustworthy image pair on this record"
+    return None
 
 
 def conceded(ev: Evidence) -> list[str]:
@@ -240,7 +322,7 @@ def _weak_reasons(ev: Evidence, sources: list[str]) -> list[str]:
     if sources:
         reasons.append(f"corroborated by {', '.join(sources)}, but no plot-specific signal")
     else:
-        reasons.append("no corroboration from weather, alerts or news")
+        reasons.append(NO_SUPPORT)
     if taken := conceded(ev):
         reasons.append(f"conceded objections: {', '.join(taken)}")
     return reasons
@@ -306,10 +388,12 @@ def _caveats(ev: Evidence, level: str) -> list[str]:
     caveats = []
     if level_could_change(ev, level):
         caveats.append(NEAR_LINE_CAVEAT)
+    can_recheck = recheck_possible(ev)
     if ripening_unresolved(ev):
         caveats.append(
             "If the crop was near harvest, this fall in greenness cannot be told apart from ripening "
-            "without a control. A later satellite pass will help."
+            "without a control."
+            + (" A later satellite pass will help." if can_recheck else "")
         )
     if sensors_disagree(ev):
         caveats.append(
@@ -336,7 +420,8 @@ def _caveats(ev: Evidence, level: str) -> list[str]:
         days = (ev.optical.post.date - ev.event.date).days
         caveats.append(
             f"The image after the event is from only {days} day{'s' if days != 1 else ''} later, which may be too early: "
-            "damage can take days to show. A re-check is scheduled."
+            "damage can take days to show."
+            + (" A re-check is scheduled." if can_recheck else " The window for a later image has passed.")
         )
     if ev.neighbours is not None and ev.optical.post is not None:
         caveats.append(

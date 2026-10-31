@@ -25,13 +25,15 @@ from typing import TypeVar
 
 from pydantic import BaseModel
 
-from app.agent.parse import ParsedReport, today_ist
+from app import errors
+from app.agent.parse import MAX_TEXT_CHARS, ParsedReport, event_date_problem, today_ist, valid_clock_time
 from app.config import get_settings
 
 log = logging.getLogger(__name__)
 T = TypeVar("T", bound=BaseModel)
 
 TTS_VOICE = "Kore"
+MAX_CROP_CHARS = 64  # the column's width
 LANG_NAMES = {"hi": "Hindi", "en": "English", "te": "Telugu"}
 _client_lock = threading.Lock()
 _client = None
@@ -79,7 +81,7 @@ def client():
 
 
 def _note(capability: str, surface: str, exc: Exception) -> None:
-    message = f"{surface}: {type(exc).__name__}: {str(exc)[:300]}"
+    message = f"{surface}: {type(exc).__name__}: {errors.scrub(exc)[:300]}"
     last_errors[capability] = message
     log.warning("gemini %s failed on %s", capability, message)
 
@@ -190,15 +192,17 @@ def _to_report(raw: _ReportSchema) -> ParsedReport:
             event_date = date.fromisoformat(raw.event_date)
         except ValueError:
             event_date = None
-    if event_date and event_date > today_ist():
+    if event_date and event_date_problem(event_date):
         event_date = None
+    event_time = raw.event_time if valid_clock_time(raw.event_time) else None
+    crop = (raw.crop or "").strip()[:MAX_CROP_CHARS] or None
     event_type = raw.event_type
     if event_type not in {"hail", "unseasonal_rain", "flood", "cyclone", "wind", "pest", "drought",
                           "other", "unknown"}:
         event_type = "unknown"
     return ParsedReport(
-        crop=raw.crop, event_type=event_type, event_date=event_date, event_time=raw.event_time,
-        transcript=raw.transcript or None,
+        crop=crop, event_type=event_type, event_date=event_date, event_time=event_time,
+        transcript=(raw.transcript or "")[:MAX_TEXT_CHARS] or None,
         confidence=round(max(0.0, min(1.0, raw.confidence)), 2), llm_used=True,
     )
 
@@ -458,11 +462,7 @@ def grounded_sources(query: str) -> list[dict] | None:
                     continue
                 for ann in block.annotations or []:
                     if ann.type == "url_citation" and ann.url:
-                        cited = block.text[ann.start_index:ann.end_index] if (
-                            ann.start_index is not None and ann.end_index is not None
-                        ) else None
-                        found.setdefault(ann.url, {"url": ann.url, "title": ann.title or ann.url,
-                                                   "snippet": cited})
+                        found.setdefault(ann.url, {"url": ann.url, "title": ann.title or ann.url})
         if found:
             return list(found.values())
     except Exception as exc:  # noqa: BLE001
@@ -481,8 +481,7 @@ def grounded_sources(query: str) -> list[dict] | None:
         out = []
         for chunk in (metadata.grounding_chunks or []) if metadata else []:
             if chunk.web and chunk.web.uri:
-                out.append({"url": chunk.web.uri, "title": chunk.web.title or chunk.web.uri,
-                            "snippet": None})
+                out.append({"url": chunk.web.uri, "title": chunk.web.title or chunk.web.uri})
         return out
     except Exception as exc:  # noqa: BLE001
         _note("search", "generate_content", exc)

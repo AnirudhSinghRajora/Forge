@@ -195,16 +195,17 @@ class Alert(BaseModel):
     identifier: str
     issued: datetime | None = None
     area: str | None = None
+    event: str | None = None  # the CAP event name: the alert's hazard
     headline: str | None = None
     severity: str | None = None
     url: str | None = None
 
 
 class NewsItem(BaseModel):
+    """A related report: shown with its link, and never an input to the verdict."""
     title: str
     url: str
     date: str | None = None
-    snippet: str | None = None
 
 
 class TimelinePoint(BaseModel):
@@ -276,6 +277,8 @@ class ReplayCore(BaseModel):
     scene_archives: dict[str, str] = {}  # scene id -> public archive it was read from
     seed: int
     numbers: dict[str, float | None]  # flat "field.path" -> value, rounded to 4 dp
+    # sha256 of the level and its corroboration inputs. Checked for tampering, never recomputed.
+    verdict_digest: str | None = None
 
 
 class ScaleLevel(BaseModel):

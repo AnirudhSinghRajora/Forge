@@ -28,6 +28,7 @@ MIN_RULE_COVERAGE = 0.5
 STRICT_COVERAGE = 0.75
 RRF_K = 60
 MAX_CLAUSE_CHARS = 1400
+MAX_QUESTION_CHARS = 500  # applied before any regex
 
 _STOP = {"a", "an", "and", "are", "as", "at", "be", "but", "by", "can", "do", "does", "for", "from", "has", "have", "how", "i", "if", "in", "is", "it", "me", "my", "of", "on", "or", "our", "so", "that", "the", "their", "them", "there", "this", "to", "was", "we", "what", "when", "where", "which", "who", "why", "will", "with", "you", "your", "not", "no", "should", "would", "could", "about", "after", "before", "get", "got", "any", "all"}
 # Hindi and Telugu terms, and Hinglish spellings, mapped to the corpus's English vocabulary.
@@ -243,39 +244,68 @@ def _clause_by_id(clause_id: str) -> dict | None:
 
 _REPORTING = (r"report|intimat|inform|tell|notify|सूचना|सूचित|बताना|बताएँ|बताऊँ|रिपोर्ट|"
               r"సమాచారం|తెలియజేయ|నివేదించ")
+_LATE = r"late|delay|missed|देर|विलंब|ఆలస్యం"
+_PERIL_WORDS = (r"hail|rain|flood|cyclone|storm|drought|pest|landslide|peril|ओल|बारिश|बाढ़|तूफान|चक्रवात|सूखा|కీట|"
+                r"వడగళ్ల|వర్షం|వరద|తుఫాను")
+_COVER_WORDS = r"cover|insured|include|कवर|शामिल|కవర్"
+
+
+def _word(pattern: str):
+    compiled = re.compile(f"(?i){pattern}")
+    return lambda question: compiled.search(question) is not None
+
+
+def _in_order(*patterns: str):
+    """Each pattern somewhere after the last. The same meaning as joining them with .*, in linear
+    time: the earliest match of each is the best start for the next, so nothing is ever retried."""
+    compiled = [re.compile(f"(?i){p}") for p in patterns]
+
+    def check(question: str) -> bool:
+        position = 0
+        for pattern in compiled:
+            found = pattern.search(question, position)
+            if found is None:
+                return False
+            position = found.end()
+        return True
+
+    return check
+
+
+def _either(*checks):
+    return lambda question: any(check(question) for check in checks)
+
+
 # Farmers ask in their own words, which rarely share vocabulary with a rule, so common intents route
 # directly. Checked in order: the first match wins, so "report late" reaches late_intimation.
 _INTENTS = [
-    ("late_intimation", re.compile(
-        rf"(?i)(late|delay|missed|after the deadline|देर|विलंब|ఆలస్యం).*({_REPORTING}|claim|दावा|క్లెయిమ్)"
-        rf"|({_REPORTING}).*(late|delay|missed|देर|विलंब|ఆలస్యం)")),
-    ("after_removal_from_field", re.compile(
-        r"(?i)\bstored\b|\bstorage\b|godown|granary|removed from the field|taken (off|from) the field|"
+    ("late_intimation", _either(
+        _in_order(rf"{_LATE}|after the deadline", rf"{_REPORTING}|claim|दावा|క్లెయిమ్"),
+        _in_order(_REPORTING, _LATE))),
+    ("after_removal_from_field", _word(
+        r"\bstored\b|\bstorage\b|godown|granary|removed from the field|taken (off|from) the field|"
         r"खेत से (हट|उठा)|गोदाम|रखी (हुई|गई)|నిల్వ")),
-    ("post_harvest_14_day", re.compile(r"(?i)post.?harvest|after harvest|cut.and.spread|कटाई के बाद|కోత తర్వాత")),
-    ("intimation_deadline", re.compile(
-        rf"(?i)(how long|how many (hours|days)|how much time|by when|time limit|deadline|last date|"
-        rf"कितने (घंटे|दिन)|कितना समय|कब तक|समय सीमा|ఎన్ని గంటల|ఎన్ని రోజుల|ఎప్పటి లోపు|గడువు)"
-        rf"|(when|कब|ఎప్పుడు).*({_REPORTING})")),
-    ("intimation_contents", re.compile(
-        rf"(?i)(what|which|क्या|कौन|ఏ).*(detail|information|document|जानकारी|दस्तावेज़|వివరాలు|పత్రాలు).*"
-        rf"({_REPORTING}|intimation|claim)")),
-    ("channels", re.compile(
-        rf"(?i)(how|where|whom|who|helpline|phone|number|कैसे|कहाँ|किसे|किसको|हेल्पलाइन|ఎలా|ఎక్కడ|ఎవరికి).*({_REPORTING})"
-        rf"|({_REPORTING}).*(how|where|whom|कैसे|कहाँ|किसे|किसको|ఎలా|ఎక్కడ|ఎవరికి)|helpline|हेल्पलाइन|14447")),
-    ("grievance", re.compile(r"(?i)grievance|complain|contest|dispute|appeal|reject|शिकायत|असहमत|ఫిర్యాదు")),
-    ("perils", re.compile(
-        r"(?i)(cover|insured|include|क्या.*कवर|कवर|शामिल|కవర్).*"
-        r"(hail|rain|flood|cyclone|storm|drought|pest|landslide|peril|ओल|बारिश|बाढ़|तूफान|चक्रवात|सूखा|కీట|వడగళ్ల|వర్షం|వరద|తుఫాను)"
-        r"|(hail|rain|flood|cyclone|storm|drought|pest|landslide|peril|ओल|बारिश|बाढ़|तूफान|चक्रवात|सूखा|వడగళ్ల|వర్షం|వరద|తుఫాను).*"
-        r"(cover|insured|include|कवर|शामिल|కవర్)")),
+    ("post_harvest_14_day", _word(r"post.?harvest|after harvest|cut.and.spread|कटाई के बाद|కోత తర్వాత")),
+    ("intimation_deadline", _either(
+        _word(r"how long|how many (hours|days)|how much time|by when|time limit|deadline|last date|"
+              r"कितने (घंटे|दिन)|कितना समय|कब तक|समय सीमा|ఎన్ని గంటల|ఎన్ని రోజుల|ఎప్పటి లోపు|గడువు"),
+        _in_order(r"when|कब|ఎప్పుడు", _REPORTING))),
+    ("intimation_contents", _in_order(
+        r"what|which|क्या|कौन|ఏ", r"detail|information|document|जानकारी|दस्तावेज़|వివరాలు|పత్రాలు",
+        rf"{_REPORTING}|intimation|claim")),
+    ("channels", _either(
+        _in_order(r"how|where|whom|who|helpline|phone|number|कैसे|कहाँ|किसे|किसको|हेल्पलाइन|ఎలా|ఎక్కడ|ఎవరికి", _REPORTING),
+        _in_order(_REPORTING, r"how|where|whom|कैसे|कहाँ|किसे|किसको|ఎలా|ఎక్కడ|ఎవరికి"),
+        _word(r"helpline|हेल्पलाइन|14447"))),
+    ("grievance", _word(r"grievance|complain|contest|dispute|appeal|reject|शिकायत|असहमत|ఫిర్యాదు")),
+    ("perils", _either(_in_order(_COVER_WORDS, _PERIL_WORDS), _in_order(_PERIL_WORDS, _COVER_WORDS))),
 ]
 
 
 def _intent_rule(question: str, rules: dict) -> tuple[str, dict] | None:
-    for name, pattern in _INTENTS:
+    for name, matches in _INTENTS:
         rule = rules.get(name)
-        if rule and str(rule.get("status", "")).startswith("verified") and pattern.search(question):
+        if rule and str(rule.get("status", "")).startswith("verified") and matches(question):
             return name, rule
     return None
 
@@ -336,6 +366,7 @@ def _unverified_citations(item: str) -> list[dict]:
 
 def ask(question: str, lang: str = "hi") -> dict:
     lang = lang if lang in NOT_COVERED else "en"
+    question = question[:MAX_QUESTION_CHARS]
     if load_corpus() is None:
         return {"answer": CORPUS_MISSING[lang], "citations": [], "covered": False,
                 "reason": UNAVAILABLE}
