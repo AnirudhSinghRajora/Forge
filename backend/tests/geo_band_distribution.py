@@ -1,8 +1,8 @@
 """The Draw and the Vanishing across in-band Bhiwani plots, chosen by rule. Real data; not a pytest.
 
-Rule, fixed before looking: plot centres drawn uniformly at random from the band mask (smoothed
-28 Feb -> 9 Mar 2024 change <= -0.12, from geo_c1_controls), at least 80% WorldCover cropland, pre NDVI
-at least 0.5. The typical plot is the one whose plot change is the median of the set.
+Rule: plot centres drawn uniformly at random from the band mask (smoothed 28 Feb -> 9 Mar 2024 change
+<= -0.12, from geo_c1_controls), with at least 80% WorldCover cropland. There is no pre-event NDVI filter.
+The typical plot is the one whose plot change is the median of the set.
 """
 from __future__ import annotations
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useI18n, keyLabel } from "../i18n";
+import { useI18n, keyLabel, type Key } from "../i18n";
 import { readSse } from "../sse";
 import { Icon } from "../components/Icon";
 import { Stamp } from "../components/Stamp";
@@ -7,12 +7,12 @@ import { useNow, usePrefersReducedMotion } from "../components/Bits";
 import { clock, dayLabel } from "../format";
 
 interface Row { key: string; stored: number | null; recomputed: number | null; state: "match" | "mismatch" | "unavailable" }
-type Status = "verified" | "mismatch" | "unknown_hash" | "tampered" | "upstream_unavailable" | "nothing_to_recompute";
+type Status = "verified" | "mismatch" | "partial" | "unknown_hash" | "tampered" | "upstream_unavailable" | "archive_mismatch" | "nothing_to_recompute";
 interface Result { status: Status; ok: boolean; matched?: number; total?: number; message_hi?: string; message_en?: string; recomputed_hash?: string; error?: string }
 interface Start {
   hash_verified?: boolean; engine_version?: string; event_date?: string; optical_pre_id?: string | null; optical_post_id?: string | null;
   sar_pre_id?: string | null; sar_post_id?: string | null; history_scene_ids?: string[]; seed?: number; n_numbers?: number; tolerance?: number;
-  numbers?: Record<string, number | null>;
+  numbers?: Record<string, number | null>; superseded?: boolean;
 }
 
 type Conn = "connecting" | "open" | "done" | "failed";
@@ -35,6 +35,10 @@ export default function Verify({ hash }: { hash: string }) {
   const [start, setStart] = useState<Start | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [progress, setProgress] = useState<{ message_hi?: string; message_en?: string } | null>(null);
+  const [group, setGroup] = useState<string | null>(null);
+  const [sourceSeen, setSourceSeen] = useState(false);
+  const [failedGroups, setFailedGroups] = useState<{ group: string; reason: string }[]>([]);
+  const [note, setNote] = useState<{ message_hi?: string; message_en?: string } | null>(null);
   const [run, setRun] = useState(0);
   const [startedAt, setStartedAt] = useState(() => Date.now());
   const [restartNote, setRestartNote] = useState(false);
@@ -48,6 +52,10 @@ export default function Verify({ hash }: { hash: string }) {
     setRevealed(0);
     setStart(null);
     setResult(null);
+    setGroup(null);
+    setFailedGroups([]);
+    setNote(null);
+    setProgress(null);
     setConn("connecting");
     setStartedAt(Date.now());
     let sawResult = false;
@@ -60,6 +68,9 @@ export default function Verify({ hash }: { hash: string }) {
             try { msg = JSON.parse(m.data) as Record<string, unknown>; } catch { return; }
             if (msg.type === "start") setStart(msg as Start);
             else if (msg.type === "progress") setProgress(msg as { message_hi?: string; message_en?: string });
+            else if (msg.type === "group_started") { setGroup(String(msg.group)); setSourceSeen(true); }
+            else if (msg.type === "group_failed") setFailedGroups((g) => [...g, { group: String(msg.group), reason: String(msg.reason ?? "") }]);
+            else if (msg.type === "note") setNote(msg as { message_hi?: string; message_en?: string });
             else if (msg.type === "number") setArrived((r) => [...r, toRow(msg)]);
             else if (msg.type === "result") { sawResult = true; setResult(msg as unknown as Result); }
           },
@@ -102,7 +113,7 @@ export default function Verify({ hash }: { hash: string }) {
   const elapsed = (now - startedAt) / 1000;
   const settled = !running && revealed >= arrived.length;
   const status = result?.status;
-  const refused = status === "unknown_hash" || status === "tampered" || status === "upstream_unavailable";
+  const refused = status === "unknown_hash" || status === "tampered" || status === "upstream_unavailable" || status === "archive_mismatch";
   const stored = start?.numbers ? Object.entries(start.numbers) : [];
   const pendingStored = stored.filter(([k]) => !rows.some((r) => r.key === k));
   const message = result ? (lang === "hi" ? result.message_hi : result.message_en) ?? result.message_en ?? null : null;
@@ -147,7 +158,7 @@ export default function Verify({ hash }: { hash: string }) {
               {result?.recomputed_hash && <code className="mono small break">{result.recomputed_hash}</code>}
             </div>
           )}
-          {status === "upstream_unavailable" && (
+          {(status === "upstream_unavailable" || status === "archive_mismatch") && (
             <div className="verify-line verify-partial" role="status">
               <Stamp size="lg" tone="muted">{t("verify.stamp_incomplete")}</Stamp>
               <p>{message}</p>
@@ -172,12 +183,19 @@ export default function Verify({ hash }: { hash: string }) {
             </>
           )}
 
-          {running && arrived.length === 0 && (
+          {running && revealed >= arrived.length && (
             <p className="loading" role="status">
-              <span className="spinner" aria-hidden="true" /> {conn === "connecting" ? t("verify.connecting") : (lang === "hi" ? progress?.message_hi : progress?.message_en) ?? t("verify.working", { n: total })}
+              <span className="spinner" aria-hidden="true" /> {conn === "connecting" ? t("verify.connecting") : group ? t(`verify.group_${group}` as Key) : (lang === "hi" ? progress?.message_hi : progress?.message_en) ?? t("verify.working", { n: total })}
             </p>
           )}
-          {running && arrived.length === 0 && elapsed > 20 && <p className="small faint">{t("verify.slow")}</p>}
+          {running && elapsed > 20 && <p className="small faint">{t("verify.slow")}</p>}
+          {sourceSeen && <p className="small verify-source">{t("verify.source")}</p>}
+          {note && <p className="notice small">{(lang === "hi" ? note.message_hi : note.message_en) ?? note.message_en}</p>}
+          {failedGroups.length > 0 && (
+            <ul className="notice small verify-failed">
+              {failedGroups.map((g) => <li key={g.group}>{t(`verify.group_${g.group}` as Key)}: {t("verify.group_failed")} <span lang="en" className="faint">{g.reason}</span></li>)}
+            </ul>
+          )}
 
           {(rows.length > 0 || pendingStored.length > 0) && (
             <div className="table-scroll">

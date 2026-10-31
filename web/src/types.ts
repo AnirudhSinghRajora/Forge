@@ -60,7 +60,7 @@ export interface Verdict {
 }
 export interface PolicyClause { clause_id: string; doc: string; page?: number | null; text: string; applies_because?: string | null; url?: string | null }
 export interface Deadline { type: "intimation_72h" | "recheck" | "other"; due_at: string; basis: string; status: "open" | "met" | "lapsed" }
-export type ChipKind = "true_colour_pre" | "true_colour_post" | "ndvi_pre" | "ndvi_post" | "delta_map" | "sar_change";
+export type ChipKind = "true_colour_pre" | "true_colour_post" | "ndvi_pre" | "ndvi_post" | "delta_map" | "sar_change" | "region_map";
 export interface Chip { kind: ChipKind; path: string; scene_id?: string | null; date?: string | null; bounds?: [number, number, number, number] | null }
 export interface ReplayCore {
   engine_version: string; polygon: GeoPolygon; event_date: string; optical_pre_id?: string | null; optical_post_id?: string | null;
@@ -72,7 +72,7 @@ export interface SurveyDraw { parcels: [number, number][]; average: number }
 export interface SurveyLottery {
   n_simulations: number; parcels_per_survey: number; statistic: string; plot_value: number | null; n_candidate_parcels: number;
   average_median: number | null; average_p05: number | null; average_p95: number | null; share_below_half_of_plot: number | null;
-  affected_only_n_candidates?: number | null; affected_only_median?: number | null; affected_only_p05?: number | null; affected_only_p95?: number | null;
+  affected_only_n_candidates?: number | null; affected_only_median?: number | null; affected_only_p05?: number | null; affected_only_p95?: number | null; affected_only_reason?: string | null;
   histogram_edges: number[]; histogram_counts: number[]; sample_draws: SurveyDraw[]; seed: number; insufficient_reason?: string | null;
   rule_applicability: "may_apply" | "illustration_only";
 }

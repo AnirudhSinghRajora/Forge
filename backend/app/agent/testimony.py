@@ -74,7 +74,8 @@ def templates(ev: Evidence) -> tuple[str, str, str]:
         hi.append(f"{date_hi(o.pre.date)} को उपग्रह ने मुझे देखा। तब मेरी हरियाली (NDVI) {o.pre.ndvi_median:.2f} थी।")
         en.append(f"On {date_en(o.pre.date)} the satellite saw me. My greenness (NDVI) was {o.pre.ndvi_median:.2f}.")
         te.append(f"{_date_te(o.pre.date)}న ఉపగ్రహం నన్ను చూసింది. అప్పుడు నా పచ్చదనం (NDVI) {o.pre.ndvi_median:.2f}.")
-    rejected = [q for q in o.scenes_considered if q.status == "rejected"]
+    rejected = [q for q in o.scenes_considered if q.status == "rejected"
+                and (o.post is None or q.date <= o.post.date)]
     if rejected:
         # The one nearest the event, preferring an image from after it: that is the one that matters.
         q = min(rejected, key=lambda x: (x.date <= ev.event.date, abs((x.date - ev.event.date).days)))

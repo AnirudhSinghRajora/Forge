@@ -1,5 +1,6 @@
 import { useI18n, type Key } from "../i18n";
 import { Icon } from "./Icon";
+import { Missing } from "./Bits";
 import { rawNum } from "../format";
 import type { Evidence, PlaceboTest } from "../types";
 
@@ -14,7 +15,7 @@ function answerOf(test: PlaceboTest | null | undefined): Answer {
 }
 
 function Card({ q, test, unmeasuredWhy }: { q: Key; test: PlaceboTest | null | undefined; unmeasuredWhy: string }) {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const a = answerOf(test);
   return (
     <div className={`tq tq-${a}`}>
@@ -27,9 +28,7 @@ function Card({ q, test, unmeasuredWhy }: { q: Key; test: PlaceboTest | null | u
         <p className="small">{test?.insufficient_reason ?? unmeasuredWhy}</p>
       ) : (
         <p className="small">
-          {lang === "en"
-            ? t("tq.count", { k: test!.n_at_least_as_extreme, n: test!.n_placebos })
-            : t("tq.count", { k: test!.n_at_least_as_extreme, n: test!.n_placebos })}{" "}
+          {t("tq.count", { k: test!.n_at_least_as_extreme, n: test!.n_placebos })}{" "}
           <span className="mono faint">p = {rawNum(test!.p_value)}</span>
         </p>
       )}
@@ -43,12 +42,19 @@ export function TwoQuestions({ ev }: { ev: Evidence }) {
   const n = ev.neighbours;
   const far = answerOf(n?.far_placebo);
   const ring = answerOf(n?.placebo);
-  if (far === "unmeasured" && ring === "unmeasured") return null;
+  if (far === "unmeasured" && ring === "unmeasured") {
+    return (
+      <section className="two-q" aria-labelledby="tq-t">
+        <h3 id="tq-t" className="h-sec">{t("tq.title")}</h3>
+        <Missing what={t("tq.title")} why={t("tq.both_unmeasured")} />
+      </section>
+    );
+  }
   const finding: Key = `tq.finding_${far}_${ring}` as Key;
   const big = ev.event.type === "cyclone" || ev.event.type === "flood";
   return (
     <section className="two-q" aria-labelledby="tq-t">
-      <h2 id="tq-t" className="h-sec">{t("tq.title")}</h2>
+      <h3 id="tq-t" className="h-sec">{t("tq.title")}</h3>
       <div className="tq-grid">
         <Card q="tq.q_far" test={n?.far_placebo} unmeasuredWhy={t("tq.far_unmeasured")} />
         <Card q="tq.q_ring" test={n?.placebo} unmeasuredWhy={t("tq.ring_unmeasured")} />

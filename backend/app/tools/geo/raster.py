@@ -46,6 +46,7 @@ RETRY_DELAYS = (2.0, 5.0, 15.0)
 MAX_WORKERS = 8  # the link is the limit (about 0.35 MB/s measured); more workers only cause timeouts
 LRU_BYTES = 512 * 1024 * 1024
 DISK_CACHE_BYTES = 3 * 1024 * 1024 * 1024
+PRUNE_EVERY_WRITES = 200
 
 _pool = ThreadPoolExecutor(max_workers=MAX_WORKERS, thread_name_prefix="geo-read")
 _lru: OrderedDict[tuple, np.ndarray] = OrderedDict()
@@ -55,6 +56,7 @@ _sign_lock = threading.Lock()  # the token is cached after one fetch; do not fet
 
 
 _regions: dict[tuple[str, str], tuple[Grid, np.ndarray]] = {}
+_writes_since_prune = 0
 _layouts: dict[tuple[str, str], tuple[float, float, int]] = {}
 
 
@@ -96,6 +98,11 @@ def _disk_get(key: tuple) -> np.ndarray | None:
 
 
 def _disk_put(key: tuple, arr: np.ndarray) -> None:
+    global _writes_since_prune
+    _writes_since_prune += 1
+    if _writes_since_prune >= PRUNE_EVERY_WRITES:
+        _writes_since_prune = 0
+        prune_disk_cache()
     path = _disk_path(key)
     try:
         path.parent.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { useI18n, translateRubric, keyLabel, type Key } from "../i18n";
-import { ApiError, getCase, pdfUrl, startInvestigation, type CaseEnvelope } from "../api";
+import { ApiError, getCase, pdfUrl, startInvestigation, type CaseEnvelope, type ExhibitStatus } from "../api";
 import { linkProps, navigate } from "../router";
 import { Icon } from "../components/Icon";
 import { Stamp } from "../components/Stamp";
@@ -8,6 +8,9 @@ import { ErrorNote, Loading, Missing, useInView } from "../components/Bits";
 import { ObjectionCard } from "../components/ObjectionCard";
 import { Voice } from "../components/Voice";
 import { TenFieldDraw } from "../components/TenFieldDraw";
+import { TwoQuestions } from "../components/TwoQuestions";
+import { GreennessBars } from "../components/GreennessBars";
+import { ExhibitGate } from "../components/ExhibitGate";
 import { Testimony } from "../components/Testimony";
 import { Countdown } from "../components/Countdown";
 import { BeforeAfter } from "../charts/BeforeAfter";
@@ -20,6 +23,7 @@ import type { Evidence, VerdictLevel } from "../types";
 
 const AnomalyMap = lazy(() => import("../map/AnomalyMap"));
 const Vanishing = lazy(() => import("../map/Vanishing"));
+const RegionMap = lazy(() => import("../map/RegionMap"));
 
 const SCALE: VerdictLevel[] = ["strong", "moderate", "weak"];
 
@@ -123,7 +127,7 @@ function Corroboration({ ev }: { ev: Evidence }) {
             <Stamp size="sm" tone={w.corroborated ? "ink" : "muted"}>{t(w.corroborated ? "corro.yes" : "corro.silent")}</Stamp>
           </p>
           {!w.corroborated && <p>{t("corro.cant_see")}</p>}
-          <p className="small" lang="en">{w.grid_note}</p>
+          <details className="fine"><summary>{t("corro.tech")}</summary><p className="small" lang="en">{w.grid_note}</p></details>
           <table className="ledger">
             <tbody>
               <tr><th>{t("corro.rain_window")}</th><td className="mono">{num(w.precip_mm_event_window, 1)} mm</td></tr>
@@ -246,6 +250,25 @@ function Sources({ ev }: { ev: Evidence }) {
   );
 }
 
+/** Machine strings we can translate show in the reader's language; the rest wait under a label. */
+function PlainList({ items }: { items: string[] }) {
+  const { t, lang } = useI18n();
+  const shown = items.map((x) => translateRubric(x, lang));
+  const translated = shown.filter((x, i) => lang === "en" || x !== items[i]);
+  const raw = shown.filter((x, i) => lang !== "en" && x === items[i]);
+  return (
+    <>
+      {translated.length > 0 && <ul>{translated.map((x, i) => <li key={i}>{x}</li>)}</ul>}
+      {raw.length > 0 && (
+        <details className="fine">
+          <summary>{t("verdict.tech_more", { n: raw.length })}</summary>
+          <ul lang="en" className="small">{raw.map((x, i) => <li key={i}>{x}</li>)}</ul>
+        </details>
+      )}
+    </>
+  );
+}
+
 function RunAgain({ caseId }: { caseId: string }) {
   const { t } = useI18n();
   const [busy, setBusy] = useState(false);
@@ -285,6 +308,20 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
     return () => ctl.abort();
   }, [load]);
 
+  // Exhibits land after the verdict, so keep asking until they settle. A dropped poll changes nothing.
+  const [pollUntil, setPollUntil] = useState(0);
+  const anyPending = Object.values(env?.exhibits ?? {}).some((x) => x.status === "pending");
+  const running = !!env?.case.active_run_id;
+  const live = anyPending || running || Date.now() < pollUntil;
+  useEffect(() => {
+    if (!live) return;
+    const id = window.setInterval(() => {
+      getCase(caseId).then(setEnv).catch(() => {});
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [live, caseId]);
+  const onRetried = useCallback(() => setPollUntil(Date.now() + 120000), []);
+
   if (err) {
     const gone = err instanceof ApiError && err.status === 404;
     return <div className="page narrow">{gone ? <p className="notice">{t("case.not_found")}</p> : <ErrorNote error={err} onRetry={() => load()} />}</div>;
@@ -318,6 +355,14 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
   const recheck = ev.deadlines.find((d) => d.type === "recheck");
   const twinWhy = ev.neighbours?.placebo?.insufficient_reason ?? (ev.optical.post ? null : t("twin.no_post"));
   const sealed = !!ev.evidence_hash;
+  const regionChip = ev.chips.find((c) => c.kind === "region_map");
+  const statuses = env.exhibits ?? {};
+  const pendingCount = Object.values(statuses).filter((x) => x.status === "pending").length;
+  const gate = (name: string, children: React.ReactNode) => (
+    <ExhibitGate name={name} status={statuses[name] as ExhibitStatus | undefined} caseId={caseId} sealed={sealed} onRetried={onRetried}>
+      {children}
+    </ExhibitGate>
+  );
 
   return (
     <div className="page verdict">
@@ -330,6 +375,8 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
               <h1 className={`verdict-headline level-${v.level}`}>{headline}</h1>
               <LevelScale level={v.level} />
               <p className="plain-level">{t(`level.${v.level}` as Key)}</p>
+              {ev.optical.pre && ev.optical.post && <GreennessBars pre={ev.optical.pre} post={ev.optical.post} />}
+              {!sealed && <p className="small">{t("verdict.may_change")}</p>}
             </>
           ) : (
             <>
@@ -375,7 +422,7 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
                 <a className="btn" {...linkProps(`/verify/${ev.evidence_hash}`)}><Icon name="check" /> {t("verdict.verify")}</a>
               </>
             ) : (
-              <p className="small faint">{t("verdict.not_sealed")}</p>
+              <p className="small faint">{t(pendingCount > 0 ? "verdict.not_sealed_pending" : "verdict.not_sealed")}</p>
             )}
           </div>
         </aside>
@@ -386,13 +433,13 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
           {v.caveats.length > 0 && (
             <div className="caveats">
               <h2 className="h-sec">{t("verdict.caveats")}</h2>
-              <ul>{v.caveats.map((c2, i) => <li key={i}>{translateRubric(c2, lang)}</li>)}</ul>
+              <PlainList items={v.caveats} />
             </div>
           )}
           {v.reasons.length > 0 && (
             <div className="reasons">
               <h2 className="h-sec">{t("verdict.reasons")}</h2>
-              <ul>{v.reasons.map((r, i) => <li key={i}>{translateRubric(r, lang)}</li>)}</ul>
+              <PlainList items={v.reasons} />
               <p className="small faint">{t("verdict.rubric")} <span className="mono">{v.rubric_version}</span></p>
             </div>
           )}
@@ -403,28 +450,53 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
       )}
 
       <div className="exhibits">
-        <section className="signature" aria-labelledby="draw-t">
-          <p className="exhibit-mark"><span>{t("ex.label")}</span> <b>{t("ex.draw")}</b></p>
-          <h2 id="draw-t" className="signature-title">{t("ex.draw_t")}</h2>
-          <ErrorBoundary><TenFieldDraw ev={ev} /></ErrorBoundary>
+        {pendingCount > 0 && (
+          <p className="still-computing" role="status">
+            <span className="spinner" aria-hidden="true" /> {t("exhibit.still", { n: pendingCount })}
+          </p>
+        )}
+
+        <section className="signature" aria-labelledby="foot-t">
+          <p className="exhibit-mark"><span>{t("ex.label")}</span> <b>{t("ex.foot")}</b></p>
+          <h2 id="foot-t" className="signature-title">{t("ex.foot_t")}</h2>
+          <div className="foot-grid">
+            <div className="foot-map">
+              <ErrorBoundary>
+                {gate("chips", regionChip?.bounds ? (
+                  <Suspense fallback={<Loading what={t("loading.map")} />}>
+                    <RegionMap chip={regionChip} ev={ev} />
+                  </Suspense>
+                ) : (
+                  <Missing what={t("foot.missing")} why={ev.optical.post ? t("foot.missing_why") : t("anom.no_pair")} />
+                ))}
+              </ErrorBoundary>
+            </div>
+            <div className="foot-answers"><TwoQuestions ev={ev} /></div>
+          </div>
         </section>
 
         <section className="signature" aria-labelledby="van-t">
           <p className="exhibit-mark"><span>{t("ex.label")}</span> <b>{t("ex.van")}</b></p>
           <h2 id="van-t" className="signature-title">{t("ex.van_t")}</h2>
           <ErrorBoundary>
-            {ev.scale_fade && ev.scale_fade.levels.length > 0 ? (
+            {gate("scale_fade", ev.scale_fade && ev.scale_fade.levels.length > 0 ? (
               <Suspense fallback={<Loading what={t("loading.map")} />}>
                 <Vanishing ev={ev} fade={ev.scale_fade} />
               </Suspense>
             ) : (
               <Missing what={t("van.missing")} why={t("van.missing_why")} />
-            )}
+            ))}
           </ErrorBoundary>
         </section>
 
+        <section className="signature" aria-labelledby="draw-t">
+          <p className="exhibit-mark"><span>{t("ex.label")}</span> <b>{t("ex.draw")}</b></p>
+          <h2 id="draw-t" className="signature-title">{t("ex.draw_t")}</h2>
+          <ErrorBoundary>{gate("village", <TenFieldDraw ev={ev} />)}</ErrorBoundary>
+        </section>
+
         <Exhibit id="ex-a" mark={t("ex.a")} title={t("ex.ba_t")} lead={t("ex.ba_l")}>
-          <BeforeAfter chips={ev.chips} optical={ev.optical} />
+          {gate("chips", <BeforeAfter chips={ev.chips} optical={ev.optical} />)}
           <table className="ledger ledger-keynums">
             <tbody>
               <tr><th>{t("nums.pre")}</th><td className="mono">{num(ev.optical.pre?.ndvi_median, 3)}</td></tr>
@@ -438,8 +510,14 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
         </Exhibit>
 
         <Exhibit id="ex-b" mark={t("ex.b")} title={t("ex.placebo_t")} lead={t("ex.placebo_l")}>
+          <h3 className="h-mini h-q">{t("tq.q_far")}</h3>
+          <PlaceboStrip test={ev.neighbours?.far_placebo ?? null} kind="far" />
+          <h3 className="h-mini h-q">{t("tq.q_ring")}</h3>
           <PlaceboStrip test={ev.neighbours?.placebo ?? null} kind="optical" />
-          {ev.sar?.placebo && <><h3 className="h-mini">{t("placebo.radar_head")}</h3><PlaceboStrip test={ev.sar.placebo} kind="sar" /></>}
+          {ev.neighbours?.pretrend_delta !== null && ev.neighbours?.pretrend_delta !== undefined && (
+            <p className="small">{t("tq.pretrend")} <span className="mono">{num(ev.neighbours.pretrend_delta, 3, { signed: true })}</span></p>
+          )}
+          {ev.sar?.placebo && <><h3 className="h-mini h-q">{t("placebo.radar_head")}</h3><PlaceboStrip test={ev.sar.placebo} kind="sar" /></>}
         </Exhibit>
 
         <Exhibit id="ex-c" mark={t("ex.c")} title={t("ex.twin_t")} lead={t("ex.twin_l")}>
@@ -447,13 +525,13 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
         </Exhibit>
 
         <Exhibit id="ex-d" mark={t("ex.d")} title={t("ex.anom_t")} lead={t("ex.anom_l")}>
-          <AnomalyExhibit ev={ev} />
+          {gate("chips", <AnomalyExhibit ev={ev} />)}
         </Exhibit>
 
         <Exhibit id="ex-e" mark={t("ex.e")} title={t("ex.tl_t")} lead={t("ex.tl_l")}>
-          <TimelineChart points={ev.timeline} weather={ev.weather} eventDate={ev.event.date} />
+          {gate("timeline", <TimelineChart points={ev.timeline} weather={ev.weather} eventDate={ev.event.date} />)}
           <h3 className="h-mini">{t("ex.radar_numbers")}</h3>
-          {ev.sar ? (
+          {gate("sar", ev.sar ? (
             ev.sar.usable ? (
               <table className="ledger">
                 <tbody>
@@ -465,9 +543,9 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
                 </tbody>
               </table>
             ) : <Missing what={t("sar.missing")} why={ev.sar.reason ?? null} />
-          ) : <Missing what={t("sar.missing")} />}
+          ) : <Missing what={t("sar.missing")} />)}
           <h3 className="h-mini">{t("hist.title")}</h3>
-          <PastYears ev={ev} />
+          {gate("history", <PastYears ev={ev} />)}
         </Exhibit>
 
         <Exhibit id="ex-f" mark={t("ex.f")} title={t("ex.exam_t")} lead={t("ex.exam_l")}>

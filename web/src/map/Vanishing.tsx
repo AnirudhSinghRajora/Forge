@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { canRunMap, maplibregl, satelliteStyle } from "./base";
-import { useI18n } from "../i18n";
+import { useI18n, type Key } from "../i18n";
 import { artifactUrl } from "../api";
 import { Icon } from "../components/Icon";
 import { useInView, usePrefersReducedMotion } from "../components/Bits";
@@ -115,9 +115,13 @@ export default function Vanishing({ ev, fade }: { ev: Evidence; fade: ScaleFade 
   const unit = isSar ? " dB" : "";
   const first = levels[0]?.plot_cell_value ?? null;
   const last = levels[levels.length - 1]?.plot_cell_value ?? null;
-  // A real local fall that shrinks at coarse scale. Anything else is reported as no local signal.
-  const dissolves = first !== null && last !== null && first < 0 && Math.abs(first) >= (isSar ? 0.5 : 0.05) && Math.abs(last) < Math.abs(first);
-  const sharePct = dissolves ? Math.round((Math.abs(last as number) / Math.abs(first as number)) * 100) : null;
+  // The message comes only from the values, so a strong fade and a whole-area change both read true.
+  const fell = first !== null && last !== null && first < 0 && Math.abs(first) >= (isSar ? 0.5 : 0.05);
+  const keptPct = fell ? Math.round((Math.abs(last as number) / Math.abs(first as number)) * 100) : null;
+  const reading = keptPct === null ? (first !== null && last !== null ? "van.read_none" : null) : keptPct < 50 ? "van.read_fades" : "van.read_holds";
+  // Once the finest level is the plot's own median, it is the field's own number and says so.
+  const finestIsField = first !== null && ev.optical.plot_delta_ndvi !== null && ev.optical.plot_delta_ndvi !== undefined
+    && Math.abs(first - ev.optical.plot_delta_ndvi) < 0.0006;
   const biggest = Math.max(...levels.map((l) => Math.abs(l.plot_cell_value ?? 0)), 0.0001);
   const atEnd = pos >= levels.length - 1 - 0.01;
 
@@ -172,7 +176,7 @@ export default function Vanishing({ ev, fade }: { ev: Evidence; fade: ScaleFade 
         </div>
 
         <div className="vanish-side">
-          <span className="drw-cap">{t("van.field_at", { scale: level ? scaleName(level.block_m) : "" })}</span>
+          <span className="drw-cap">{near === 0 && finestIsField ? t("placebo.yours") : t("van.field_at", { scale: level ? scaleName(level.block_m) : "" })}</span>
           <b className="vanish-value mono" key={near}>
             {level && level.plot_cell_value !== null ? `${num(level.plot_cell_value, dp, { signed: true })}${unit}` : "—"}
           </b>
@@ -186,7 +190,7 @@ export default function Vanishing({ ev, fade }: { ev: Evidence; fade: ScaleFade 
               return (
                 <li key={l.block_m} className={i === near ? "on" : ""}>
                   <button onClick={() => { touched.current = true; setPos(i); }}>
-                    <span className="ladder-scale mono">{scaleName(l.block_m)}</span>
+                    <span className="ladder-scale mono">{i === 0 && finestIsField ? t("van.field_short") : scaleName(l.block_m)}</span>
                     <span className="ladder-track"><i style={{ width: `${pct}%` }} className={v !== null && v > 0 ? "up" : ""} /></span>
                     <span className="ladder-v mono">{v !== null ? num(v, dp === 2 ? 3 : 1, { signed: true }) : "—"}</span>
                   </button>
@@ -194,13 +198,14 @@ export default function Vanishing({ ev, fade }: { ev: Evidence; fade: ScaleFade 
               );
             })}
           </ol>
+          {reading && (
+            <p className={`vanish-end ${atEnd ? "vanish-end-on" : ""}`}>
+              {t(reading as Key, { pct: keptPct ?? 0, scale: scaleName(levels[levels.length - 1].block_m) })}
+            </p>
+          )}
           <button className="linkish small vanish-replay" onClick={replay}><Icon name="retry" size={16} /> {t("van.replay")}</button>
         </div>
       </div>
-
-      <p className={`vanish-end ${atEnd ? "vanish-end-on" : ""}`}>
-        {dissolves ? t("van.summary", { pct: sharePct ?? 0, scale: scaleName(levels[levels.length - 1].block_m) }) : first !== null && last !== null ? t("van.no_local") : ""}
-      </p>
 
       <div className="ramp">
         <span className={`ramp-bar ${isSar ? "ramp-sar" : "ramp-delta"}`} />

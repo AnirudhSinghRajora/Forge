@@ -12,7 +12,7 @@ interface Dot { cx: number; cy: number; hot: boolean }
  * reports bins and not per-field values. Exactly n_at_least_as_extreme dots are darkened,
  * counted in from the extreme end, so the picture and the sentence cannot disagree.
  */
-export function PlaceboStrip({ test, kind }: { test: PlaceboTest | null | undefined; kind: "optical" | "sar" }) {
+export function PlaceboStrip({ test, kind }: { test: PlaceboTest | null | undefined; kind: "optical" | "sar" | "far" }) {
   const { t, lang } = useI18n();
   const [ref, width] = useWidth<HTMLDivElement>(340);
   const [hover, setHover] = useState<number | null>(null);
@@ -67,11 +67,11 @@ export function PlaceboStrip({ test, kind }: { test: PlaceboTest | null | undefi
   }, [usable, test, width]);
 
   if (!test) {
-    return <Missing what={t(kind === "sar" ? "placebo.missing_sar" : "placebo.missing_optical")} />;
+    return <Missing what={t(kind === "sar" ? "placebo.missing_sar" : kind === "far" ? "placebo.missing_far" : "placebo.missing_optical")} why={kind === "far" ? t("tq.far_unmeasured") : null} />;
   }
   if (!model) {
     return (
-      <Missing what={t(kind === "sar" ? "placebo.missing_sar" : "placebo.missing_optical")}
+      <Missing what={t(kind === "sar" ? "placebo.missing_sar" : kind === "far" ? "placebo.missing_far" : "placebo.missing_optical")}
         why={test.insufficient_reason ?? t("placebo.no_hist")} />
     );
   }
@@ -100,7 +100,7 @@ export function PlaceboStrip({ test, kind }: { test: PlaceboTest | null | undefi
           </>
         )}
       </p>
-      <p className="how-to-read">{t("placebo.read")}</p>
+      <p className="how-to-read">{t(kind === "far" ? "placebo.read_far" : "placebo.read")}</p>
 
       <div className="chart" ref={ref} onMouseLeave={() => setHover(null)}>
         <svg width={width} height={height} role="img" aria-label={t("placebo.aria", { k: test.n_at_least_as_extreme, n: test.n_placebos })}>

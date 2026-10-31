@@ -73,15 +73,16 @@ for (const vp of VIEWPORTS) {
       await page.screenshot({ path: `${SHOTS}/verdict-top-${vp.name}.png` });
       await page.locator(".tenfield").scrollIntoViewIfNeeded();
       await page.waitForTimeout(3500);
-      await page.locator(".signature").first().screenshot({ path: `${SHOTS}/draw-mid-${vp.name}.png` });
+      await page.locator(".signature").nth(2).screenshot({ path: `${SHOTS}/draw-mid-${vp.name}.png` });
       // Natural end of the sequence, not the skip button: the bars must reach their full height.
       await page.waitForTimeout(16000);
       const heights = await page.locator(".drw-hist .bar").evaluateAll((els) => els.map((e) => Number(e.getAttribute("height"))));
       expect(Math.max(...heights)).toBeGreaterThan(50);
-      await page.locator(".signature").first().screenshot({ path: `${SHOTS}/draw-final-${vp.name}.png` });
+      await page.locator(".signature").nth(2).screenshot({ path: `${SHOTS}/draw-final-${vp.name}.png` });
       await page.locator(".vanish").scrollIntoViewIfNeeded();
       await page.waitForTimeout(1500);
       await page.locator(".signature").nth(1).screenshot({ path: `${SHOTS}/vanish-${vp.name}.png` });
+      await page.locator(".signature").first().screenshot({ path: `${SHOTS}/foot-${vp.name}.png` });
       await page.locator("#ex-b").scrollIntoViewIfNeeded();
       await page.locator(".exhibits").screenshot({ path: `${SHOTS}/exhibits-${vp.name}.png` });
       expect(errors).toEqual([]);

@@ -2,7 +2,8 @@
 
 Our illustration from public satellite data, not output of YES-TECH. Blocks are anchored so the
 plot centroid sits at the middle of its own block at every scale. Otherwise the plot's value would
-depend on where an arbitrary grid happened to fall. All levels share one colour scale.
+depend on where an arbitrary grid happened to fall. All levels share one colour scale. The 10 m level
+draws the map itself and reports the plot's own median change; coarser levels report their block.
 """
 from __future__ import annotations
 
@@ -69,6 +70,9 @@ def _scale_fade(polygon: dict, pre_id: str, post_id: str, out_dir: str | Path | 
     levels = []
     for block_m in BLOCK_LEVELS_M:
         layer, value, lowest = block_average(change.change, block_m // grid.res, centre)
+        if block_m == BLOCK_LEVELS_M[0]:
+            # "Your field": the plot's own median change. A single centre pixel is noise, not the field.
+            value = change.plot_value
         path = None
         if out_dir is not None:
             target = Path(out_dir) / f"scale_{block_m}m.png"

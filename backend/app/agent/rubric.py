@@ -296,7 +296,7 @@ def _caveats(ev: Evidence, level: str) -> list[str]:
     if post_too_early(ev):
         days = (ev.optical.post.date - ev.event.date).days
         caveats.append(
-            f"The image after the event is from only {days} days later, which may be too early: "
+            f"The image after the event is from only {days} day{'s' if days != 1 else ''} later, which may be too early: "
             "damage can take days to show. A re-check is scheduled."
         )
     if ev.neighbours is not None and ev.optical.post is not None:

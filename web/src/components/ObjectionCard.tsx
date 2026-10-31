@@ -24,7 +24,12 @@ export function ObjectionCard({ o, index, fresh }: { o: Objection; index?: numbe
       </div>
       <div className="ex-test">
         <span className="ex-role"><Icon name="satellite" size={18} /> {t("exam.test")}</span>
-        <p lang="en">{o.test}</p>
+        {lang === "en" ? <p>{o.test}</p> : (
+          <details className="fine">
+            <summary>{t("exam.tech_def")}</summary>
+            <p lang="en">{o.test}</p>
+          </details>
+        )}
         {entries.length > 0 && (
           <table className="ledger ledger-tight">
             <tbody>

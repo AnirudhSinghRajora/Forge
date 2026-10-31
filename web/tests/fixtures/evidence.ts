@@ -32,6 +32,11 @@ export const evidence = (over: Record<string, unknown> = {}) => ({
       histogram_edges: [-0.34, -0.31, -0.28, -0.25, -0.22, -0.19, -0.16, -0.13, -0.1, -0.07, -0.04, -0.01, 0.02, 0.05, 0.08],
       histogram_counts: [1, 2, 1, 3, 4, 8, 15, 23, 34, 41, 33, 22, 10, 3], seed: 1234,
     },
+    far_placebo: {
+      n_placebos: 200, n_at_least_as_extreme: 0, p_value: 0.005, statistic: "median_delta_ndvi", plot_value: -0.3, placebo_median: -0.02, placebo_p05: -0.1, placebo_p95: 0.04,
+      histogram_edges: [-0.32, -0.28, -0.24, -0.2, -0.16, -0.12, -0.08, -0.04, 0, 0.04, 0.08], histogram_counts: [0, 0, 0, 1, 3, 12, 40, 70, 55, 15, 4].slice(0, 10), seed: 1234,
+    },
+    pretrend_delta: 0.01,
     counterfactual: {
       n_control_pixels: 1520, pre_fit_rmse: 0.018, gap_at_post: -0.25, method: "matched pixels on the pre-event trajectory",
       series: days.map((d, i) => ({ date: d, observed: i === 6 ? null : [0.62, 0.66, 0.69, 0.71, 0.72, 0.71, 0, 0.41][i], expected: [0.63, 0.66, 0.68, 0.7, 0.71, 0.71, 0.68, 0.66][i], expected_low: [0.6, 0.63, 0.65, 0.67, 0.68, 0.68, 0.64, 0.61][i], expected_high: [0.66, 0.69, 0.71, 0.73, 0.74, 0.74, 0.72, 0.71][i] })),
@@ -54,6 +59,7 @@ export const evidence = (over: Record<string, unknown> = {}) => ({
     { kind: "true_colour_post", path: "test/true_colour_post.png", scene_id: SCENE("2026-10-29"), date: "2026-10-29", bounds: [75.028, 29.528, 75.034, 29.534] },
     { kind: "ndvi_pre", path: "test/ndvi_pre.png", scene_id: SCENE("2026-10-23"), date: "2026-10-23", bounds: [75.028, 29.528, 75.034, 29.534] },
     { kind: "ndvi_post", path: "test/ndvi_post.png", scene_id: SCENE("2026-10-29"), date: "2026-10-29", bounds: [75.028, 29.528, 75.034, 29.534] },
+    { kind: "region_map", path: "test/region_map.png", scene_id: SCENE("2026-10-29"), date: "2026-10-29", bounds: [74.9, 29.42, 75.15, 29.64] },
     { kind: "delta_map", path: "test/delta_map.png", scene_id: SCENE("2026-10-29"), date: "2026-10-29", bounds: [75.012, 29.515, 75.05, 29.548] },
   ],
   cross_examination: [
@@ -81,7 +87,7 @@ export const evidence = (over: Record<string, unknown> = {}) => ({
   village: {
     radius_m: 3000, sensor: "s2", n_cropland_pixels: 84210, affected_share: 0.14, affected_definition: "NDVI change below -0.15 and not bare after the event", nearby_real_cases: null,
     lottery: {
-      n_simulations: 1000, parcels_per_survey: 10, statistic: "mean_delta_ndvi", plot_value: -0.3, n_candidate_parcels: 2200, average_median: -0.07, average_p05: -0.13, average_p95: -0.02, share_below_half_of_plot: 0.97,
+      n_simulations: 1000, parcels_per_survey: 10, statistic: "mean_delta_ndvi", plot_value: -0.3, n_candidate_parcels: 2200, average_median: -0.07, average_p05: -0.13, average_p95: -0.02, share_below_half_of_plot: 0.97, affected_only_n_candidates: 300, affected_only_median: -0.245, affected_only_p05: -0.28, affected_only_p95: -0.21,
       histogram_edges: Array.from({ length: 19 }, (_, i) => Number((-0.2 + i * 0.012).toFixed(3))),
       histogram_counts: [2, 4, 8, 15, 30, 52, 88, 121, 148, 152, 131, 98, 66, 42, 24, 12, 5, 2],
       sample_draws: [0, 1, 2, 3, 4, 5].map((s) => ({ parcels: parcels(s + 1), average: [-0.05, -0.11, -0.07, -0.03, -0.09, -0.06][s] })),

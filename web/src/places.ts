@@ -13,12 +13,25 @@ export interface Place {
 
 export const PLACES: Place[] = [
   {
-    id: "bhiwani-hail-2024",
+    id: "bhiwani-typical",
+    lat: 28.715212,
+    lon: 76.231138,
+    zoom: 15,
+    eventDate: "2024-03-02",
+    label: { hi: "ओले, भिवानी 2024: आम खेत", te: "వడగళ్లు, భివానీ 2024: సాధారణ పొలం", en: "Hail, Bhiwani 2024: typical plot" },
+    selected: {
+      hi: "यह खेत पहले से तय नियम से चुना गया: उस पट्टी का एक आम खेत।",
+      te: "ఈ పొలం ముందే నిర్ణయించిన నియమంతో ఎంపికైంది: ఆ పట్టీలో ఒక సాధారణ పొలం.",
+      en: "This plot was chosen by a rule fixed in advance: a typical field in that band.",
+    },
+  },
+  {
+    id: "bhiwani-strongest",
     lat: 28.700911,
     lon: 76.215719,
     zoom: 15,
     eventDate: "2024-03-02",
-    label: { hi: "ओले, भिवानी (मार्च 2024)", te: "వడగళ్లు, భివానీ (మార్చి 2024)", en: "Hail, Bhiwani (March 2024)" },
+    label: { hi: "ओले, भिवानी 2024: सबसे ज़्यादा गिरा खेत", te: "వడగళ్లు, భివానీ 2024: అత్యధికంగా తగ్గిన పొలం", en: "Hail, Bhiwani 2024: strongest plot" },
     selected: {
       hi: "यह खेत चुना हुआ है: उस पट्टी के स्कैन किए 200 खेतों में सबसे ज़्यादा गिरावट वाला। यह आम खेत नहीं है।",
       te: "ఈ పొలం ఎంపిక చేసినది: ఆ పట్టీలో స్కాన్ చేసిన 200 పొలాలలో అత్యధిక తగ్గుదల ఉన్నది. ఇది సాధారణ పొలం కాదు.",

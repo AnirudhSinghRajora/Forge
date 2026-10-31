@@ -5,6 +5,8 @@ import { Icon } from "./Icon";
 import { CopyButton, Missing, useInView, usePrefersReducedMotion } from "./Bits";
 import { linear, useWidth } from "../charts/util";
 import { num, pct, rawNum } from "../format";
+import { moveWords } from "../plain";
+import { selectionNear } from "../places";
 
 /** Small changes keep a third decimal, so +0.005 does not read as nothing. */
 const change = (v: number | null | undefined) => num(v, v !== null && v !== undefined && Math.abs(v) < 0.1 ? 3 : 2, { signed: true });
@@ -40,8 +42,6 @@ function Histogram({ sim, shownDraws, fill, activeAverage }: {
   const x = linear(lo - span * 0.04, hi + span * 0.04, m.l, width - m.r);
   const maxC = Math.max(...counts, 1);
   const y = linear(0, maxC, height - m.b, m.t);
-  const half = pv !== null ? pv / 2 : null;
-  const belowHalf = (a: number, b: number) => half !== null && (pv as number) < 0 ? (a + b) / 2 > half : false;
   const binIdx = (v: number) => {
     const i = edges.findIndex((e, j) => j < counts.length && v >= e && v < edges[j + 1]);
     return i < 0 ? (v < edges[0] ? 0 : counts.length - 1) : i;
@@ -58,7 +58,7 @@ function Histogram({ sim, shownDraws, fill, activeAverage }: {
           const x1 = x(edges[i + 1]);
           const w = Math.max(1, Math.abs(x1 - x0) - 1.5);
           const h = (height - m.b - y(c)) * fill;
-          return <rect key={i} x={Math.min(x0, x1) + 0.75} width={w} y={height - m.b - h} height={h} rx={1} className={belowHalf(edges[i], edges[i + 1]) ? "bar bar-light" : "bar"}><title>{`${rawNum(edges[i])} … ${rawNum(edges[i + 1])}: ${c}`}</title></rect>;
+          return <rect key={i} x={Math.min(x0, x1) + 0.75} width={w} y={height - m.b - h} height={h} rx={1} className="bar"><title>{`${rawNum(edges[i])} … ${rawNum(edges[i + 1])}: ${c}`}</title></rect>;
         })}
         {shownDraws.map((a, i) => {
           const bin = binIdx(a);
@@ -74,14 +74,49 @@ function Histogram({ sim, shownDraws, fill, activeAverage }: {
         )}
         {pv !== null && (
           <g>
-            <line x1={x(pv)} x2={x(pv)} y1={m.t - 16} y2={height - m.b} className="yours-stem" />
-            <circle cx={x(pv)} cy={height - m.b} r={7} className="yours-dot" />
-            <text x={x(pv)} y={m.t - 22} textAnchor={x(pv) < width * 0.25 ? "start" : x(pv) > width * 0.75 ? "end" : "middle"} className="yours-label">{t("placebo.yours")}</text>
+            <line x1={x(pv)} x2={x(pv)} y1={m.t - 8} y2={height - m.b} className="field-ref" />
+            <text x={x(pv)} y={m.t - 12} textAnchor={x(pv) < width * 0.25 ? "start" : x(pv) > width * 0.75 ? "end" : "middle"} className="field-ref-label">{t("placebo.yours")}</text>
           </g>
         )}
         <text x={m.l} y={height - 6} className="tick">{rawNum(edges[0])}</text>
         <text x={width - m.r} y={height - 6} textAnchor="end" className="tick">{rawNum(edges[edges.length - 1])}</text>
       </svg>
+    </div>
+  );
+}
+
+/** One scenario's spread on an axis shared with the other, so the two can be compared by eye. */
+function Scenario({ title, note, lo, hi, mid, nCand, dom, plotValue, why }: {
+  title: string; note: string; lo: number | null | undefined; hi: number | null | undefined; mid: number | null | undefined;
+  nCand: number | null | undefined; dom: [number, number]; plotValue: number | null; why: string;
+}) {
+  const { t } = useI18n();
+  const span = dom[1] - dom[0] || 1;
+  const at = (v: number) => `${((v - dom[0]) / span) * 100}%`;
+  const ok = lo !== null && lo !== undefined && hi !== null && hi !== undefined && mid !== null && mid !== undefined;
+  return (
+    <div className={`scen ${ok ? "" : "scen-none"}`}>
+      <h4 className="scen-t">{title}</h4>
+      <p className="small scen-note">{note}</p>
+      {ok ? (
+        <>
+          <p className="scen-say">{t("draw.scen_say", { a: Math.abs(hi as number).toFixed(2), b: Math.abs(lo as number).toFixed(2) })}</p>
+          <div className="spread" role="img" aria-label={t("draw.spread_aria", { lo: num(lo, 3), hi: num(hi, 3) })}>
+            <span className="spread-zero" style={{ left: at(0) }}><i>0</i></span>
+            <span className="spread-range" style={{ left: at(lo as number), width: `${(((hi as number) - (lo as number)) / span) * 100}%` }} />
+            <span className="spread-mid" style={{ left: at(mid as number) }} />
+            {plotValue !== null && <span className="spread-field" style={{ left: at(plotValue) }} title={t("placebo.yours")} />}
+          </div>
+          <dl className="scen-nums">
+            <div><dt>{t("draw.p05")}</dt><dd className="mono">{num(lo, 3, { signed: true })}</dd></div>
+            <div><dt>{t("draw.mid")}</dt><dd className="mono">{num(mid, 3, { signed: true })}</dd></div>
+            <div><dt>{t("draw.p95")}</dt><dd className="mono">{num(hi, 3, { signed: true })}</dd></div>
+          </dl>
+          {nCand !== null && nCand !== undefined && <p className="small faint">{t("draw.candidates", { n: nCand })}</p>}
+        </>
+      ) : (
+        <p className="scen-why"><strong>{t("missing.label")}</strong> {why}</p>
+      )}
     </div>
   );
 }
@@ -184,7 +219,11 @@ function AffectedShare({ v }: { v: VillageWitness }) {
         <span className="affected-line-label" style={{ left: "25%" }}>{t("draw.line25")}</span>
       </div>
       <p className="small"><strong>{t("draw.share_indicator")}</strong></p>
-      <p className="small faint" lang="en">{v.affected_definition} · <span className="mono">{v.n_cropland_pixels}</span> px · {v.sensor === "s2" ? "Sentinel-2" : "Sentinel-1"}</p>
+      <details className="fine">
+        <summary>{t("draw.tech_def")}</summary>
+        <p className="small" lang="en">{v.affected_definition}</p>
+        <p className="small faint"><span className="mono">{v.n_cropland_pixels}</span> px · {v.sensor === "s2" ? "Sentinel-2" : "Sentinel-1"}</p>
+      </details>
     </div>
   );
 }
@@ -216,7 +255,7 @@ function ShareBlock({ ev, v, applies }: { ev: Evidence; v: VillageWitness | null
 
 /** The headline exhibit: para 21.5.8's sampling run on real pixels, to show how far one draw's average can move. */
 export function TenFieldDraw({ ev }: { ev: Evidence }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const reduced = usePrefersReducedMotion();
   const v = ev.village;
   const sim = v?.lottery ?? null;
@@ -331,10 +370,15 @@ export function TenFieldDraw({ ev }: { ev: Evidence }) {
   const settled = phase === "settled" || phase === "final";
   const isFinal = phase === "final";
   const shownAverage = settled && draw && !isFinal ? draw.average : null;
-  const share = sim.share_below_half_of_plot;
+  // One axis for both scenarios, wide enough for zero and the field's reference mark.
+  const domVals = [sim.average_p05, sim.average_p95, sim.affected_only_p05, sim.affected_only_p95, sim.plot_value, 0].filter((x): x is number => typeof x === "number");
+  const domPad = (Math.max(...domVals) - Math.min(...domVals) || 0.1) * 0.06;
+  const dom: [number, number] = [Math.min(...domVals) - domPad, Math.max(...domVals) + domPad];
+  const selected = selectionNear(ev.plot.centroid[0], ev.plot.centroid[1]);
 
   return (
     <div className="tenfield" ref={slot}>
+      {selected && <p className="selected-note">{selected[lang]}</p>}
       <p className={`drw-applies ${applies ? "" : "drw-applies-no"}`}>{t(applies ? "draw.may_apply" : "draw.illustration")}</p>
       <p className="drw-claim">
         {t("draw.claim_a")} <b className="mono">{sim.parcels_per_survey}</b> {t("draw.claim_b")}
@@ -359,35 +403,46 @@ export function TenFieldDraw({ ev }: { ev: Evidence }) {
         </div>
 
         <div className="drw-right">
-          <div className="drw-numbers">
-            <div className="drw-num drw-num-yours">
-              <span className="drw-cap">{t("draw.your_field")}</span>
-              <b className="mono">{change(sim.plot_value)}</b>
-            </div>
-            <div className={`drw-num drw-num-avg ${settled && !isFinal ? "drw-settle" : ""}`} key={isFinal ? "final" : `${drawIndex}-${settled}`}>
-              <span className="drw-cap">{isFinal ? t("draw.median") : t("draw.avg_of_10", { n: sim.parcels_per_survey })}</span>
-              <b className="mono">
-                {isFinal ? change(sim.average_median) : shownAverage !== null ? change(shownAverage) : "…"}
-              </b>
-            </div>
+          <div className={`drw-num ${settled && !isFinal ? "drw-settle" : ""}`} key={isFinal ? "final" : `${drawIndex}-${settled}`}>
+            <span className="drw-cap">{isFinal ? t("draw.of_all", { n: sim.n_simulations }) : t("draw.avg_of_10", { n: sim.parcels_per_survey })}</span>
+            {isFinal ? (
+              <p className="drw-spread-say">{sim.average_p05 !== null && sim.average_p95 !== null ? t("draw.spread_say", { a: num(sim.average_p05, 2, { signed: true }), b: num(sim.average_p95, 2, { signed: true }) }) : t("draw.no_hist")}</p>
+            ) : (
+              <>
+                <b className="mono">{shownAverage !== null ? change(shownAverage) : "…"}</b>
+                {shownAverage !== null && (() => { const w = moveWords(shownAverage); return <span className="drw-words">{t(w.key, w.vars)}</span>; })()}
+              </>
+            )}
           </div>
           <Histogram sim={sim} shownDraws={doneDraws} fill={fill} activeAverage={shownAverage} />
           <p className="small faint drw-axis-word">{t("draw.axis")}</p>
-          <div className={`drw-verdict ${isFinal ? "drw-verdict-on" : ""}`}>
-            {sim.plot_value !== null && sim.plot_value >= 0 && <p className="drw-big-sentence">{t("draw.no_fall")}</p>}
-            {share !== null && sim.plot_value !== null && sim.plot_value < 0 && (
-              <p className="drw-big-sentence">
-                {t("draw.of_surveys", { n: sim.n_simulations })} <b className="mono">{pct(share)}</b> {t("draw.below_half")}
-              </p>
-            )}
-            {sim.plot_value === null && <p className="small">{t("draw.no_half")}</p>}
-            <p className="small">
-              {t("draw.range_a")} <b className="mono">{change(sim.average_p05)}</b> {t("draw.range_b")} <b className="mono">{change(sim.average_p95)}</b> {t("draw.range_c")}
-            </p>
-            <p className="drw-move">{t("draw.how_much")}</p>
-          </div>
+          <p className="drw-move">{t("draw.how_much")}</p>
+          {sim.plot_value !== null && <p className="small faint">{t("draw.field_ref")} <span className="mono">{change(sim.plot_value)}</span></p>}
         </div>
       </div>
+
+      <section className="scens" aria-labelledby="scens-t">
+        <h3 id="scens-t" className="scens-t">{t("draw.scens_title")}</h3>
+        <div className="scens-grid">
+          <Scenario
+            title={t("draw.scen_all")} note={t("draw.scen_all_note")}
+            lo={sim.average_p05} hi={sim.average_p95} mid={sim.average_median} nCand={sim.n_candidate_parcels}
+            dom={dom} plotValue={sim.plot_value} why={t("draw.no_hist")}
+          />
+          <Scenario
+            title={t("draw.scen_affected")} note={t("draw.scen_affected_note")}
+            lo={sim.affected_only_p05} hi={sim.affected_only_p95} mid={sim.affected_only_median} nCand={sim.affected_only_n_candidates}
+            dom={dom} plotValue={sim.plot_value}
+            why={sim.affected_only_reason
+              ? sim.affected_only_reason
+              : sim.affected_only_n_candidates === null || sim.affected_only_n_candidates === undefined
+                ? t("draw.affected_not_run")
+                : t("draw.affected_too_few", { n: sim.affected_only_n_candidates })}
+          />
+        </div>
+        <p className="scens-truth">{t("draw.bounds")}</p>
+        <p className="scens-claim">{t("draw.claim_list")}</p>
+      </section>
 
       <div className="drw-below">
         <Quote clause={clause} />

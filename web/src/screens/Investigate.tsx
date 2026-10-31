@@ -351,6 +351,15 @@ export default function Investigate({ caseId }: { caseId: string }) {
         <button className="linkish skip-replay" onClick={skip}>{t("trace.skip", { n: events.length - shown })}</button>
       )}
 
+      {hasVerdict && !done && fullyShown && (
+        <section className="trace-end">
+          <a className="btn btn-primary btn-big btn-wide" {...linkProps(`/case/${encodeURIComponent(caseId)}`)}>
+            {t("trace.read_verdict")} <Icon name="arrow" />
+          </a>
+          <p className="small">{t("trace.exhibits_filling")}</p>
+        </section>
+      )}
+
       {done && fullyShown && (
         <section className="trace-end">
           {failed ? (

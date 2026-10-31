@@ -34,12 +34,13 @@ def line(name: str, rows: list[dict]) -> None:
           f"median delta {np.median([r['delta'] for r in usable]):.3f}  mean placebos {np.mean([r['n_placebos'] for r in usable]):.0f}")
 
 
-rows = [json.loads(x) for x in open(sys.argv[1])]
-line("all cropland", rows)
-line("standing crop (pre NDVI >= 0.4)", [r for r in rows if r["pre_ndvi"] >= 0.4])
-line("bare before (pre NDVI < 0.3)", [r for r in rows if r["pre_ndvi"] < 0.3])
-line("homogeneous (pre IQR < 0.08)", [r for r in rows if r["pre_iqr"] is not None and r["pre_iqr"] < 0.08])
-line("standing + homogeneous", [r for r in rows if r["pre_ndvi"] >= 0.4 and r["pre_iqr"] is not None and r["pre_iqr"] < 0.08])
-big = [r for r in rows if r["delta"] <= -0.15]
-line("dropped >= 0.15", big)
-print("share of all plots with delta <= -0.15:", round(len(big) / max(1, len(rows)), 3))
+if __name__ == "__main__":
+    rows = [json.loads(x) for x in open(sys.argv[1])]
+    line("all cropland", rows)
+    line("standing crop (pre NDVI >= 0.4)", [r for r in rows if r["pre_ndvi"] >= 0.4])
+    line("bare before (pre NDVI < 0.3)", [r for r in rows if r["pre_ndvi"] < 0.3])
+    line("homogeneous (pre IQR < 0.08)", [r for r in rows if r["pre_iqr"] is not None and r["pre_iqr"] < 0.08])
+    line("standing + homogeneous", [r for r in rows if r["pre_ndvi"] >= 0.4 and r["pre_iqr"] is not None and r["pre_iqr"] < 0.08])
+    big = [r for r in rows if r["delta"] <= -0.15]
+    line("dropped >= 0.15", big)
+    print("share of all plots with delta <= -0.15:", round(len(big) / max(1, len(rows)), 3))

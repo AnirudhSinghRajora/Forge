@@ -207,7 +207,7 @@ GEO's validation found two faults. (1) Field-vs-ring placebo has low power insid
 
 **Second data source:** Earth Search (`earth-search.aws.element84.com/v1`, public, no account) has Sentinel-2 `S2C_44QND_20261031_0_L2A` over the Godavari delta, 40% tile cloud, not yet on Planetary Computer. Add it as a fallback source for Sentinel-2. `ReplayCore` and provenance record which archive each scene came from, and QA and offset handling apply unchanged. Planetary Computer stays primary.
 
-## Addendum 5, 31 Oct 2026, 11:15 PM: what the real numbers say, and the new order
+## Addendum 5, 31 Oct 2026, 11:00 PM: what the real numbers say, and the new order
 Measured on the Bhiwani in-swath plot (28.700911 N, 76.215719 E, the most extreme of 200 scanned): the Vanishing runs −0.437 (10 m), −0.352, −0.267, −0.164, −0.098 (3 km). The Ten-Field Draw averages −0.080 with a p05-p95 of −0.129 to −0.039.
 
 **New exhibit order: (1) The storm's footprint and the Vanishing, (2) the Ten-Field Draw.** The Vanishing is the stronger and simpler result. Its question is about area-yield scale (Gram Panchayat), as Addendum 2 requires.
@@ -217,3 +217,13 @@ Measured on the Bhiwani in-swath plot (28.700911 N, 76.215719 E, the most extrem
 **Selection must be disclosed.** Any plot chosen from a scan is labelled as such, with the count ("strongest of 200 scanned"). Add a typical in-band plot beside the extreme one, chosen by rule (the median in-band plot), and report the distribution of the Draw and Vanishing results across in-band plots.
 
 **Arnab:** at tile scale, the east-west gradient is mostly seasonal (about −0.1 is normal for these weeks in 2023 and 2024). No Arnab signal is established at tile scale. Do not present the 31 Oct gradient as storm damage. Reports of flattened paddy are not contradicted: lodged paddy can stay green.
+
+## Addendum 6, 31 Oct 2026, 11:27 PM: typical plots and what we may claim
+Forty plots drawn at random from the band (rule fixed in advance; note the intended pre-NDVI filter was not applied) give: plot change median −0.125; Vanishing median at 100 m to 1 km about −0.13, at 3 km −0.085, so a typical field loses about a third at 3 km. **The dramatic fade (−0.437 to −0.098) belongs to the strongest of 200 scanned plots and must never be shown without that label.**
+
+**Story order, final unless the holdout changes it:**
+1. **The storm's footprint and the two questions.** The band on the region map (labelled "consistent with"), then far test vs ring test. This is the lead: a field being unlike fields outside the storm is the result that held up (design plot far p 0.005; holdout pending).
+2. **The Vanishing, shown honestly.** Works on whatever case is open. In the pitch, show the labelled strongest plot and the typical plot side by side. The point: when a field was hit harder than its surroundings, area averages can't show it; when a whole area was hit, they mostly can. That is more credible than a single dramatic slider.
+3. **The Ten-Field Draw.** All cropland averages −0.07, fields that visibly dropped −0.245, luck of the draw about ±0.035. **The second scenario is partly mechanical:** those parcels are below −0.15 by definition, so these two are bounds, not an estimate. Allowed claim: "the average depends heavily on who is on the list, and nobody outside the insurer can see that list". Not allowed: "who is on the list matters more than luck" as a measured finding, or anything implying the rule is unfair.
+
+Demo plots: typical 28.715212 N, 76.231138 E (chosen by rule; moderate at best) and strongest 28.700911 N, 76.215719 E (labelled). Live pins from judges will mostly and correctly show little.

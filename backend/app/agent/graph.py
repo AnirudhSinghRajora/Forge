@@ -1984,7 +1984,7 @@ def retry_exhibit(run_id: str, case_id: str, name: str, tracer: Tracer) -> str:
                 ctx.set_exhibit(name, "failed", str(exc))
     new_core = seal_core(ev, polygon, seed)
     new_hash = evidence_hash(new_core)
-    if new_hash != old_hash:
+    if name not in ("chips", "timeline") and new_hash != old_hash:  # those two carry no sealed numbers
         # The earlier record may already be on a printed QR code, so it stays verifiable.
         cache_put(f"sealed:{old_hash}", "superseded-seal", None, old_core)
         ev.replay, ev.evidence_hash = new_core, new_hash
