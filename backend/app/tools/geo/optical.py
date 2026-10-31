@@ -29,6 +29,7 @@ from .base import (
     r4,
 )
 from .grid import Grid, Plot, parse_plot
+from .far import far_placements
 from .placebo import MIN_PLACEBOS, build_placebo_fields, sample_placements
 from .qa import PLOT_VALID_MIN, apply_q5, plot_clear_share, qa_chain, qa_one, raw_qa, to_scene_qa
 from .raster import read_assets, read_many
@@ -216,13 +217,62 @@ def _twin(plot: Plot, grid: Grid, mask: np.ndarray, ring: np.ndarray, pre: Scene
         layers.append(vi)
     dates = [s.date for s in used]
     n_pre = sum(1 for s in used if s.date <= pre.date)
-    twin = field_twin(np.stack(layers), dates, n_pre, dates.index(post.date), mask, ring)
+    stack = np.stack(layers)
+    twin = field_twin(stack, dates, n_pre, dates.index(post.date), mask, ring)
     chain = sorted(extra_qa + [pre_qa, post_qa], key=lambda q: (q.date, q.id))
-    return twin, chain
+    return twin, chain, stack, dates
+
+
+def _pretrend(
+    neighbours: NeighbourEvidence, stack: np.ndarray, dates: list[Date], pre_date: Date,
+    mask: np.ndarray, ring: np.ndarray, seed: int,
+) -> None:
+    """The same statistic on the last accepted pre-event pair: was this field already falling?
+
+    Uses only arrays the twin already loaded, so it costs no reads. Stays None if there is no such pair.
+    """
+    earlier = [i for i, d in enumerate(dates) if d < pre_date]
+    if not earlier or pre_date not in dates:
+        return
+    a, b = stack[earlier[-1]], stack[dates.index(pre_date)]
+    both = np.isfinite(a) & np.isfinite(b)
+    pair = mask & both
+    if not pair.any():
+        return
+    plot_pre = float(np.median(a[mask & np.isfinite(a)]))
+    value = float(np.median((b - a)[pair]))
+    q25, q75 = np.percentile(a[pair], [25, 75])
+    placements = sample_placements(
+        mask, ring, both, a, np.nan_to_num(b - a), plot_pre, seed, PRE_NDVI_TOLERANCE,
+        plot_pre_iqr=float(q75 - q25), spread_tolerance=PRE_SPREAD_TOLERANCE,
+    )
+    neighbours.pretrend_delta = r4(value)
+    neighbours.pretrend_placebo = PlaceboTest(**build_placebo_fields(placements, value, "median_delta_ndvi", seed))
+
+
+def _far_test(
+    plot: Plot, mask: np.ndarray, pre: SceneRef, post: SceneRef, pre_a: SceneArrays, plot_delta: float,
+    seed: int, fresh: bool,
+) -> PlaceboTest:
+    def layer(scene: SceneRef, bands: dict, is_post: bool):
+        if bands["B04"] is None or bands["B08"] is None or bands["SCL"] is None:
+            return None, None
+        offset = _offset(scene)
+        vi = ix.ndvi(ix.to_reflectance(bands["B08"], offset), ix.to_reflectance(bands["B04"], offset))
+        vi[~ix.clear_mask(bands["SCL"], allow_water=is_post)] = np.nan
+        return vi, np.isfinite(vi)
+
+    values = pre_a.ndvi[mask & pre_a.valid]
+    q25, q50, q75 = np.percentile(values, [25, 50, 75])
+    placements = far_placements(
+        plot, mask, pre, post, layer, float(q50), float(q75 - q25), PRE_NDVI_TOLERANCE, PRE_SPREAD_TOLERANCE, seed, fresh,
+    )
+    return PlaceboTest(**build_placebo_fields(placements, plot_delta, "median_delta_ndvi", seed))
 
 
 def _optical_compare(
-    polygon: dict, pre_id: str, post_id: str, seed: int, *, fresh: bool = False, with_twin: bool = True
+    polygon: dict, pre_id: str, post_id: str, seed: int, *, fresh: bool = False, with_twin: bool = True,
+    with_far: bool = True,
 ) -> tuple[OpticalEvidence, NeighbourEvidence]:
     plot = parse_plot(polygon)
     pre = get_scene(pre_id, plot)
@@ -266,8 +316,11 @@ def _optical_compare(
     twin_ring = (dist >= RING_M[0]) & (dist <= RING_M[1])
     chain = [pre_qa, post_qa]
     if with_twin:
-        twin, chain = _twin(plot, twin_grid, twin_mask, twin_ring, pre, post, pre_qa, post_qa, fresh)
+        twin, chain, stack, stack_dates = _twin(plot, twin_grid, twin_mask, twin_ring, pre, post, pre_qa, post_qa, fresh)
         neighbours.counterfactual = twin
+        _pretrend(neighbours, stack, stack_dates, pre.date, twin_mask, twin_ring, seed)
+    if with_far:
+        neighbours.far_placebo = _far_test(plot, mask, pre, post, pre_a, plot_delta, seed, fresh)
 
     optical = OpticalEvidence(
         scenes_considered=chain,

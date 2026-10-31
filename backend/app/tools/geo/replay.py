@@ -55,6 +55,9 @@ def flatten_numbers(
         for name in ("n_comparable_pixels", "neighbour_median_delta", "plot_minus_neighbour", "neighbour_bare_fraction_post"):
             out[f"neighbours.{name}"] = r4(getattr(neighbours, name))
         _placebo("neighbours.placebo", neighbours.placebo, out)
+        _placebo("neighbours.far_placebo", neighbours.far_placebo, out)
+        out["neighbours.pretrend_delta"] = r4(neighbours.pretrend_delta)
+        _placebo("neighbours.pretrend_placebo", neighbours.pretrend_placebo, out)
         twin = neighbours.counterfactual
         if twin is not None:
             out["neighbours.counterfactual.n_control_pixels"] = r4(twin.n_control_pixels)

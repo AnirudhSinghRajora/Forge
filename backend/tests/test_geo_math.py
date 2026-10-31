@@ -10,7 +10,8 @@ from app.evidence.schema import SceneQA
 from app.tools.geo import flatten_numbers, plot_info, scene_archive, utm_epsg
 from app.tools.geo import indices as ix
 from app.tools.geo.base import PlotError, r4
-from app.tools.geo.grid import parse_plot
+from app.tools.geo.far import annulus_mask, sector_windows
+from app.tools.geo.grid import Grid, parse_plot
 from app.tools.geo.placebo import PlacementResult, build_placebo_fields, p_value, sample_placements
 from app.tools.geo.qa import RawQA, apply_q5, evaluate_optical, evaluate_sar
 from app.tools.geo.sar import water_threshold
@@ -384,6 +385,27 @@ class TestBlockAverage:
         assert values[1] == pytest.approx(-0.5)
         assert values[2] == pytest.approx(-0.02)
         assert values[3] < 0 and abs(values[3]) < abs(values[2])
+
+
+class TestFarWindows:
+    def test_windows_are_block_aligned_in_the_annulus_and_seeded(self):
+        a = sector_windows(600000.0, 3200000.0, 499980.0, 3300000.0, 5120, seed=1, epsg=32643)
+        b = sector_windows(600000.0, 3200000.0, 499980.0, 3300000.0, 5120, seed=1, epsg=32643)
+        assert a == b and 4 <= len(a) <= 6
+        for w in a:
+            assert (w.left - 499980.0) % 5120 == 0 and (3300000.0 - w.top) % 5120 == 0
+            cx, cy = w.left + 2560, w.top - 2560
+            assert 5000 <= np.hypot(cx - 600000.0, cy - 3200000.0) <= 12000
+
+    def test_sectors_surround_the_plot(self):
+        ws = sector_windows(600000.0, 3200000.0, 499980.0, 3300000.0, 5120, seed=2, epsg=32643)
+        angles = sorted(np.arctan2(w.top - 2560 - 3200000.0, w.left + 2560 - 600000.0) for w in ws)
+        assert max(np.diff(angles)) < np.pi * 1.2
+
+    def test_annulus_mask_respects_the_radii(self):
+        grid = Grid(32643, 0.0, 30000.0, 300, 300, 100)
+        m = annulus_mask(grid, 15000.0, 15000.0)
+        assert not m[150, 150] and m[150, 80] and not m[150, 5]
 
 
 class TestArchives:

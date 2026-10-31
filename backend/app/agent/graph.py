@@ -60,8 +60,8 @@ POST_WINDOW_DAYS = 20
 MAX_POST_WINDOW_DAYS = 30
 MAX_QA_PER_SEARCH = 6
 QA_PREFETCH = 2
-PRE_WALK_S = 45  # one search step gets a bounded share of the budget, whatever the scenes do
-QA_WALK_S = 70
+PRE_WALK_S = 30  # one search step gets a bounded share of the budget, whatever the scenes do
+QA_WALK_S = 50
 MAX_LOOPS = 2
 SENTINEL2_REVISIT_DAYS = 5
 SAME_FIELD_M = 50
@@ -74,7 +74,7 @@ VERDICT_TARGET_S = 75  # stop waiting for background evidence here, to land the 
 EXHIBIT_TIMEOUT_S = 330  # a slow exhibit is still worth having; the verdict is already out
 EXHIBITS = ("sar", "history", "village", "scale_fade", "chips", "timeline")
 _TIMEOUTS_S = {
-    "weather": 25, "alerts": 12, "news": 30, "search_optical": 25, "qa_scene": 45,
+    "weather": 25, "alerts": 12, "news": 30, "search_optical": 25, "qa_scene": 30,
     "optical_compare": 70, "search_sar": 25, "sar_compare": 70, "history": EXHIBIT_TIMEOUT_S,
     "timeline": EXHIBIT_TIMEOUT_S,
     "render_chips": EXHIBIT_TIMEOUT_S, "village_witness": EXHIBIT_TIMEOUT_S,
@@ -164,6 +164,7 @@ class Ctx:
     lock: threading.Lock = field(default_factory=threading.Lock)
     sar_future: Any = None
     history_future: Any = None
+    optical_future: Any = None  # optical work that missed the verdict target, landing later
     evidence_run_id: str | None = None  # a retry updates the evidence row of the original run
     exhibits: dict = field(default_factory=dict)
 
@@ -645,6 +646,51 @@ def _prefetch_qa(polygon: dict, scenes: list, seen: dict[str, SceneQA]) -> None:
     wait(futures, timeout=_TIMEOUTS_S["qa_scene"])
 
 
+def _late_optical(ctx: Ctx, state: State, pre, pre_qa, pre_more: list, post, post_more: list):
+    """QA and comparison that missed the verdict target. Returns what landed, or None."""
+    geo = _geo()
+    polygon, seed = state["polygon"], state["seed"]
+    considered: list[SceneQA] = []
+
+    def qa_of(scene, previous):
+        return ctx.call(
+            "search_optical", "qa_scene", lambda: geo.qa_scene(scene, polygon, previous),
+            f"{date_hi(scene.date)} की तस्वीर की जाँच", f"Checking the {date_en(scene.date)} image",
+            summarize=lambda q: {"scene_id": q.id, "date": q.date, "status": q.status, "reasons": q.reasons},
+            counted=False, timeout_s=EXHIBIT_TIMEOUT_S, scene_id=scene.id,
+        )
+
+    for scene in pre_more:
+        if pre is not None:
+            break
+        qa = qa_of(scene, None)
+        considered.append(qa)
+        if qa.status == "accepted":
+            pre, pre_qa = scene, qa
+    for scene in post_more:
+        if post is not None:
+            break
+        qa = qa_of(scene, pre_qa)
+        considered.append(qa)
+        if qa.status == "accepted":
+            post = scene
+    if pre is None or post is None:
+        return {"considered": considered, "optical": None}
+    optical, neighbours = ctx.call(
+        "optical_compare", "optical_compare", lambda: geo.optical_compare(polygon, pre.id, post.id, seed),
+        "ऑप्टिकल तुलना और प्लेसिबो जाँच", "Optical comparison and placebo test",
+        summarize=lambda r: {
+            "plot_delta_ndvi": r[0].plot_delta_ndvi, "drop_frac": r[0].drop_frac,
+            "post_bare_fraction": r[0].post_bare_fraction,
+            "placebo_p": r[1].placebo.p_value if r[1].placebo else None,
+            "far_p": r[1].far_placebo.p_value if r[1].far_placebo else None,
+            "pretrend_delta": r[1].pretrend_delta,
+        },
+        timeout_s=EXHIBIT_TIMEOUT_S, pre=pre.id, post=post.id,
+    )
+    return {"considered": considered, "optical": optical, "neighbours": neighbours, "pre": pre, "post": post}
+
+
 def n_search_optical(state: State, ctx: Ctx) -> dict:
     ev: Evidence = state["evidence"]
     polygon = state["polygon"]
@@ -709,13 +755,16 @@ def n_search_optical(state: State, ctx: Ctx) -> dict:
     _prefetch_qa(polygon, [*pre_list[:QA_PREFETCH], *(settled or post_list)[:QA_PREFETCH]], seen)
 
     walk_started = time.monotonic()
+    unfinished_pre, unfinished_post = [], []
     pre_scene = pre_qa = pre_suspect = pre_suspect_qa = None
-    for scene in pre_list:
+    for position, scene in enumerate(pre_list):
         if qa_budget <= 0 or ctx.seconds_left() < 20 or time.monotonic() - walk_started > PRE_WALK_S:
+            unfinished_pre.extend(pre_list[position:position + 3])
             break
         qa_budget -= 1
         qa = _qa_with_trace(ctx, polygon, scene, None, seen)
         if qa is None:
+            unfinished_pre.append(scene)
             continue
         considered[qa.id] = qa
         if qa.status == "accepted":
@@ -735,12 +784,14 @@ def n_search_optical(state: State, ctx: Ctx) -> dict:
         x for x in post_list if x.date < settled_from
     ]
     post_scene = suspect = None
-    for scene in ordered_post:
+    for position, scene in enumerate(ordered_post):
         if qa_budget <= 0 or ctx.seconds_left() < 20 or time.monotonic() - walk_started > QA_WALK_S:
+            unfinished_post.extend(ordered_post[position:position + 3])
             break
         qa_budget -= 1
         qa = _qa_with_trace(ctx, polygon, scene, pre_qa, seen)
         if qa is None:
+            unfinished_post.append(scene)
             continue
         considered[qa.id] = qa
         if qa.status == "accepted":
@@ -765,6 +816,19 @@ def n_search_optical(state: State, ctx: Ctx) -> dict:
             n_rejected=sum(1 for q in considered.values() if q.status == "rejected"),
         )
         return update
+    if (unfinished_pre or pre_scene) and (unfinished_post or chosen_post) and not state.get("before_redate"):
+        # Cold reads on a thin link missed the target, which says nothing about the scenes. The work
+        # goes on behind the verdict and lands as late evidence, instead of being thrown away.
+        ctx.emit(
+            "decision", "search_optical",
+            "तस्वीरें अभी डाउनलोड हो रही हैं। यह काम पीछे चलता रहेगा और आते ही नतीजे में जुड़ जाएगा।",
+            "The images are still downloading. That work carries on behind the result and is added "
+            "as soon as it lands.",
+            action="optical_continues", unfinished=[x.id for x in [*unfinished_pre, *unfinished_post]],
+        )
+        ctx.optical_future = _TOOLS.submit(
+            _late_optical, ctx, state, pre_scene, pre_qa, unfinished_pre, chosen_post, unfinished_post
+        )
     return no_pair()
 
 
@@ -887,9 +951,8 @@ def n_sar_compare(state: State, ctx: Ctx) -> dict:
     ev: Evidence = state["evidence"]
     if state.get("sar_tried") and ev.sar is not None:
         return {}
-    sar = run_sar(state, ctx, "sar_compare")
-    _apply_sar(ev, sar)
-    _mark_sar(ctx, ev, sar)
+    # Waited for up to the verdict target at the cross-examination, like the rest.
+    ctx.sar_future = _TOOLS.submit(run_sar, state, ctx, "sar_compare", True)
     return {"evidence": ev, "sar_tried": True}
 
 
@@ -1075,11 +1138,45 @@ def _pick_followup(state: State, ctx: Ctx, followups: list[cross_exam.FollowUp],
     return None, "nothing more to try"
 
 
-def land_background(ctx: Ctx, ev: Evidence, wait_s: float) -> bool:
+def _apply_late_optical(ctx: Ctx, ev: Evidence, result: dict, state: State) -> None:
+    by_id = {q.id: q for q in ev.optical.scenes_considered}
+    by_id.update({q.id: q for q in result["considered"]})
+    considered = sorted(by_id.values(), key=lambda q: q.date)
+    if result["optical"] is None:
+        ev.optical.scenes_considered = considered
+        return
+    ev.optical = OpticalEvidence(**{**result["optical"].model_dump(exclude={"scenes_considered"}),
+                                    "scenes_considered": []})
+    ev.optical.scenes_considered = considered
+    ev.neighbours = result["neighbours"]
+    for name, scene in (("optical.pre", result["pre"]), ("optical.post", result["post"])):
+        _prov(ev, name, f"{PC} (sentinel-2-l2a)", asset=scene.id)
+    if ctx.history_future is None and ev.history is None and ev.optical.pre is not None:
+        ctx.set_exhibit("history", "pending")
+        ctx.history_future = _TOOLS.submit(
+            run_history, ctx, state["polygon"], ev.event.date, ev.optical.plot_delta_ndvi,
+            ev.optical.pre.ndvi_median,
+        )
+
+
+def land_background(ctx: Ctx, ev: Evidence, wait_s: float, state: State | None = None) -> bool:
     """Applies radar and history if they have finished, waiting up to wait_s for them in total.
     Returns whether anything new landed. Whatever is still running stays pending."""
     landed = False
     deadline = time.monotonic() + max(0.0, wait_s)
+    if ctx.optical_future is not None:
+        try:
+            result = ctx.optical_future.result(timeout=max(0.0, deadline - time.monotonic()))
+        except FutureTimeout:
+            pass
+        except ToolFailed as exc:
+            ctx.optical_future = None
+            ctx.archive_failed = True
+            ctx.emit("warning", "search_optical", "ऑप्टिकल तस्वीरें नहीं मिल सकीं", f"The optical images could not be read: {exc}")
+        else:
+            ctx.optical_future = None
+            _apply_late_optical(ctx, ev, result, state or {})
+            landed = True
     if ctx.sar_future is not None:
         try:
             sar = ctx.sar_future.result(timeout=max(0.0, deadline - time.monotonic()))
@@ -1111,7 +1208,7 @@ def land_background(ctx: Ctx, ev: Evidence, wait_s: float) -> bool:
 
 def n_cross_examine(state: State, ctx: Ctx) -> dict:
     ev: Evidence = state["evidence"]
-    land_background(ctx, ev, VERDICT_TARGET_S - ctx.elapsed())
+    land_background(ctx, ev, VERDICT_TARGET_S - ctx.elapsed(), state)
     ctx.emit("step_started", "cross_examine", "अब एक सख़्त सर्वेयर इस सबूत पर सवाल उठाएगा",
              "A hostile surveyor now attacks this evidence", round=state.get("loops", 0) + 1)
     objections, followups = cross_exam.run(ev, state.get("farmer_date"))
@@ -1168,7 +1265,7 @@ def n_cross_examine(state: State, ctx: Ctx) -> dict:
             "history_date": state.get("history_date"),
         }
         _redate(ev, proposed, ctx)
-        ctx.sar_future = ctx.history_future = None  # those were for the old date
+        ctx.sar_future = ctx.history_future = ctx.optical_future = None  # those were for the old date
         ctx.set_exhibit("sar", "pending")
         ctx.set_exhibit("history", "pending")
         update["seed"] = make_seed(state["polygon"], proposed)
@@ -1215,7 +1312,12 @@ def decide(ctx: Ctx, ev: Evidence, *, revised: bool = False) -> None:
     from app.evidence.schema import Verdict
 
     result = rubric.decide(ev)
-    if ctx.archive_failed and result.level == "insufficient":
+    provisional = result.level == "insufficient" and (
+        ctx.optical_future is not None or ctx.sar_future is not None
+    )
+    if provisional:
+        result = replace(result, reasons=[rubric.STILL_COMPUTING])
+    elif ctx.archive_failed and result.level == "insufficient":
         result = replace(result, reasons=[rubric.ARCHIVE_UNREACHABLE])
     head_hi, head_en, head_te = explain.headlines(result.level, ev.event.type)
     ev.verdict = Verdict(
@@ -1227,9 +1329,9 @@ def decide(ctx: Ctx, ev: Evidence, *, revised: bool = False) -> None:
     ctx.emit("verdict", "verdict", head_hi, head_en, level=result.level, reasons=result.reasons,
              caveats=result.caveats, rubric_version=result.version,
              corroborated_by=rubric.corroboration(ev), conceded=rubric.conceded(ev),
-             revised=revised, sealed=False, exhibits_pending=pending)
+             revised=revised, sealed=False, exhibits_pending=pending, provisional=provisional)
     ev.deadlines = [d for d in ev.deadlines if d.type != "recheck"]
-    if result.schedule_recheck:
+    if result.schedule_recheck and not provisional:
         latest = max((q.date for q in ev.optical.scenes_considered), default=today_ist())
         due = datetime.combine(
             max(latest + timedelta(days=SENTINEL2_REVISIT_DAYS), today_ist() + timedelta(days=1)),
@@ -1369,7 +1471,10 @@ def _reexamine(ctx: Ctx, ev: Evidence, state: State) -> None:
                 outcome=objection.outcome, finding_hi=objection.finding_hi,
                 finding_en=objection.finding_en, round="late_evidence",
             )
-    if rubric.decide_level(ev)[0] != level_before:
+    was_provisional = ev.verdict is not None and rubric.STILL_COMPUTING in ev.verdict.reasons
+    if rubric.decide_level(ev)[0] != level_before or (
+        was_provisional and ctx.optical_future is None and ctx.sar_future is None
+    ):
         decide(ctx, ev, revised=True)
         n_explain(state, ctx)
     elif ev.verdict is not None:
@@ -1386,9 +1491,15 @@ def n_exhibits(state: State, ctx: Ctx) -> dict:
              "The result is in. The other exhibits are still computing and will appear as they finish.",
              action="exhibits_started", pending=[n for n, e in ctx.exhibits.items()
                                                  if e["status"] == "pending"])
+    limit = get_settings().run_hard_limit_s
+    # The pair-based exhibits need to know the final pair, so late optical work settles first.
+    while ctx.optical_future is not None and ctx.elapsed() < limit:
+        if land_background(ctx, ev, min(2.0, limit - ctx.elapsed()), state):
+            _reexamine(ctx, ev, state)
+            persist(ctx, ev)
+    ctx.optical_future = None
     futures = {_TOOLS.submit(fn): name for name, fn in _exhibit_runners(ctx, ev, polygon, seed).items()}
     persist(ctx, ev)
-    limit = get_settings().run_hard_limit_s
     pending = set(futures)
     while pending or ctx.sar_future is not None or ctx.history_future is not None:
         left = limit - ctx.elapsed()
@@ -1409,7 +1520,7 @@ def n_exhibits(state: State, ctx: Ctx) -> dict:
             _emit_exhibit(ctx, name)
             persist(ctx, ev)
         had_background = ctx.sar_future is not None or ctx.history_future is not None
-        if land_background(ctx, ev, 0.0 if pending else 1.0) or (
+        if land_background(ctx, ev, 0.0 if pending else 1.0, state) or (
             had_background and ctx.sar_future is None and ctx.history_future is None
         ):
             _reexamine(ctx, ev, state)
@@ -1420,7 +1531,7 @@ def n_exhibits(state: State, ctx: Ctx) -> dict:
         if entry["status"] == "pending":
             ctx.set_exhibit(name, "failed", f"not finished within {limit:.0f} s; it can be retried")
             _emit_exhibit(ctx, name)
-    ctx.sar_future = ctx.history_future = None
+    ctx.sar_future = ctx.history_future = ctx.optical_future = None
     return {"evidence": ev}
 
 

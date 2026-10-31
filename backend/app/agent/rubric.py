@@ -27,6 +27,7 @@ P_FIELD = 0.025  # Bonferroni across the far and ring tests
 P_SAR = 0.05
 MIN_DAYS_AFTER_EVENT = 5  # hail damage develops, so an earlier image may show too little
 NEW_WATER_MIN = 0.2
+STILL_COMPUTING = "the satellite comparison is still computing; this result will update when it lands"
 ARCHIVE_UNREACHABLE = "the satellite archive could not be reached in this run; it will be retried soon"
 
 
@@ -104,7 +105,9 @@ def comparison_incomplete(ev: Evidence) -> bool:
     could not be searched at all. Different from "no image", and never reported as that."""
     if ev.optical.post is not None:
         return False
-    if ev.verdict is not None and ARCHIVE_UNREACHABLE in ev.verdict.reasons:
+    if ev.verdict is not None and (
+        ARCHIVE_UNREACHABLE in ev.verdict.reasons or STILL_COMPUTING in ev.verdict.reasons
+    ):
         return True
     return any(q.status == "accepted" and q.date > ev.event.date for q in ev.optical.scenes_considered)
 

@@ -143,10 +143,9 @@ def _groups_for(core: ReplayCore) -> list[tuple[str, Callable[[], dict]]]:
     exported = getattr(geo, "replay_groups", None)
     if exported is not None:
         return list(exported(core))
-    try:
-        return default_groups(core)
-    except ImportError:  # a stand-in geo module exposes only replay()
+    if not hasattr(geo, "__path__"):  # a stand-in module in tests exposes only replay()
         return [("all", lambda: geo.replay(core))]
+    return default_groups(core)
 
 
 def _keys_of(group: str, numbers: dict) -> dict:

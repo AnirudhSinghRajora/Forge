@@ -190,7 +190,7 @@ def test_real_recomputations_really_read_fresh():
     for fn in (_optical_compare, _sar_compare, history_from_ids, _scale_fade, _village_witness):
         assert "fresh" in inspect.signature(fn).parameters, fn
     source = inspect.getsource(verify.default_groups)
-    assert source.count("fresh=True") == 5
+    assert source.count("fresh=True") >= 5
 
 
 def test_a_superseded_hash_stays_verifiable(monkeypatch):

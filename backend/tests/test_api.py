@@ -223,7 +223,8 @@ def test_weather_outage_does_not_refute(client, monkeypatch):
     ev = client.get(f"/api/cases/{case_id}").json()["evidence"]
     assert ev["weather"] is None
     wrong_date = next(o for o in ev["cross_examination"] if o["id"] == "wrong_date")
-    assert wrong_date["outcome"] == "unresolved" and ev["verdict"]["level"] == "moderate"
+    assert wrong_date["outcome"] == "unresolved" and ev["verdict"]["level"] == "weak"
+    assert any("could not be retrieved" in c for c in ev["verdict"]["caveats"])
 
 
 def test_cloudy_post_loops_to_another_scene(client, monkeypatch):
@@ -691,3 +692,43 @@ def test_claim_path_text_is_keyed_by_language_and_every_clause_has_text(client, 
     client.patch(f"/api/cases/{case_id}", json={"crop_stage": "cut_and_spread"})
     ev = client.get(f"/api/cases/{case_id}").json()["evidence"]
     assert set(ev["claim_path"]["clause_ids"]) <= {c["clause_id"] for c in ev["policy"]}
+
+
+def test_slow_cold_reads_give_a_provisional_verdict_then_the_real_one(client, monkeypatch):
+    from app.agent import graph
+
+    monkeypatch.setattr(graph, "VERDICT_TARGET_S", 0.1)
+    monkeypatch.setitem(graph._TIMEOUTS_S, "qa_scene", 0.05)
+    monkeypatch.setattr(graph, "QA_PREFETCH", 0)
+    release = threading.Event()
+
+    def slow_qa(sc, *a, **k):
+        if sc.id == POST_ID:
+            release.wait(20)
+        return qa(sc.id, sc.date)
+
+    def slow_sar_search(*a, **k):
+        release.wait(20)
+        return []
+
+    install_fake_geo(monkeypatch, qa_scene=slow_qa, search_sar=slow_sar_search)
+    case_id = new_case(client, insured="yes", crop_stage="standing")
+    run_id = client.post(f"/api/cases/{case_id}/investigate").json()["run_id"]
+    body = None
+    for _ in range(100):
+        body = client.get(f"/api/cases/{case_id}").json()
+        if body["verdict_ready"] and body["evidence"]["explanation_en"]:
+            break
+        time.sleep(0.05)
+    assert body["verdict_ready"] and not body["sealed"]
+    assert body["evidence"]["verdict"]["level"] == "insufficient"
+    assert "still computing" in body["evidence"]["verdict"]["reasons"][0]
+    assert "not responding" in body["evidence"]["explanation_en"]
+    release.set()
+    events = wait_done(client, run_id)
+    verdicts = [e for e in events if e["type"] == "verdict"]
+    assert verdicts[0]["detail"]["provisional"] is True
+    assert verdicts[-1]["detail"]["level"] == "strong" and verdicts[-1]["detail"]["revised"] is True
+    final = client.get(f"/api/cases/{case_id}").json()
+    assert final["sealed"] and final["evidence"]["optical"]["post"]["scene_id"] == POST_ID
+    assert "still computing" not in " ".join(final["evidence"]["verdict"]["reasons"])

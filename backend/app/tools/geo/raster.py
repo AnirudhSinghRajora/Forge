@@ -21,6 +21,7 @@ import rasterio
 from rasterio.enums import Resampling
 from rasterio.errors import RasterioError, RasterioIOError
 from rasterio.vrt import WarpedVRT
+from rasterio.windows import from_bounds
 
 from .base import GeoUnavailable, var_dir
 from .grid import Grid
@@ -54,6 +55,7 @@ _sign_lock = threading.Lock()  # the token is cached after one fetch; do not fet
 
 
 _regions: dict[tuple[str, str], tuple[Grid, np.ndarray]] = {}
+_layouts: dict[tuple[str, str], tuple[float, float, int]] = {}
 
 
 class AssetMissing(Exception):
@@ -148,6 +150,68 @@ def prefetch_region(item_ids: list[str], assets: list[str], grid: Grid, *, is_fl
 
 def clear_regions() -> None:
     _regions.clear()
+
+
+def block_layout(item_id: str, asset: str, *, fresh: bool = False) -> tuple[float, float, int]:
+    """(left, top, block size in pixels) of a COG, so reads can line up with whole blocks."""
+    cached = None if fresh else _layouts.get((item_id, asset))
+    if cached is not None:
+        return cached
+    href = asset_href(get_item(item_id), asset)
+    if href is None:
+        raise GeoUnavailable(f"{item_id} has no asset {asset}")
+
+    def fetch() -> tuple[float, float, int]:
+        with _sign_lock:
+            signed = planetary_computer.sign(href)
+        with rasterio.Env(**GDAL_ENV), rasterio.open(signed) as ds:
+            return (float(ds.transform.c), float(ds.transform.f), int(ds.block_shapes[0][0]))
+
+    last: Exception | None = None
+    for delay in (*RETRY_DELAYS, None):
+        try:
+            layout = fetch()
+            _layouts[(item_id, asset)] = layout
+            return layout
+        except (RasterioError, RasterioIOError, OSError) as exc:
+            last = exc
+            if delay is not None:
+                time.sleep(delay)
+    raise GeoUnavailable(f"reading the layout of {item_id}/{asset} failed: {last}") from last
+
+
+def read_overview(item_id: str, asset: str, grid: Grid) -> np.ndarray | None:
+    """A coarse read that uses the COG's overviews, which WarpedVRT does not (measured: it fetched
+    native blocks for a whole tile). Only for pictures and context, never for a reported statistic.
+    The item must be in the grid's CRS; otherwise this returns None and the caller reads normally.
+    """
+    item = get_item(item_id)
+    href = asset_href(item, asset)
+    if href is None:
+        return None
+
+    def fetch() -> np.ndarray | None:
+        with _sign_lock:
+            signed = planetary_computer.sign(href)
+        with rasterio.Env(**GDAL_ENV), rasterio.open(signed) as ds:
+            if ds.crs.to_epsg() != grid.epsg:
+                return None
+            right, bottom = grid.left + grid.width * grid.res, grid.top - grid.height * grid.res
+            window = from_bounds(grid.left, bottom, right, grid.top, ds.transform)
+            return ds.read(
+                1, window=window, out_shape=grid.shape, resampling=Resampling.nearest, boundless=True,
+                fill_value=ds.nodata if ds.nodata is not None else 0,
+            )
+
+    last: Exception | None = None
+    for delay in (*RETRY_DELAYS, None):
+        try:
+            return fetch()
+        except (RasterioError, RasterioIOError, OSError) as exc:
+            last = exc
+            if delay is not None:
+                time.sleep(delay)
+    raise GeoUnavailable(f"overview read of {item_id}/{asset} failed: {last}") from last
 
 
 def _read_once(href: str, grid: Grid, is_float: bool) -> np.ndarray:

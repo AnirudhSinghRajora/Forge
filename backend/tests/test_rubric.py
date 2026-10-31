@@ -3,7 +3,16 @@ from datetime import timedelta
 
 from app.agent import rubric
 from app.evidence.schema import Objection
-from tests.conftest import EVENT, an_alert, evidence, history_ok, placebo, sar_evidence, stats, weather
+from tests.conftest import (
+    EVENT,
+    an_alert,
+    evidence,
+    history_ok,
+    placebo,
+    sar_evidence,
+    stats,
+    weather,
+)
 
 
 def _objection(oid, outcome):
