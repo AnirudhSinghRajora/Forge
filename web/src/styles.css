@@ -661,6 +661,8 @@ html[data-lang="en"] .path-route { font-weight: 700; }
 .vgroup-waiting .vgroup-name, .vgroup-waiting .vgroup-meta { color: var(--ink-3); }
 .vgroup-running { font-weight: 700; background: var(--paper-2); }
 .vgroup-failed .vgroup-mark { color: var(--ink); }
+.verify-line p.small { font: 400 0.86rem/1.5 var(--sans); color: var(--ink-2); }
+.vgroup-failed .vgroup-meta { font-family: var(--sans); }
 .hash-ok { display: flex; gap: 8px; align-items: flex-start; font-weight: 600; color: var(--blue); }
 .verify-sub { font: 400 0.86rem/1.5 var(--sans) !important; color: var(--ink-2); }
 .tally { display: flex; flex-wrap: wrap; gap: 8px 26px; margin: 18px 0 8px; }
