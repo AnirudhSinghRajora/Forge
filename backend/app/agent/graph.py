@@ -172,6 +172,7 @@ class Ctx:
     evidence_run_id: str | None = None  # a retry updates the evidence row of the original run
     reads: threading.Semaphore = field(default_factory=lambda: threading.Semaphore(MAX_BACKGROUND_READS))
     exhibits: dict = field(default_factory=dict)
+    announced: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         for name in EXHIBITS:
@@ -1586,6 +1587,9 @@ def n_exhibits(state: State, ctx: Ctx) -> dict:
 
 def _emit_exhibit(ctx: Ctx, name: str) -> None:
     entry = ctx.exhibits[name]
+    if ctx.announced.get(name) == entry["status"]:
+        return
+    ctx.announced[name] = entry["status"]
     done = entry["status"] == "done"
     ctx.emit("action", "exhibits",
              f"{_EXHIBIT_HI[name]}: {'तैयार' if done else 'नहीं बन पाया' if entry['status'] == 'failed' else 'लागू नहीं'}",
