@@ -44,14 +44,21 @@ It is the best match for all three of your criteria:
 ### On ScholarFlow (the existing plan)
 It's now **#5 (71)**. NSP's 2026-27 deadline for most scholarships is **today**, and One-Time Registration requires **Aadhaar face authentication**, so a live end-to-end application demo is unlikely to survive judging. The process parts of `HACKATHON_PLAYBOOK.md` (phases, checkpoints, handoffs) can be reused for any idea above.
 
-## Open questions for the team
+## Decision log: team answers (31 Oct 2026)
 
-1. **Are you OK dropping ScholarFlow?** Has anything been built or validated for it since the playbook was written?
-2. **Exact submission deadline (and time zone)?** Is there a separate deadline for the video, deck and form?
-3. **Skills:** has anyone worked with raster/geospatial data (rasterio, xarray, GDAL, Earth Engine), or with audio/vision ML? This is the main tie-breaker between #1/#2 and #3.
-4. **Languages:** which Indian languages can the team verify? Hindi/Punjabi suits both Sirsa (#1) and Punjab (#2).
-5. **Paid API budget:** a small amount for an LLM API and a higher weather-API quota helps #1/#2. #3 also needs reverse-image search.
-6. **Field contacts:** any farmer, FPO, KVK or agriculture officer you could get one real quote from? A single real user voice makes the impact pillar much stronger.
+| Question | Answer | Effect |
+|---|---|---|
+| Anything built for ScholarFlow? | **No** | Nothing is sunk. Pivoting costs nothing; ScholarFlow stays out of the top 3. |
+| Submission deadline | **~2 days left** | A bit more room than the ~31 h estimate. The MVP can include some nice-to-haves (neighbour analysis, scheduled re-checks, grievance drafting for #1). |
+| Paid API budget | **Gemini paid APIs available** | Covers reasoning, function calling, Search grounding, vision, audio in, and Hindi TTS. Helps all three ideas. The ranking is unchanged: Search grounding helps TraceBack's retrieval, but its crowding problem remains. For #1, Gemini adds a **news-corroboration signal** and a **visual second opinion** (see [03 §5a](03-idea-1-fasalsaakshi.md#5a-gemini-mapping-paid-access-confirmed)). |
+
+**Gemini caution:** Gemini 2.5 models shut down in October 2026. Use current 3.x models and confirm the exact IDs in AI Studio.
+
+## Still-open questions for the team
+
+1. **Skills:** has anyone worked with raster/geospatial data (rasterio, xarray, GDAL, Earth Engine), or with audio/vision ML? This is the main tie-breaker between #1/#2 and #3.
+2. **Languages:** which Indian languages can the team verify? Hindi/Punjabi suits both Sirsa (#1) and Punjab (#2).
+3. **Field contacts:** any farmer, FPO, KVK or agriculture officer you could get one real quote from? A single real user voice makes the impact pillar much stronger.
 
 ## Next steps once the idea is locked
 

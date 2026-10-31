@@ -4,6 +4,8 @@ Research date: **31 Oct 2026**. About 31 hours of the build window were left whe
 
 This folder holds the research behind choosing what to build for the Forge Gen AI Buildathon (NxtWave): competition constraints, a longlist of 12 ideas scored against the judging rubric, deep dives on the top 3, and a recommendation.
 
+**Team inputs so far:** nothing has been built for ScholarFlow; ~2 days left to submit; Gemini paid APIs available (mapping in [03 §5a](03-idea-1-fasalsaakshi.md#5a-gemini-mapping-paid-access-confirmed)).
+
 **Revision 2:** the team's priorities are **judge impression, impact, and a problem that isn't fully solved yet**. The audience award is not a goal. Scores and rankings were redone on that basis.
 
 ## TL;DR — Top 3

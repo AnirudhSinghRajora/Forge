@@ -127,3 +127,10 @@ Run from our cloud build container (not an Indian network):
 - [Insights: India's Heat Action Plans (2026)](https://www.insightsonindia.com/2026/05/15/upsc-editorial-analysis-indias-heat-action-plans-2026/) *(secondary)*
 - [Vikaspedia: National Disaster Alert Portal (SACHET)](https://en.vikaspedia.in/social-welfare/disaster-management-1/national-disaster-alert-portal)
 - [Sphere India SitRep, Aug 2026](https://www.sphereindia.org.in/sites/default/files/2026-08/02.08.2026%20SitRep-%205%20Extreme%20Weather%20Events%20in%20India.pdf)
+
+## Gemini API (build tooling)
+- [Gemini 3 developer guide](https://ai.google.dev/gemini-api/docs/gemini-3)
+- [Gemini API changelog (built-in tools + function calling combination, Mar 2026)](https://ai.google.dev/gemini-api/docs/changelog)
+- [Firebase AI Logic: grounding with Google Search (supported models)](https://firebase.google.com/docs/ai-logic/grounding-google-search)
+- [Firebase AI Logic locations (Gemini 2.5 shutdown notice, Oct 2026)](https://firebase.google.com/docs/ai-logic/locations?api=vertexai)
+- [Cloud Text-to-Speech: Gemini-TTS languages (hi-IN GA, pa-IN preview)](https://cloud.google.com/text-to-speech/docs/gemini-tts)

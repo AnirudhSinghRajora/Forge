@@ -103,17 +103,30 @@ What judges will see: **self-correction** (cloudy, so switch to radar; the drop 
 | Layer | Choice (suggested) | Notes |
 |---|---|---|
 | Channel | WhatsApp Cloud API (Meta test number) and/or a web PWA; optional IVR | Voice in / voice out |
-| Speech + language | Bhashini / Sarvam / AI4Bharat IndicTrans2 + IndicWhisper / IndicTTS, or a frontier LLM for reasoning | Hindi/Punjabi first, since the Haryana demo calls for it |
-| Agent orchestration | LangGraph-style state graph (or equivalent) with typed tools, retries, timeouts | "Complex state graphs" are named in the rubric |
+| Speech + language | **Gemini (team has paid access):** native audio understanding for Hindi/Punjabi voice notes in; **Gemini TTS** for voice out (Hindi = GA, Punjabi = preview). Fallback: Sarvam / Bhashini. | Hindi first for the Sirsa demo, since Hindi TTS is GA |
+| Agent orchestration | LangGraph-style state graph (or equivalent) with typed tools, retries, timeouts; **Gemini 3.x Pro** as planner/reasoner, **Gemini 3.x Flash** for cheap/fast steps, using function calling | "Complex state graphs" are named in the rubric. Gemini 2.5 shuts down Oct 2026, so don't use it. |
 | Geospatial engine | **Microsoft Planetary Computer STAC** (Sentinel-2 L2A, Sentinel-1 RTC; free, no key for search) via `pystac-client` + `odc-stac`/`stackstac` + `rasterio`/`xarray`. Fallback: **Copernicus Data Space** (Sentinel Hub Statistical API). | Per-plot zonal stats only, never whole tiles, to keep latency low |
 | Field boundaries | Segment-Anything-style model on S2 RGB, or user-drawn polygon (Leaflet/MapLibre) | User-drawn is the robust fallback |
 | Weather / alerts | Open-Meteo (forecast + archive), NASA POWER (agro-met, daily), **NDMA SACHET CAP RSS** | Open-Meteo's archive hit a 429 daily limit in our test, so cache responses and keep NASA POWER as the fallback |
-| Policy RAG | PMFBY operational guidelines + state notifications, chunked with clause IDs | Citation-first answers |
+| Policy RAG | PMFBY operational guidelines + state notifications, chunked with clause IDs (Gemini embeddings, or the long context window for the guideline PDF) | Citation-first answers |
 | Storage | Postgres + PostGIS (plots, cases, evidence), object storage for PNG/PDF | Case history for re-checks |
 | Scheduler | Cron/worker that re-checks new passes and deadlines | Shows autonomy over time |
 | Output | Evidence-pack PDF (before/after chips, charts, citations), voice note | The strongest visual moment for judges |
 
 ---
+
+## 5a. Gemini mapping (paid access confirmed)
+
+| Agent step | Gemini capability | Guardrail |
+|---|---|---|
+| Parse a farmer's voice note (Hindi/Haryanvi/Punjabi) | Native audio input → structured JSON (crop, event, date, location hints) via a response schema | Read back the parsed facts to the farmer for confirmation |
+| Planner / tool-calling loop | Function calling with our typed tools (`search_optical`, `search_sar`, `get_weather`, `get_alerts`, `baseline`, `neighbours`, `policy_rag`, `draft_intimation`) | Max-steps budget; every tool result logged into the trace shown in the UI |
+| **Independent news corroboration** (a new evidence signal) | **Grounding with Google Search** combined with function calling (supported on Gemini 3 models): "was hail/unseasonal rain reported near Sirsa around 25 Oct 2026?" → cited URLs (e.g. the UNI report) | Treated as a *corroborating* signal only, never as proof of an individual plot's loss |
+| Visual sanity check of before/after chips | Multimodal image input on the true-colour + NDVI chips: "describe visible change; is it consistent with lodging/hail vs harvest?" | Second opinion only. The numeric index change and baselines decide; disagreements are flagged as "needs review". |
+| Policy answers | Long-context reading of PMFBY guidelines, or RAG with Gemini embeddings; cite clause IDs | Refuse to answer policy questions without a retrieved clause |
+| Farmer-facing output | Gemini TTS voice note + plain-language summary | Fixed template for numbers, so the LLM never invents figures |
+
+Note: Search-grounding usage is billed per executed query on Gemini 3 models, so cache per event and region. Confirm exact current model IDs in AI Studio before coding (tables online were inconsistent on 31 Oct 2026).
 
 ## 6. Data: verified live on 31 Oct 2026
 
@@ -163,6 +176,6 @@ All official, open data. **No dummy data anywhere** in the pipeline.
 | API rate limits (Open-Meteo 429) | Cache, NASA POWER fallback, pre-warm the demo locations |
 | Over-claiming legal outcomes | Language like "supports your claim with evidence" rather than "you will get paid" |
 
-## 10. MVP cut for the remaining window (if chosen)
+## 10. MVP cut (team confirmed ~2 days left)
 
 Must-have: pin/polygon in → S2 before/after + NDVI change + baseline → SAR fallback → weather/SACHET corroboration → cited verdict → intimation draft → Hindi voice note. Nice-to-have: field segmentation, scheduled re-checks, grievance drafting, neighbour analysis.
