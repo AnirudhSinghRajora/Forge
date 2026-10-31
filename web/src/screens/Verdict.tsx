@@ -4,7 +4,7 @@ import { ApiError, getCase, pdfUrl, startInvestigation, type CaseEnvelope, type 
 import { linkProps, navigate } from "../router";
 import { Icon } from "../components/Icon";
 import { Stamp } from "../components/Stamp";
-import { ErrorNote, Loading, Missing, useInView } from "../components/Bits";
+import { ErrorNote, Loading, Missing, useInView, useNow } from "../components/Bits";
 import { ObjectionCard } from "../components/ObjectionCard";
 import { Voice } from "../components/Voice";
 import { TenFieldDraw } from "../components/TenFieldDraw";
@@ -18,7 +18,7 @@ import { PlaceboStrip } from "../charts/PlaceboStrip";
 import { TwinChart } from "../charts/TwinChart";
 import { TimelineChart } from "../charts/TimelineChart";
 import { ErrorBoundary } from "../components/ErrorBoundary";
-import { dateTimeLabel, dayLabel, num, pct } from "../format";
+import { clock, dateTimeLabel, dayLabel, num, pct } from "../format";
 import type { Evidence, VerdictLevel } from "../types";
 
 const AnomalyMap = lazy(() => import("../map/AnomalyMap"));
@@ -269,6 +269,22 @@ function PlainList({ items }: { items: string[] }) {
   );
 }
 
+/** Long waits are normal on a cold pin. This says exactly what is being read, and for how long. */
+function WaitBar({ names, startedAt }: { names: string[]; startedAt: string | null }) {
+  const { t } = useI18n();
+  const now = useNow(1000);
+  const since = startedAt ? (now - new Date(startedAt).getTime()) / 1000 : null;
+  return (
+    <aside className="activity" aria-live="off">
+      <div className="activity-now">
+        <span className="spinner" aria-hidden="true" />
+        <span className="activity-title">{t("exhibit.reading", { names: names.map((n) => t(`exhibit.${n}` as Key)).join(", ") })}</span>
+      </div>
+      {since !== null && since > 0 && <div className="activity-meta"><span className="mono">{clock(since)}</span></div>}
+    </aside>
+  );
+}
+
 function RunAgain({ caseId }: { caseId: string }) {
   const { t } = useI18n();
   const [busy, setBusy] = useState(false);
@@ -355,9 +371,12 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
   const recheck = ev.deadlines.find((d) => d.type === "recheck");
   const twinWhy = ev.neighbours?.placebo?.insufficient_reason ?? (ev.optical.post ? null : t("twin.no_post"));
   const sealed = !!ev.evidence_hash;
+  // An early "insufficient" while work is still running means "still computing", never a finding.
+  const provisional = !sealed && v?.level === "insufficient" && !!c.active_run_id;
   const regionChip = ev.chips.find((c) => c.kind === "region_map");
   const statuses = env.exhibits ?? {};
-  const pendingCount = Object.values(statuses).filter((x) => x.status === "pending").length;
+  const pendingNames = Object.entries(statuses).filter(([, x]) => x.status === "pending").map(([k]) => k);
+  const pendingCount = pendingNames.length;
   const gate = (name: string, children: React.ReactNode) => (
     <ExhibitGate name={name} status={statuses[name] as ExhibitStatus | undefined} caseId={caseId} sealed={sealed} onRetried={onRetried}>
       {children}
@@ -366,11 +385,17 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
 
   return (
     <div className="page verdict">
-      <Testimony ev={ev} caseId={caseId} verdictLine={headline} />
+      {!provisional && <Testimony ev={ev} caseId={caseId} verdictLine={headline} passes={env.exhibits?.timeline?.status} />}
       <header className="verdict-top">
         <div className="verdict-main">
           <p className="eyebrow">{t("verdict.eyebrow")} · <span className="mono">{caseId.slice(0, 12)}</span></p>
-          {v ? (
+          {provisional ? (
+            <>
+              <h1 className="verdict-headline">{t("verdict.provisional")}</h1>
+              <p className="lede">{t("verdict.provisional_body")}</p>
+              <a className="btn" {...linkProps(`/case/${encodeURIComponent(caseId)}/investigate${c.active_run_id ? `?run=${encodeURIComponent(c.active_run_id)}` : ""}`)}>{t("verdict.watch")}</a>
+            </>
+          ) : v ? (
             <>
               <h1 className={`verdict-headline level-${v.level}`}>{headline}</h1>
               <LevelScale level={v.level} />
@@ -385,9 +410,9 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
               {!c.active_run_id && <RunAgain caseId={caseId} />}
             </>
           )}
-          {explanation && <p className="explanation">{explanation}</p>}
+          {explanation && !provisional && <p className="explanation">{explanation}</p>}
           {!explanation && v && lang === "te" && <p className="small faint">{t("verdict.te_missing")}</p>}
-          <Voice caseId={caseId} text={voiceText} />
+          {!provisional && <Voice caseId={caseId} text={voiceText} />}
           {ev.llm_used === false && <p className="small faint">{t("verdict.no_llm")}</p>}
         </div>
 
@@ -450,12 +475,6 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
       )}
 
       <div className="exhibits">
-        {pendingCount > 0 && (
-          <p className="still-computing" role="status">
-            <span className="spinner" aria-hidden="true" /> {t("exhibit.still", { n: pendingCount })}
-          </p>
-        )}
-
         <section className="signature" aria-labelledby="foot-t">
           <p className="exhibit-mark"><span>{t("ex.label")}</span> <b>{t("ex.foot")}</b></p>
           <h2 id="foot-t" className="signature-title">{t("ex.foot_t")}</h2>
@@ -572,6 +591,8 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
           )}
         </Exhibit>
       </div>
+
+      {pendingCount > 0 && <WaitBar names={pendingNames} startedAt={c.latest_run?.started_at ?? null} />}
 
       <div className="cta verdict-next">
         <button className="btn btn-primary btn-big btn-wide" onClick={() => navigate(`/case/${encodeURIComponent(caseId)}/action`)}>

@@ -41,6 +41,7 @@ const PlotMap = forwardRef<PlotMapHandle, Props>(function PlotMap({ center, init
   const [tileError, setTileError] = useState(false);
   const [broken] = useState(() => !canRunMap());
   const [initError, setInitError] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
 
   const emit = () => {
     const draw = drawRef.current;
@@ -221,11 +222,12 @@ const PlotMap = forwardRef<PlotMapHandle, Props>(function PlotMap({ center, init
       <div ref={host} className="map-host" />
       <div className="places places-over" role="group" aria-label={t("map.places")}>
         {PLACES.map((p) => (
-          <button key={p.id} className="chip" onClick={() => mapRef.current?.jumpTo({ center: [p.lon, p.lat], zoom: p.zoom })}>
+          <button key={p.id} className="chip" onClick={() => { mapRef.current?.jumpTo({ center: [p.lon, p.lat], zoom: p.zoom }); setNote(p.selected?.[lang] ?? null); }}>
             <Icon name="pin" size={16} /> {p.label[lang]}
           </button>
         ))}
       </div>
+      {note && <p className="map-note map-note-top">{note}</p>}
       {tileError && <p className="map-note" role="status">{t("map.tiles_failed")}</p>}
     </div>
   );

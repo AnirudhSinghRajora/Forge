@@ -37,6 +37,11 @@ function ClaimPathBlock({ ev, caseRecord }: { ev: Evidence | null; caseRecord: C
   const { t, lang } = useI18n();
   const cp = ev?.claim_path ?? null;
   const clauses = (cp?.clause_ids ?? []).map((id) => ev?.policy.find((c) => c.clause_id === id) ?? null);
+  // The server keeps this text in every language, so switching language here needs no new run.
+  const text = ev?.claim_path_text?.[lang];
+  const reasons = text?.reasons ?? cp?.reasons ?? [];
+  const nextSteps = text?.next_steps ?? cp?.next_steps ?? [];
+  const evidenceUse = text?.evidence_use ?? cp?.evidence_use ?? null;
   return (
     <section className="claim-path" aria-labelledby="path-t">
       <p className="eyebrow">{t("path.eyebrow")}</p>
@@ -58,11 +63,11 @@ function ClaimPathBlock({ ev, caseRecord }: { ev: Evidence | null; caseRecord: C
             <p className="small">{t("path.tell_more")} <a {...linkProps(`/case/${encodeURIComponent(caseRecord.id)}/confirm`)}>{t("path.tell_link")}</a></p>
           )}
           <div className="path-grid">
-            {cp.reasons.length > 0 && <div><h3 className="h-mini">{t("path.why")}</h3><ul>{cp.reasons.map((r, i) => <li key={i}>{translateRubric(r, lang)}</li>)}</ul></div>}
-            {cp.next_steps.length > 0 && <div><h3 className="h-mini">{t("path.next")}</h3><ol>{cp.next_steps.map((r, i) => <li key={i}>{translateRubric(r, lang)}</li>)}</ol></div>}
+            {reasons.length > 0 && <div><h3 className="h-mini">{t("path.why")}</h3><ul>{reasons.map((r, i) => <li key={i}>{translateRubric(r, lang)}</li>)}</ul></div>}
+            {nextSteps.length > 0 && <div><h3 className="h-mini">{t("path.next")}</h3><ol>{nextSteps.map((r, i) => <li key={i}>{translateRubric(r, lang)}</li>)}</ol></div>}
             <div>
               <h3 className="h-mini">{t("path.useful")}</h3>
-              {cp.evidence_use ? <p>{translateRubric(cp.evidence_use, lang)}</p> : <p className="faint">{t("missing.not_measured")}</p>}
+              {evidenceUse ? <p>{translateRubric(evidenceUse, lang)}</p> : <p className="faint">{t("missing.not_measured")}</p>}
               <p className="small">{t("path.no_must")}</p>
             </div>
             {cp.unknowns.length > 0 && <div><h3 className="h-mini">{t("path.unknown")}</h3><ul>{cp.unknowns.map((r, i) => <li key={i}>{keyLabel(r, lang)}</li>)}</ul></div>}
@@ -290,8 +295,9 @@ export default function ActionScreen({ caseId }: { caseId: string }) {
   const lapsed = deadline?.status === "lapsed" || draft?.deadline_status === "lapsed";
   const lapsedNote = lang === "hi" ? draft?.lapsed_note_hi : lang === "te" ? draft?.lapsed_note_te ?? draft?.lapsed_note_en : draft?.lapsed_note_en;
   const text = draft?.available ? (lang === "te" ? draft.text_te ?? draft.text_en : lang === "hi" ? draft.text_hi : draft.text_en) ?? null : null;
+  const partialNote = (lang === "te" ? draft?.partial_allowed_note_te : lang === "hi" ? draft?.partial_allowed_note_hi : draft?.partial_allowed_note_en) ?? null;
   const phone = phoneOf(draft?.channels) ?? "14447";
-  const wa = text ? `https://wa.me/?text=${encodeURIComponent(text)}` : null;
+  const wa = (lang === "te" ? draft?.whatsapp_url_te : lang === "hi" ? draft?.whatsapp_url_hi : draft?.whatsapp_url_en) ?? (text ? `https://wa.me/?text=${encodeURIComponent(text)}` : null);
 
   const download = () => {
     if (!text) return;
@@ -344,6 +350,7 @@ export default function ActionScreen({ caseId }: { caseId: string }) {
             <>
               <pre className="draft" lang={lang}>{text}</pre>
               <p className="small">{t("draft.fill")}</p>
+              {partialNote && <p className="small">{partialNote}</p>}
               <div className="btn-grid">
                 <a className="btn btn-big btn-primary" href={`tel:${phone}`}><Icon name="phone" /> {t("draft.call")} <span className="mono">{phone}</span></a>
                 <CopyButton text={text} label={t("draft.copy")} />

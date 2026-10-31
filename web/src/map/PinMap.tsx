@@ -15,6 +15,7 @@ export default function PinMap({ start, onPick, onPlace }: {
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [center, setCenter] = useState<{ lat: number; lon: number } | null>(null);
   const [broken] = useState(() => !canRunMap());
+  const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (broken || !host.current) return;
@@ -50,11 +51,12 @@ export default function PinMap({ start, onPick, onPlace }: {
     <div className="pinmap">
       <div className="places" role="group" aria-label={t("map.places")}>
         {PLACES.map((p) => (
-          <button key={p.id} className="chip" onClick={() => { mapRef.current?.jumpTo({ center: [p.lon, p.lat], zoom: p.zoom }); onPlace?.(p.eventDate); }}>
+          <button key={p.id} className="chip" onClick={() => { mapRef.current?.jumpTo({ center: [p.lon, p.lat], zoom: p.zoom }); onPlace?.(p.eventDate); setNote(p.selected?.[lang] ?? null); }}>
             <Icon name="pin" size={16} /> {p.label[lang]}
           </button>
         ))}
       </div>
+      {note && <p className="selected-note">{note}</p>}
       <div className="pinmap-canvas">
         <div ref={host} className="map-host" />
         <span className="crosshair" aria-hidden="true"><Icon name="pin" size={44} stroke={1.6} /></span>

@@ -251,7 +251,9 @@ async def stream(hash_value: str) -> AsyncIterator[dict]:
             continue
         for row in compare_all(expected, recomputed):
             checked[row["field"]] = row
-            yield _event("number", group=group, source=SOURCE["read"], **row)
+            # `field` is the sealed key; `label` is what to show, under the user-facing name.
+            label = row["field"].replace("village.lottery.", "village.ten_field_draw.")
+            yield _event("number", group=group, source=SOURCE["read"], label=label, **row)
             await asyncio.sleep(0.01)
         yield _event("group_done", group=group, n_numbers=len(expected),
                      elapsed_s=round(time.monotonic() - group_began, 1))

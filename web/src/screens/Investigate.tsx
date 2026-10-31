@@ -117,13 +117,34 @@ function usePaced(events: TraceEvent[], restored: number) {
 }
 
 /** The server sends the challenge as the event's title, and the rest of the objection as detail. */
+const TOOL_NAMES: Record<string, Key> = {
+  optical_compare: "tool.optical_compare", sar_compare: "tool.sar_compare", scale_fade: "tool.scale_fade",
+  village_witness: "tool.village_witness", render_chips: "tool.render_chips", timeline: "tool.timeline",
+  history: "tool.history", qa_scene: "tool.qa_scene", search_optical: "tool.search_optical", search_sar: "tool.search_sar",
+};
+
+const isProvisional = (ev: TraceEvent) => ev.type === "verdict" && ev.detail.provisional === true;
+
+/** The line a reader sees for an event: never a machine name, and never a provisional result as a finding. */
+function useEventTitle() {
+  const { t, lang } = useI18n();
+  return useCallback((ev: TraceEvent): string => {
+    if (isProvisional(ev)) return t("trace.provisional");
+    if (ev.type === "action" && ev.detail.action === "exhibit") {
+      return `${t(`exhibit.${String(ev.detail.exhibit)}` as Key)}: ${t(`exhibit.st_${String(ev.detail.status)}` as Key)}`;
+    }
+    if (lang === "hi") return ev.title_hi;
+    return ev.title_en.replace(/\b(optical_compare|sar_compare|scale_fade|village_witness|render_chips|timeline|history|qa_scene|search_optical|search_sar)\b/g, (m) => t(TOOL_NAMES[m]));
+  }, [t, lang]);
+}
+
 function asObjection(ev: TraceEvent): Objection | null {
   const d = ev.detail as Partial<Objection>;
   if (typeof d.outcome !== "string") return null;
   return { ...d, challenge_hi: ev.title_hi, challenge_en: ev.title_en } as Objection;
 }
 
-const HIDDEN = new Set(["objection", "reasons", "reason", "scene", "from", "to", "frm", "seq", "headline_hi", "headline_en", "headline_te", "rejected", "caveats", "budget", "country_code", "fallback_used", "tool", "args", "llm", "choice", "excluded", "start", "end", "duration_s", "action", "report", "open_followups", "round", "needed", "corroborated_by", "conceded", "evidence_hash", "due_at", "grid_note", "centroid", "crs", "warnings", "scenes"]);
+const HIDDEN = new Set(["exhibit", "exhibits", "exhibits_pending", "exhibits_started", "provisional", "revised", "sealed", "signature", "pending", "n_clauses", "clause_ids", "unknowns", "intimation", "route", "reason", "objection", "reasons", "scene", "from", "to", "frm", "seq", "headline_hi", "headline_en", "headline_te", "rejected", "caveats", "budget", "country_code", "fallback_used", "tool", "args", "llm", "choice", "excluded", "start", "end", "duration_s", "action", "report", "open_followups", "round", "needed", "corroborated_by", "conceded", "evidence_hash", "due_at", "grid_note", "centroid", "crs", "warnings", "scenes"]);
 
 function flatten(d: Record<string, unknown>, prefix = "", depth = 0): [string, string][] {
   const out: [string, string][] = [];
@@ -181,9 +202,14 @@ function SceneRejected({ ev, title }: { ev: TraceEvent; title: string }) {
       <p className="rejected-title">{title}</p>
       {date && <p className="mono">{dayLabel(date, lang)}</p>}
       {id && <p className="mono small break">{id}</p>}
-      {reasons.length > 0 && (
-        <ul className="rejected-reasons">{reasons.map((r, i) => <li key={i} lang="en">{r}</li>)}</ul>
-      )}
+      {reasons.length > 0 && (lang === "en"
+        ? <ul className="rejected-reasons">{reasons.map((r, i) => <li key={i}>{r}</li>)}</ul>
+        : (
+          <details className="fine">
+            <summary>{t("exhibit.technical")}</summary>
+            <ul className="rejected-reasons" lang="en">{reasons.map((r, i) => <li key={i}>{r}</li>)}</ul>
+          </details>
+        ))}
       <Numbers detail={Object.fromEntries(Object.entries(raw).filter(([k]) => !["id", "scene_id", "date", "reasons", "reason", "status", "collection"].includes(k)))} />
     </div>
   );
@@ -201,9 +227,12 @@ function SensorSwitch({ ev, title }: { ev: TraceEvent; title: string }) {
       </p>
       <p className="switch-title">{title}</p>
       {rejected.length > 0 && (
-        <ul className="small switch-rejected">
-          {rejected.map((r, i) => <li key={i}><span className="mono">{dayLabel(r.date, lang)}</span> <span lang="en">{(r.reasons ?? []).join("; ")}</span></li>)}
-        </ul>
+        <details className="fine switch-tech">
+          <summary>{t("exhibit.technical")}</summary>
+          <ul className="small switch-rejected">
+            {rejected.map((r, i) => <li key={i}><span className="mono">{dayLabel(r.date, lang)}</span> <span lang="en">{(r.reasons ?? []).join("; ")}</span></li>)}
+          </ul>
+        </details>
       )}
       <p className="small switch-why">{t("trace.radar_why")}</p>
     </div>
@@ -211,8 +240,8 @@ function SensorSwitch({ ev, title }: { ev: TraceEvent; title: string }) {
 }
 
 function TraceLine({ ev, base, fresh, n }: { ev: TraceEvent; base: number; fresh: boolean; n: number }) {
-  const { t, lang } = useI18n();
-  const title = lang === "hi" ? ev.title_hi : ev.title_en;
+  const { t } = useI18n();
+  const title = useEventTitle()(ev);
   const offset = (new Date(ev.ts).getTime() - base) / 1000;
   const obj = ev.type === "objection" ? asObjection(ev) : null;
 
@@ -226,7 +255,7 @@ function TraceLine({ ev, base, fresh, n }: { ev: TraceEvent; base: number; fresh
     case "decision": body = <><p className="trace-decision">{title}</p><Numbers detail={ev.detail} /></>; break;
     case "warning": body = <><p className="trace-warn"><Icon name="warn" size={18} /> {title}</p><Numbers detail={ev.detail} /></>; break;
     case "error": body = <><p className="trace-warn"><Icon name="warn" size={18} /> {title}</p><Numbers detail={ev.detail} /></>; break;
-    case "verdict": body = <><p className="trace-verdict">{title}</p>{typeof ev.detail.level === "string" && <Stamp size="md" tone="ink" className={fresh ? "stamp-thump" : ""}>{t(`scale.${ev.detail.level}` as Key)}</Stamp>}</>; break;
+    case "verdict": body = isProvisional(ev) ? <p className="trace-asked"><span className="spinner" aria-hidden="true" /> {title}</p> : <>{ev.detail.revised === true && <p className="small">{t("trace.revised")}</p>}<p className="trace-verdict">{title}</p>{typeof ev.detail.level === "string" && <Stamp size="md" tone="ink" className={fresh ? "stamp-thump" : ""}>{t(`scale.${ev.detail.level}` as Key)}</Stamp>}</>; break;
     case "done": body = <p className="trace-done">{title}</p>; break;
     default: body = <><p>{title}</p><Numbers detail={ev.detail} /></>;
   }
@@ -240,7 +269,7 @@ function TraceLine({ ev, base, fresh, n }: { ev: TraceEvent; base: number; fresh
 }
 
 export default function Investigate({ caseId }: { caseId: string }) {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const [runId, setRunId] = useState<string | null>(() => new URLSearchParams(location.search).get("run"));
   const [boot, setBoot] = useState<unknown>(null);
   const [attempt, setAttempt] = useState(0);
@@ -280,7 +309,8 @@ export default function Investigate({ caseId }: { caseId: string }) {
   const finalStatus = events.find((e) => e.type === "done")?.detail.status;
   const failed = done && (finalStatus === "failed" || finalStatus === "interrupted");
   const lastError = [...events].reverse().find((e) => e.type === "error");
-  const hasVerdict = events.some((e) => e.type === "verdict");
+  const hasVerdict = events.some((e) => e.type === "verdict" && !isProvisional(e));
+  const titleOf = useEventTitle();
 
   const running = !!runId && !done && conn !== "gone";
   const now = useNow(1000, running);
@@ -327,7 +357,7 @@ export default function Investigate({ caseId }: { caseId: string }) {
     );
   }
 
-  const nowTitle = last ? (lang === "hi" ? last.title_hi : last.title_en) : t("trace.waiting_first");
+  const nowTitle = last ? titleOf(last) : t("trace.waiting_first");
 
   return (
     <div className="page trace-page">
@@ -394,8 +424,8 @@ export default function Investigate({ caseId }: { caseId: string }) {
               <button className="linkish small" onClick={reconnect}>{t("trace.reconnecting", { n: tries })}</button>
             ) : conn === "connecting" ? (
               <span className="small">{t("trace.connecting")}</span>
-            ) : quiet > 20 ? (
-              <span className="small">{t("trace.quiet", { s: Math.round(quiet) })}</span>
+            ) : quiet > 5 ? (
+              <span className="small">{t("trace.on_step")} <span className="mono">{clock(quiet)}</span></span>
             ) : null}
           </div>
           {quiet > 60 && <p className="small activity-note">{t("trace.slow")}</p>}

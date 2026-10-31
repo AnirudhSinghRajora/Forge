@@ -203,7 +203,10 @@ def build_context(ev: Evidence, case: dict, actions: list[dict], lang: str, char
         "generated": datetime.now(UTC).astimezone(IST).strftime("%-d %b %Y, %H:%M IST"),
         "qr": _qr_data_uri(verify_url),
         "verify_url": verify_url,
-        "numbers": sorted((ev.replay.numbers or {}).items()) if ev.replay else [],
+        "numbers": sorted(
+            (name.replace("village.lottery.", "village.ten_field_draw."), value)
+            for name, value in (ev.replay.numbers or {}).items()
+        ) if ev.replay else [],
     }
 
 

@@ -107,7 +107,8 @@ export interface CaseRecord {
 export interface ActionRecord { id?: string; type: string; status?: string; payload?: Record<string, unknown> | null; due_at?: string | null; created_at?: string }
 export interface IntimationDraft {
   available: boolean; needed?: boolean; reason?: string; text_hi?: string; text_en?: string; text_te?: string;
-  whatsapp_url_hi?: string; whatsapp_url_en?: string; channels?: unknown[]; basis?: string | null;
+  whatsapp_url_hi?: string; whatsapp_url_en?: string; whatsapp_url_te?: string;
+  fields_to_fill?: string[]; partial_allowed_note_hi?: string; partial_allowed_note_en?: string; partial_allowed_note_te?: string; channels?: unknown[]; basis?: string | null;
   deadline_status?: string | null; due_at?: string | null; time_assumed?: boolean;
   lapsed_note_hi?: string | null; lapsed_note_en?: string | null; lapsed_note_te?: string | null; lapsed_basis?: string | null;
 }

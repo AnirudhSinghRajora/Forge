@@ -247,7 +247,8 @@ test.describe("languages and shared links", () => {
     });
     await page.goto("/?near=28.77,76.18");
     await expect(page.locator(".pinmap")).toBeVisible();
-    await page.getByRole("button", { name: /ओले, भिवानी/ }).click();
+    await page.getByRole("button", { name: /ओले, भिवानी 2024: आम खेत/ }).click();
+    await expect(page.locator(".selected-note")).toBeVisible();
     expect(posts).toEqual([]);
   });
 });

@@ -55,7 +55,7 @@ _GLOSSARY = {
 # A question has to touch crop insurance at all before it can be answered from this corpus.
 _DOMAIN = re.compile(
     r"(?i)insur|pmfby|fasal|bima|crop|claim|premium|loss|damage|harvest|hail|inundat|flood|cyclon|"
-    r"contest|dispute|complain|appeal|25\s*(?:percent|per cent|%)|सर्वे|असहमत|"
+    r"\breport|helpline|14447|contest|dispute|complain|appeal|25\s*(?:percent|per cent|%)|सर्वे|असहमत|"
     r"rain|drought|pest|intimat|survey|farmer|kisan|grievance|cut.?off|sum insured|loan|kcc|"
     r"notified|enrol|yes-tech|cce|deadline|72"
     r"|बीमा|फसल|फ़सल|नुकसान|कटाई|ओल|दावा|क्लेम|प्रीमियम|किसान|सूचना|शिकायत|बाढ़|बारिश|सूखा|तूफान|चक्रवात|कीट"
@@ -70,6 +70,12 @@ CORPUS_MISSING = {
     "hi": "नीति के दस्तावेज़ अभी उपलब्ध नहीं हैं, इसलिए मैं इसका जवाब नहीं दे सकता।",
     "en": "The policy documents are not available right now, so I cannot answer this.",
     "te": "విధాన పత్రాలు ప్రస్తుతం అందుబాటులో లేవు, కాబట్టి నేను సమాధానం చెప్పలేను.",
+}
+# Rule statements are our summaries of the cited clauses, so they are not introduced as quotes.
+SUMMARY_INTRO = {
+    "hi": "दिशानिर्देशों का हमारा सार (मूल धाराएँ नीचे हैं, अंग्रेज़ी में):",
+    "en": "Our summary of the guidelines (the clauses are cited below):",
+    "te": "మార్గదర్శకాల మా సారాంశం (మూల నిబంధనలు కింద ఉన్నాయి, ఆంగ్లంలో):",
 }
 QUOTE_INTRO = {
     "hi": "दिशानिर्देशों में यह लिखा है (अंग्रेज़ी में मूल पाठ):",
@@ -235,9 +241,48 @@ def _clause_by_id(clause_id: str) -> dict | None:
     return next((c for c in corpus.clauses if str(c["clause_id"]) == clause_id), None)
 
 
+_REPORTING = (r"report|intimat|inform|tell|notify|सूचना|सूचित|बताना|बताएँ|बताऊँ|रिपोर्ट|"
+              r"సమాచారం|తెలియజేయ|నివేదించ")
+# Farmers ask in their own words, which rarely share vocabulary with a rule, so common intents route
+# directly. Checked in order: the first match wins, so "report late" reaches late_intimation.
+_INTENTS = [
+    ("late_intimation", re.compile(
+        rf"(?i)(late|delay|missed|after the deadline|देर|विलंब|ఆలస్యం).*({_REPORTING}|claim|दावा|క్లెయిమ్)"
+        rf"|({_REPORTING}).*(late|delay|missed|देर|विलंब|ఆలస్యం)")),
+    ("post_harvest_14_day", re.compile(r"(?i)post.?harvest|after harvest|cut.and.spread|कटाई के बाद|కోత తర్వాత")),
+    ("intimation_deadline", re.compile(
+        rf"(?i)(how long|how many (hours|days)|how much time|by when|time limit|deadline|last date|"
+        rf"कितने (घंटे|दिन)|कितना समय|कब तक|समय सीमा|ఎన్ని గంటల|ఎన్ని రోజుల|ఎప్పటి లోపు|గడువు)"
+        rf"|(when|कब|ఎప్పుడు).*({_REPORTING})")),
+    ("intimation_contents", re.compile(
+        rf"(?i)(what|which|क्या|कौन|ఏ).*(detail|information|document|जानकारी|दस्तावेज़|వివరాలు|పత్రాలు).*"
+        rf"({_REPORTING}|intimation|claim)")),
+    ("channels", re.compile(
+        rf"(?i)(how|where|whom|who|helpline|phone|number|कैसे|कहाँ|किसे|किसको|हेल्पलाइन|ఎలా|ఎక్కడ|ఎవరికి).*({_REPORTING})"
+        rf"|({_REPORTING}).*(how|where|whom|कैसे|कहाँ|किसे|किसको|ఎలా|ఎక్కడ|ఎవరికి)|helpline|हेल्पलाइन|14447")),
+    ("grievance", re.compile(r"(?i)grievance|complain|contest|dispute|appeal|reject|शिकायत|असहमत|ఫిర్యాదు")),
+    ("perils", re.compile(
+        r"(?i)(cover|insured|include|क्या.*कवर|कवर|शामिल|కవర్).*"
+        r"(hail|rain|flood|cyclone|storm|drought|pest|landslide|peril|ओल|बारिश|बाढ़|तूफान|चक्रवात|सूखा|కీట|వడగళ్ల|వర్షం|వరద|తుఫాను)"
+        r"|(hail|rain|flood|cyclone|storm|drought|pest|landslide|peril|ओल|बारिश|बाढ़|तूफान|चक्रवात|सूखा|వడగళ్ల|వర్షం|వరద|తుఫాను).*"
+        r"(cover|insured|include|कवर|शामिल|కవర్)")),
+]
+
+
+def _intent_rule(question: str, rules: dict) -> tuple[str, dict] | None:
+    for name, pattern in _INTENTS:
+        rule = rules.get(name)
+        if rule and str(rule.get("status", "")).startswith("verified") and pattern.search(question):
+            return name, rule
+    return None
+
+
 def _key_rule_hit(question: str) -> tuple[str, dict] | None:
     """A verified rule summary from key_rules.json that speaks to the question, if any."""
     rules = (load_key_rules() or {}).get("rules") or {}
+    routed = _intent_rule(question, rules)
+    if routed:
+        return routed
     best, best_score = None, 0.0
     for name, rule in rules.items():
         statement = rule.get("statement")
@@ -334,7 +379,7 @@ def ask(question: str, lang: str = "hi") -> dict:
     if rule_hit and rule_clauses:
         note = f" {TECHNOLOGY_NOTE[lang]}" if rule_hit[0] == "technology_and_evidence" else ""
         return {
-            "answer": f"{QUOTE_INTRO[lang]} {rule_hit[1]['statement']}{note}",
+            "answer": f"{SUMMARY_INTRO[lang]} {rule_hit[1]['statement']}{note}",
             "citations": [_citation(c) for c in rule_clauses[:3]],
             "covered": True,
             "llm_used": False,

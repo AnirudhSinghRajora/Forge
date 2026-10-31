@@ -46,7 +46,7 @@ function sentences(text: string): string[] {
 const SPEECH = { hi: "hi-IN", te: "te-IN", en: "en-IN" } as const;
 
 /** The result opens with the field itself speaking, over every pass the satellites made of it. */
-export function Testimony({ ev, caseId, verdictLine }: { ev: Evidence; caseId: string; verdictLine: string | null }) {
+export function Testimony({ ev, caseId, verdictLine, passes }: { ev: Evidence; caseId: string; verdictLine: string | null; passes?: string }) {
   const { t, lang } = useI18n();
   const reduced = usePrefersReducedMotion();
   const text = (lang === "te" ? ev.testimony_te : lang === "hi" ? ev.testimony_hi : ev.testimony_en) ?? null;
@@ -59,11 +59,18 @@ export function Testimony({ ev, caseId, verdictLine }: { ev: Evidence; caseId: s
       sensor === "s2"
         ? ev.chips.find((c) => c.date === date && (c.kind === "true_colour_pre" || c.kind === "true_colour_post")) ?? null
         : null;
-    return ev.timeline
+    const fromTimeline: Frame[] = ev.timeline
       .filter((p) => (p.sensor === "s2" ? p.ndvi !== null && p.ndvi !== undefined : p.vh_db !== null && p.vh_db !== undefined) || p.qa === "rejected")
-      .slice()
-      .sort((a, b) => a.date.localeCompare(b.date))
       .map((p) => ({ date: p.date, sensor: p.sensor, ndvi: p.ndvi ?? null, vh: p.vh_db ?? null, qa: p.qa ?? null, chip: chipFor(p.date, p.sensor) }));
+    // The compared pair's images can arrive before, or without, the full list of passes.
+    const known = new Set(fromTimeline.filter((f) => f.sensor === "s2").map((f) => f.date));
+    const fromChips: Frame[] = ev.chips
+      .filter((c) => (c.kind === "true_colour_pre" || c.kind === "true_colour_post") && c.date && !known.has(c.date))
+      .map((c) => ({
+        date: c.date as string, sensor: "s2", qa: "accepted", vh: null, chip: c,
+        ndvi: (c.kind === "true_colour_pre" ? ev.optical.pre?.ndvi_median : ev.optical.post?.ndvi_median) ?? null,
+      }));
+    return [...fromTimeline, ...fromChips].sort((a, b) => a.date.localeCompare(b.date));
   }, [ev]);
 
   const [slot, inView] = useInView<HTMLDivElement>("0px");
@@ -180,7 +187,7 @@ export function Testimony({ ev, caseId, verdictLine }: { ev: Evidence; caseId: s
         ) : (
           <div className="flip-empty">
             <FieldShape ev={ev} fill="none" />
-            <p>{t("field.no_passes")}</p>
+            <p>{t(passes === "pending" ? "field.passes_pending" : passes === "failed" ? "field.passes_failed" : "field.no_passes")}</p>
           </div>
         )}
       </div>

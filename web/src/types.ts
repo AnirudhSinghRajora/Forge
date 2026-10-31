@@ -88,6 +88,7 @@ export interface ClaimPath {
 }
 export interface Evidence {
   scale_fade?: ScaleFade | null; village?: VillageWitness | null; claim_path?: ClaimPath | null;
+  claim_path_text?: Record<string, { reasons?: string[]; next_steps?: string[]; evidence_use?: string | null }> | null;
   testimony_hi?: string | null; testimony_en?: string | null; testimony_te?: string | null;
   case_id: string; run_id: string; created_at: string; plot: PlotInfo; event: EventInfo; optical: OpticalEvidence;
   neighbours?: NeighbourEvidence | null; history?: HistoryEvidence | null; sar?: SarEvidence | null; weather?: WeatherEvidence | null;

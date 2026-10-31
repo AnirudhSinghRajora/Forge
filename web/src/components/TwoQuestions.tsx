@@ -29,7 +29,7 @@ function Card({ q, test, unmeasuredWhy }: { q: Key; test: PlaceboTest | null | u
       ) : (
         <p className="small">
           {t("tq.count", { k: test!.n_at_least_as_extreme, n: test!.n_placebos })}{" "}
-          <span className="mono faint">p = {rawNum(test!.p_value)}</span>
+          <span className="mono faint">p = {rawNum(test!.p_value)} ({t("tq.threshold")} {P_FIELD})</span>
         </p>
       )}
     </div>

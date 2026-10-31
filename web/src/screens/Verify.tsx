@@ -6,9 +6,9 @@ import { Stamp } from "../components/Stamp";
 import { useNow, usePrefersReducedMotion } from "../components/Bits";
 import { clock, dayLabel } from "../format";
 
-interface Row { key: string; stored: number | null; recomputed: number | null; state: "match" | "mismatch" | "unavailable" }
+interface Row { key: string; label: string; stored: number | null; recomputed: number | null; state: "match" | "mismatch" | "unavailable" }
 type Status = "verified" | "mismatch" | "partial" | "unknown_hash" | "tampered" | "upstream_unavailable" | "archive_mismatch" | "nothing_to_recompute";
-interface Result { status: Status; ok: boolean; matched?: number; total?: number; message_hi?: string; message_en?: string; recomputed_hash?: string; error?: string }
+interface Result { status: Status; ok: boolean; matched?: number; total?: number; checked?: number; unchecked?: string[]; errors?: string[]; message_hi?: string; message_en?: string; recomputed_hash?: string; error?: string }
 interface Start {
   hash_verified?: boolean; engine_version?: string; event_date?: string; optical_pre_id?: string | null; optical_post_id?: string | null;
   sar_pre_id?: string | null; sar_post_id?: string | null; history_scene_ids?: string[]; seed?: number; n_numbers?: number; tolerance?: number;
@@ -17,10 +17,14 @@ interface Start {
 
 type Conn = "connecting" | "open" | "done" | "failed";
 
+/** Sealed keys hold an internal name that readers should never see. */
+const displayKey = (k: string) => k.replace("village.lottery.", "village.ten_field_draw.");
+
 function toRow(m: Record<string, unknown>): Row {
   const num = (v: unknown) => (typeof v === "number" ? v : null);
   return {
     key: String(m.field),
+    label: typeof m.label === "string" ? m.label : displayKey(String(m.field)),
     stored: num(m.stored),
     recomputed: num(m.recomputed),
     state: m.missing ? "unavailable" : m.match === true ? "match" : "mismatch",
@@ -106,9 +110,9 @@ export default function Verify({ hash }: { hash: string }) {
     return c;
   }, [rows]);
 
-  const total = start?.numbers ? Object.keys(start.numbers).length : start?.n_numbers ?? result?.total ?? arrived.length;
-  const pending = Math.max(0, total - rows.length);
+  const total = result?.total ?? (start?.numbers ? Object.keys(start.numbers).length : start?.n_numbers ?? arrived.length);
   const running = conn === "connecting" || conn === "open";
+  const pending = running ? Math.max(0, total - rows.length) : 0;
   const now = useNow(1000, running);
   const elapsed = (now - startedAt) / 1000;
   const settled = !running && revealed >= arrived.length;
@@ -146,6 +150,7 @@ export default function Verify({ hash }: { hash: string }) {
 
       {valid && (
         <>
+          {start?.superseded && <p className="notice small">{t("verify.superseded")}</p>}
           {start?.hash_verified && (
             <p className="hash-ok"><Icon name="check" size={20} stroke={2.2} /> {t("verify.hash_ok")}</p>
           )}
@@ -213,7 +218,7 @@ export default function Verify({ hash }: { hash: string }) {
                     <tr key={r.key} className={`vrow vrow-${r.state} ${reduced ? "" : "fresh"}`}>
                       <th scope="row">
                         {keyLabel(r.key, lang) !== r.key.replace(/_/g, " ") && <span className="vname">{keyLabel(r.key, lang)}</span>}
-                        <span className="mono vkey">{r.key}</span>
+                        <span className="mono vkey">{r.label}</span>
                       </th>
                       <td className="mono num" data-label={t("verify.col_stored")}>{r.stored ?? "—"}</td>
                       <td className="mono num" data-label={t("verify.col_recomputed")}>{r.recomputed ?? "—"}</td>
@@ -228,11 +233,11 @@ export default function Verify({ hash }: { hash: string }) {
                     <tr key={k} className="vrow vrow-waiting">
                       <th scope="row">
                         {keyLabel(k, lang) !== k.replace(/_/g, " ") && <span className="vname">{keyLabel(k, lang)}</span>}
-                        <span className="mono vkey">{k}</span>
+                        <span className="mono vkey">{displayKey(k)}</span>
                       </th>
                       <td className="mono num" data-label={t("verify.col_stored")}>{v ?? "—"}</td>
-                      <td className="num" data-label={t("verify.col_recomputed")}><span className="spinner" aria-label={t("verify.waiting")} /></td>
-                      <td />
+                      <td className="num" data-label={t("verify.col_recomputed")}>{running ? <span className="spinner" aria-label={t("verify.waiting")} /> : "—"}</td>
+                      <td className="vresult">{!running && <span className="faint">{t("verify.unavailable")}</span>}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -243,12 +248,12 @@ export default function Verify({ hash }: { hash: string }) {
           {lineKind && (
             <div className={`verify-line verify-${lineKind}`} role="status">
               <Stamp size="lg" tone={lineKind === "bad" ? "soil" : lineKind === "ok" ? "ink" : "muted"} className="stamp-thump">
-                {t(nothing ? "verify.stamp_nothing" : lineKind === "ok" ? "verify.stamp_ok" : lineKind === "bad" ? "verify.stamp_bad" : "verify.stamp_partial")}
+                {nothing ? t("verify.stamp_nothing") : lineKind === "ok" ? t("verify.stamp_ok") : lineKind === "bad" ? t("verify.stamp_bad") : t("verify.stamp_checked", { k: result?.checked ?? rows.length, n: result?.total ?? total })}
               </Stamp>
               <p>
                 {lineKind === "ok" && t("verify.line_ok", { n: counts.match })}
                 {lineKind === "bad" && t("verify.line_bad", { k: counts.mismatch, n: rows.length })}
-                {lineKind === "partial" && (nothing ? message : t("verify.line_partial", { k: counts.match, n: rows.length }))}
+                {lineKind === "partial" && (nothing ? message : t("verify.line_checked", { k: result?.checked ?? rows.length, n: result?.total ?? total, m: result?.matched ?? counts.match }))}
               </p>
               {start?.tolerance !== undefined && lineKind !== "ok" && !nothing && <p className="small">{t("verify.tolerance", { t: start.tolerance })}</p>}
               {start?.tolerance !== undefined && lineKind === "ok" && <p className="small verify-sub">{t("verify.tolerance", { t: start.tolerance })}</p>}
