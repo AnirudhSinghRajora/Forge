@@ -1,0 +1,11 @@
+.git
+**/.venv
+**/node_modules
+**/dist
+**/__pycache__
+**/.env
+backend/var
+backend/data/policy/raw
+backend/tests
+docs
+spikes
