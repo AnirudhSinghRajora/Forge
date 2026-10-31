@@ -85,7 +85,7 @@ export function Testimony({ ev, caseId, verdictLine, passes }: { ev: Evidence; c
   // The flipbook runs once on arrival, at the pace of pages being turned, and rests on the last pass.
   useEffect(() => {
     if (!inView || reduced || frames.length < 2) {
-      if (reduced && frames.length) setI(frames.length - 1);
+      if (reduced && frames.length && !userMoved.current) setI(frames.length - 1);
       return;
     }
     if (userMoved.current || i >= frames.length - 1) return;

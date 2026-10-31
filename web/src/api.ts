@@ -85,7 +85,13 @@ export function createCase(input: CreateCaseInput): Promise<CreateCaseResponse> 
   return request<CreateCaseResponse>("/api/cases", { method: "POST", body: fd }, 120000);
 }
 
-export interface ExhibitStatus { status: "pending" | "done" | "failed" | "not_applicable"; reason?: string | null; updated_at?: string | null }
+export interface ImageOpinionEntry { description_hi: string; description_en: string; description_te: string; visible_change: string; consistent: "yes" | "no" | "unclear"; needs_person: boolean }
+export interface StatementQuestionEntry { about: "date" | "event" | "crop_stage"; hi: string; en: string; te: string; cited_fields?: string[] }
+export interface ExhibitStatus {
+  status: "pending" | "done" | "failed" | "not_applicable"; reason?: string | null; updated_at?: string | null;
+  /** Advisory exhibits only. Stored beside the record, never in the sealed core. */
+  opinion?: ImageOpinionEntry | null; question?: StatementQuestionEntry | null;
+}
 export interface CaseEnvelope {
   case: CaseRecord; evidence: Evidence | null; actions: ActionRecord[] | null;
   sealed?: boolean; verdict_ready?: boolean; exhibits?: Record<string, ExhibitStatus>;
@@ -108,7 +114,7 @@ export interface CaseRecord {
   insured?: string | null; crop_stage?: string | null;
   transcript?: string | null; status?: string | null; district?: string | null; state?: string | null;
   needs?: string[] | null; questions?: Record<string, Record<string, string>> | null;
-  parsed?: { confidence?: number | null; date_note?: string | null } | null;
+  parsed?: { confidence?: number | null; date_note?: string | null; llm_used?: boolean; clarifying_question?: string | null } | null;
   plot?: { geometry: GeoPolygon; area_ha: number; centroid: [number, number]; crs: string; warnings: string[] } | null;
   active_run_id?: string | null;
   latest_run?: { id: string; status: string; trigger?: string; started_at?: string; finished_at?: string | null; error?: string | null } | null;
@@ -133,6 +139,9 @@ export const postSubmission = (id: string, body: { channel: string; reference_no
   request<CaseRecord>(`/api/cases/${encodeURIComponent(id)}/submission`, { method: "POST", ...json(body) });
 export const askPolicy = (id: string, question: string, lang: string) =>
   request<AskResponse>(`/api/cases/${encodeURIComponent(id)}/ask`, { method: "POST", ...json({ question, lang }) }, 60000);
+
+export const startAdvisories = (id: string) =>
+  request<{ gemini: boolean; started: string[] }>(`/api/cases/${encodeURIComponent(id)}/advisories`, { method: "POST" });
 
 export const retryExhibit = (id: string, name: string) =>
   request<{ run_id: string; exhibit: string; status: string }>(`/api/cases/${encodeURIComponent(id)}/exhibits/${encodeURIComponent(name)}/retry`, { method: "POST" });

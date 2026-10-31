@@ -47,6 +47,8 @@ export default function Confirm({ caseId }: { caseId: string }) {
 
   const [transcript, setTranscript] = useState<string | null>(null);
   const [confidence, setConfidence] = useState<number | null>(null);
+  const [byGemini, setByGemini] = useState<boolean | null>(null);
+  const [clarify, setClarify] = useState<string | null>(null);
   const [needs, setNeeds] = useState<string[]>([]);
   const [questions, setQuestions] = useState<Record<string, Record<string, string>>>({});
   const [dateNote, setDateNote] = useState<string | null>(null);
@@ -69,6 +71,8 @@ export default function Confirm({ caseId }: { caseId: string }) {
     if (created) {
       setTranscript(created.parsed?.transcript ?? null);
       setConfidence(created.parsed?.confidence ?? null);
+      setByGemini(created.parsed?.llm_used ?? false);
+      setClarify(created.parsed?.clarifying_question ?? null);
       setNeeds(created.needs ?? []);
       setCrop(created.parsed?.crop ?? "");
       setEventType(created.parsed?.event_type && created.parsed.event_type !== "unknown" ? created.parsed.event_type : "");
@@ -84,6 +88,8 @@ export default function Confirm({ caseId }: { caseId: string }) {
         if (!created) {
           setQuestions(c.questions ?? {});
           setConfidence(c.parsed?.confidence ?? null);
+          setByGemini(c.parsed?.llm_used ?? false);
+          setClarify(c.parsed?.clarifying_question ?? null);
           setDateNote(c.parsed?.date_note ?? null);
           setTranscript(c.transcript ?? null);
           setNeeds(Array.isArray(c.needs) ? c.needs : []);
@@ -158,7 +164,9 @@ export default function Confirm({ caseId }: { caseId: string }) {
           <p className="faint">{t("confirm.no_transcript")}</p>
         )}
         {confidence !== null && confidence < 0.6 && <p className="small">{t("confirm.low_conf")}</p>}
+        {transcript && byGemini !== null && <p className="small understood" data-by={byGemini ? "gemini" : "rules"}>{t(byGemini ? "confirm.by_gemini" : "confirm.by_rules")}</p>}
       </figure>
+      {clarify && <p className="clarify"><strong>{t("confirm.clarify")}</strong> <span lang={lang}>{clarify}</span></p>}
 
       {otherNeeds.length > 0 && (
         <div className="ask-list">

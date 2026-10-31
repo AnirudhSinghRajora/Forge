@@ -812,3 +812,328 @@ test.describe("an answer near the threshold", () => {
     await expect(page.locator(".tq").nth(0).locator(".tq-a")).toContainText("Yes, but near the line");
   });
 });
+
+test.describe("what Gemini adds, and what shows without it", () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+  const page_ = (over: object, env: object, gemini: boolean, onAsk?: (body: unknown) => object) => async (route: Route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === "/api/health") return route.fulfill({ json: { status: "ok", gemini, version: "t" } });
+    if (u.pathname.endsWith("/ask")) return route.fulfill({ json: onAsk ? onAsk(route.request().postDataJSON()) : { covered: false, citations: [] } });
+    if (u.pathname.endsWith("/advisories")) return route.fulfill({ json: { gemini, started: [] } });
+    if (u.pathname.match(/^\/api\/cases\/[^/]+$/) && route.request().method() === "PATCH") return route.fulfill({ json: { id: "c" } });
+    if (u.pathname.match(/^\/api\/cases\/[^/]+$/)) {
+      return route.fulfill({ json: { case: { id: "c", lat: 29.5, lon: 75, active_run_id: null, latest_run: { id: "r", status: "done", started_at: new Date(0).toISOString() } }, evidence: evidence(over), actions: [], sealed: true, verdict_ready: true, exhibits: {}, rubric: { p_field: 0.025 }, ...env } });
+    }
+    if (u.pathname.startsWith("/api/artifacts/")) return route.fulfill({ contentType: "image/png", body: testPng(8, 170, 120, 90) });
+    return route.fulfill({ status: 404, json: { detail: "x" } });
+  };
+
+  test("the witness answers in a conversation, with what it cites", async ({ page }) => {
+    const asked: { question?: string; lang?: string }[] = [];
+    await page.route("**/api/**", page_({}, {}, true, (body) => {
+      asked.push(body as { question: string });
+      return { answer: "आपका बदलाव −0.30 है।", citations: [{ clause_id: "21.5.8", text: "clause text", doc: "OG" }], evidence_fields: ["optical.plot_delta_ndvi", "verdict.level"], covered: true, llm_used: true, lang: "hi" };
+    }));
+    await page.goto("/case/c?lang=hi");
+    await expect(page.locator(".witness")).toBeVisible();
+    await expect(page.locator(".gemini-line")).toBeVisible();
+    await page.locator(".wit-suggest .chip").first().click();
+    await expect(page.locator(".wit-a")).toContainText("−0.30");
+    expect(asked[0].question).toBe("मेरा नतीजा ऐसा क्यों है?");
+    expect(asked[0].lang).toBe("hi");
+    await expect(page.locator(".wit-cite")).toContainText(["हरियाली में बदलाव (NDVI)", "नतीजे का स्तर"]);
+    await expect(page.locator(".wit-clauses summary")).toContainText("21.5.8");
+    // A field name is available, but folded away.
+    await expect(page.locator(".wit-a .facts-raw-list")).not.toBeVisible();
+    await page.locator(".witness textarea").fill("मेरे खेत का क्या हुआ?");
+    await page.locator(".witness form button").click();
+    await expect(page.locator(".wit-a")).toHaveCount(2);
+  });
+
+  test("suggested questions are in each language", async ({ page }) => {
+    await page.route("**/api/**", page_({}, {}, true));
+    await page.goto("/case/c?lang=te");
+    await expect(page.locator(".wit-suggest .chip").first()).toHaveText("నా ఫలితం ఇలా ఎందుకు ఉంది?");
+    await page.goto("/case/c?lang=en");
+    await expect(page.locator(".wit-suggest .chip").nth(1)).toHaveText("What should I do next?");
+  });
+
+  test("a refusal is plainly a refusal", async ({ page }) => {
+    await page.route("**/api/**", page_({}, {}, true, () => ({ answer: "My record and the guidelines do not answer that, so I will not guess.", citations: [], evidence_fields: [], covered: false, llm_used: false })));
+    await page.goto("/case/c?lang=en");
+    await page.locator(".witness textarea").fill("Who won the cricket?");
+    await page.locator(".witness form button").click();
+    await expect(page.locator(".wit-a-refused")).toContainText("will not guess");
+  });
+
+  test("without Gemini: a neutral line names what is off, the witness keeps its fixed answers, no error", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    await page.route("**/api/**", page_({}, {}, false, () => ({ answer: "The record's fixed words.", citations: [], evidence_fields: ["verdict.level"], covered: true, llm_used: false, mode: "record" })));
+    await page.goto("/case/c?lang=en");
+    const banner = page.locator(".band-quiet");
+    await expect(banner).toContainText("open questions");
+    await expect(banner).toContainText("second opinion");
+    await expect(banner).not.toContainText("AI language help");
+    await expect(page.locator(".gemini-line")).toHaveCount(0);
+    await expect(page.locator(".witness textarea")).toHaveCount(0);
+    await expect(page.locator(".opinion")).toContainText("not available");
+    await expect(page.locator(".statement-q")).toHaveCount(0);
+    await page.locator(".wit-suggest .chip").first().click();
+    await expect(page.locator(".wit-a")).toContainText("fixed words");
+    await expect(page.locator(".wit-a")).toContainText("not written by AI");
+    expect(errors).toEqual([]);
+  });
+
+  const opinion = (consistent: string, needs_person: boolean) => ({ image_opinion: { status: "done", opinion: { description_hi: "खेत भूरा हुआ।", description_en: "The field turned browner.", description_te: "పొలం గోధుమగా మారింది.", visible_change: "clear", consistent, needs_person } } });
+
+  test("the second opinion is labelled advisory, beside the images", async ({ page }) => {
+    await page.route("**/api/**", page_({}, { exhibits: opinion("yes", false) }, true));
+    await page.goto("/case/c?lang=en");
+    const o = page.locator("#ex-a .opinion");
+    await expect(o).toContainText("advisory: a model looking at the pictures, not part of the verdict");
+    await expect(o).toContainText("The field turned browner.");
+    await expect(o).not.toContainText("needs a person");
+  });
+
+  test("a disagreement reads needs a person to look, and the level stands", async ({ page }) => {
+    await page.route("**/api/**", page_({}, { exhibits: opinion("no", true) }, true));
+    await page.goto("/case/c?lang=en");
+    await expect(page.locator("#ex-a .opinion-person")).toContainText("needs a person to look");
+    await expect(page.locator("#ex-a .opinion-person")).toContainText("does not change");
+  });
+
+  test("a pending second opinion shows in its place and the seal is already there", async ({ page }) => {
+    await page.route("**/api/**", page_({}, { exhibits: { image_opinion: { status: "pending" } } }, true));
+    await page.goto("/case/c?lang=en");
+    await expect(page.locator("#ex-a .opinion")).toContainText("do not wait for it");
+    await expect(page.locator(".seal code")).toBeVisible();
+  });
+
+  test("the statement question is labelled, and the answer goes through PATCH", async ({ page }) => {
+    const patches: unknown[] = [];
+    page.on("request", (r) => { if (r.method() === "PATCH") patches.push(r.postDataJSON()); });
+    await page.route("**/api/**", page_({}, { exhibits: { statement_check: { status: "done", question: { about: "crop_stage", hi: "क्या फ़सल कट चुकी थी?", en: "Had the crop already been cut?", te: "పంట అప్పటికే కోశారా?" } } } }, true));
+    await page.goto("/case/c?lang=en");
+    const q = page.locator(".statement-q");
+    await expect(q).toContainText("A question for you");
+    await expect(q).toContainText("Had the crop already been cut?");
+    await q.locator(".chip").first().click();
+    await q.getByRole("button", { name: "Save my answer" }).click();
+    await expect.poll(() => patches.length).toBe(1);
+    expect(patches[0]).toEqual({ crop_stage: "standing" });
+    await expect(page.getByText("Your answer is saved.")).toBeVisible();
+  });
+
+  test("no contradiction means no question at all", async ({ page }) => {
+    await page.route("**/api/**", page_({}, { exhibits: { statement_check: { status: "done", question: null } } }, true));
+    await page.goto("/case/c?lang=en");
+    await expect(page.locator(".witness")).toBeVisible();
+    await expect(page.locator(".statement-q")).toHaveCount(0);
+  });
+
+  test("a record with no look yet asks the server once", async ({ page }) => {
+    const calls: string[] = [];
+    page.on("request", (r) => { if (r.url().endsWith("/advisories")) calls.push(r.method()); });
+    await page.route("**/api/**", page_({}, {}, true));
+    await page.goto("/case/c?lang=en");
+    await expect(page.locator(".witness")).toBeVisible();
+    await expect.poll(() => calls).toEqual(["POST"]);
+  });
+
+  test("confirm says who understood the report, and shows Gemini's question", async ({ page }) => {
+    const created = { case_id: "c", needs: ["crop"], questions: {}, parsed: { transcript: "फ़सल खराब", llm_used: true, confidence: 0.3, clarifying_question: "कौन सी फ़सल थी?" } };
+    await page.addInitScript((value) => sessionStorage.setItem("fs.created.c", JSON.stringify(value)), created);
+    await page.route("**/api/**", page_({}, {}, true));
+    await page.goto("/case/c/confirm?lang=en");
+    await expect(page.locator(".understood")).toHaveAttribute("data-by", "gemini");
+    await expect(page.locator(".clarify")).toContainText("कौन सी फ़सल थी?");
+  });
+
+  test("confirm names the fallback", async ({ page }) => {
+    const created = { case_id: "c", needs: [], questions: {}, parsed: { transcript: "कल ओले गिरे", llm_used: false, confidence: 0.6 } };
+    await page.addInitScript((value) => sessionStorage.setItem("fs.created.c", JSON.stringify(value)), created);
+    await page.route("**/api/**", page_({}, {}, false));
+    await page.goto("/case/c/confirm?lang=en");
+    await expect(page.locator(".understood")).toContainText("fixed rules");
+    await expect(page.locator(".clarify")).toHaveCount(0);
+  });
+});
+
+test.describe("seen in real screenshots", () => {
+  test.use({ viewport: { width: 1280, height: 900 } });
+  const shell = (over: object, env: object = {}) => async (route: Route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === "/api/health") return route.fulfill({ json: { status: "ok", gemini: false, version: "t" } });
+    if (u.pathname.match(/^\/api\/cases\/[^/]+$/)) {
+      return route.fulfill({ json: { case: { id: "c", lat: 29.5, lon: 75, active_run_id: null, latest_run: { id: "r", status: "done", started_at: new Date(0).toISOString() } }, evidence: evidence(over), actions: [], sealed: true, verdict_ready: true, exhibits: {}, rubric: { p_field: 0.025 }, ...env } });
+    }
+    if (u.pathname.startsWith("/api/artifacts/")) return route.fulfill({ contentType: "image/png", body: testPng(8, 170, 120, 90) });
+    return route.fulfill({ status: 404, json: { detail: "x" } });
+  };
+  const draw = (lottery: object, more: object = {}) => {
+    const base = evidence().village as unknown as { lottery: object };
+    return { village: { ...base, ...more, lottery: { ...base.lottery, ...lottery } } };
+  };
+
+  test("a field beyond the draw's axis gets an arrow and its real value", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.route("**/api/**", shell(draw({ plot_value: -0.37 })));
+    await page.goto("/case/c?lang=en");
+    await page.locator(".tenfield").scrollIntoViewIfNeeded();
+    const marker = page.locator(".field-off");
+    await expect(marker).toHaveAttribute("data-side", "low");
+    await expect(marker).toContainText("Your field");
+    await expect(marker).toContainText("−0.37");
+    await expect(marker.locator("path")).toHaveCount(1);
+    await expect(page.locator(".drw-hist .field-ref")).toHaveCount(0);
+    await expect(page.locator(".drw-hist svg > text").first()).toHaveText("−0.2");
+    const box = await marker.locator("text").boundingBox();
+    const svg = await page.locator(".drw-hist svg").boundingBox();
+    expect(box!.x + box!.width).toBeLessThanOrEqual(svg!.x + svg!.width + 1);
+  });
+
+  test("a field on the axis keeps its plain line", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.route("**/api/**", shell(draw({ plot_value: -0.1 })));
+    await page.goto("/case/c?lang=en");
+    await page.locator(".tenfield").scrollIntoViewIfNeeded();
+    await expect(page.locator(".drw-hist .field-ref")).toHaveCount(1);
+    await expect(page.locator(".field-off")).toHaveCount(0);
+  });
+
+  for (const [lang, one, many] of [
+    ["en", "1 real case from this area is recorded with us.", "2 real cases from this area are recorded with us."],
+    ["hi", "1 असली केस इस इलाके से हमारे पास दर्ज है।", "2 असली केस इस इलाके से हमारे पास दर्ज हैं।"],
+    ["te", "1 నిజమైన కేసు ఈ ప్రాంతం నుండి మా వద్ద నమోదైంది.", "2 నిజమైన కేసులు ఈ ప్రాంతం నుండి మా వద్ద నమోదయ్యాయి."],
+  ] as const) {
+    test(`nearby cases agree with their number in ${lang}`, async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.route("**/api/**", shell(draw({}, { nearby_real_cases: 1 })));
+      await page.goto(`/case/c?lang=${lang}`);
+      await expect(page.locator(".nearby")).toHaveText(one);
+      await page.unroute("**/api/**");
+      await page.route("**/api/**", shell(draw({}, { nearby_real_cases: 2 })));
+      await page.goto(`/case/c?lang=${lang}`);
+      await expect(page.locator(".nearby")).toHaveText(many);
+    });
+  }
+
+  test("under reduced motion the flipbook rests on the last pass and the slider moves", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.route("**/api/**", shell({}));
+    await page.goto("/case/c?lang=en");
+    const slider = page.locator(".flip-range");
+    await expect(slider).toBeVisible();
+    const last = await slider.getAttribute("max");
+    await expect(slider).toHaveValue(String(last));
+    await slider.fill("1");
+    await page.waitForTimeout(300);
+    await expect(slider).toHaveValue("1");
+    await slider.fill("0");
+    await page.waitForTimeout(300);
+    await expect(slider).toHaveValue("0");
+  });
+
+  test("a cross-exam card shows labels and plain values, with anything raw folded away", async ({ page }) => {
+    const objection = {
+      id: "regional_trend", challenge_hi: "सवाल", challenge_en: "Question", challenge_te: "ప్రశ్న", test: "t", outcome: "rebutted",
+      finding_hi: "खोज", finding_en: "Finding", finding_te: "తెలుగు ఫలితం",
+      measured: { ring_n_placebos: 200, ring_n_at_least_as_extreme: 12, ring_p_value: 0.06, ring_insufficient_reason: null, far_p_value: 0.005, radar_n_placebos: null, sar_usable: true, pre_scene_id: "S2_RAW_ID", rejected: [{ id: "x", reasons: ["Q2"] }], mystery_field: { a: 1 } },
+    };
+    await page.route("**/api/**", shell({ cross_examination: [objection] }));
+    for (const lang of ["en", "hi", "te"]) {
+      await page.goto(`/case/c?lang=${lang}`);
+      const table = page.locator("#ex-f .ledger-tight");
+      await expect(table).toBeVisible();
+      const text = await table.innerText();
+      expect(text).not.toMatch(/[a-z]+_[a-z]+/);
+      expect(text).not.toContain("true");
+      expect(text).not.toContain("{");
+      expect(text).not.toContain("S2_RAW_ID");
+      expect(text).not.toContain("ring n placebos");
+      await expect(page.locator("#ex-f .facts-raw-list")).not.toBeVisible();
+      if (lang === "te") await expect(page.locator("#ex-f .ex-finding")).toHaveText("తెలుగు ఫలితం");
+    }
+    await page.goto("/case/c?lang=en");
+    await page.locator("#ex-f .facts-raw summary").click();
+    await expect(page.locator("#ex-f .facts-raw-list")).toContainText("S2_RAW_ID");
+    await expect(page.locator("#ex-f .facts-raw-list")).toContainText("mystery_field");
+    await expect(page.locator("#ex-f .ledger-tight")).toContainText("Neighbouring fields compared");
+    await expect(page.locator("#ex-f .ledger-tight")).toContainText("yes");
+  });
+
+  const line = (seq: number, type: string, ts: number, detail: object, title = "Step") => ({ seq, run_id: "r9", ts: new Date(ts).toISOString(), type, node: "n", title_hi: "चरण", title_en: title, detail });
+
+  test("a trace line has no raw keys, no 18×, and no true", async ({ page }) => {
+    const now = Date.now();
+    const events = [
+      line(1, "tool_result", now, { tool: "timeline", result: { n_points: 18, points: Array.from({ length: 18 }, (_, i) => ({ date: "2026-10-0" + (i % 9 + 1), ndvi: 0.5 })), post_window_days: 20, far_significant: true } }),
+      line(2, "decision", now, { post_window_days: 20, ring_significant: false, statistic: "median_delta_ndvi" }),
+      line(3, "done", now + 1000, { status: "done" }, "Investigation complete"),
+    ];
+    await page.route("**/api/health", (r) => r.fulfill({ json: { status: "ok", gemini: false, version: "t" } }));
+    await page.route("**/api/runs/**", (r) => r.fulfill({ status: 200, contentType: "text/event-stream", body: sse(events) }));
+    await page.route("**/api/cases/**", (r) => r.fulfill({ json: { case: { id: "c", active_run_id: null }, evidence: null } }));
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    for (const lang of ["en", "hi"]) {
+      await page.goto(`/case/c/investigate?run=r9&lang=${lang}`);
+      await expect(page.locator(".trace-numbers").first()).toBeVisible();
+      const text = (await page.locator(".trace-numbers").allInnerTexts()).join(" ");
+      expect(text).not.toMatch(/[a-z]+_[a-z]+/);
+      expect(text).not.toContain("×");
+      expect(text).not.toContain("true");
+      expect(text).not.toContain("post window days");
+      expect(text).toContain("18");
+      await page.evaluate(() => sessionStorage.clear());
+    }
+    await expect(page.locator(".trace-numbers").first()).toContainText("सैटेलाइट दर्शन");
+    await page.goto("/case/c/investigate?run=r9&lang=en");
+    await expect(page.locator(".trace-numbers").first()).toContainText("Days searched after the event");
+  });
+
+  test("a replayed trace says it is a recording, with its time", async ({ page }) => {
+    const then = Date.parse("2026-10-30T10:00:00Z");
+    const events = [line(1, "step_started", then, {}), line(2, "done", then + 60000, { status: "done" }, "Investigation complete")];
+    await page.route("**/api/health", (r) => r.fulfill({ json: { status: "ok", gemini: false, version: "t" } }));
+    await page.route("**/api/runs/**", (r) => r.fulfill({ status: 200, contentType: "text/event-stream", body: sse(events) }));
+    await page.route("**/api/cases/**", (r) => r.fulfill({ json: { case: { id: "c", active_run_id: null }, evidence: null } }));
+    await page.goto("/case/c/investigate?run=r9&lang=en");
+    const lede = page.locator(".trace-head .lede");
+    await expect(lede).toContainText("recording of the earlier run");
+    await expect(lede).toContainText("2026");
+    await expect(lede).not.toContainText("What you see is what is happening");
+  });
+
+  test("a trace still running says it is happening", async ({ page }) => {
+    const now = Date.now();
+    await page.route("**/api/health", (r) => r.fulfill({ json: { status: "ok", gemini: false, version: "t" } }));
+    await page.route("**/api/runs/**", (r) => r.fulfill({ status: 200, contentType: "text/event-stream", body: sse([line(1, "step_started", now, {})]) }));
+    await page.route("**/api/cases/**", (r) => r.fulfill({ json: { case: { id: "c", active_run_id: "r9" }, evidence: null } }));
+    await page.goto("/case/c/investigate?run=r9&lang=en");
+    await expect(page.locator(".trace-head .lede")).toContainText("What you see is what is happening");
+  });
+
+  // The typical plot holds 104 sealed numbers and Arnab 85. The page reads whatever the record holds.
+  for (const n of [85, 104]) {
+    test(`a stored check of ${n} numbers reads ${n} everywhere`, async ({ page }) => {
+      const hash = "ab".repeat(32);
+      const numbers = Object.fromEntries(Array.from({ length: n }, (_, i) => [`optical.n${i}`, i / 100]));
+      const body = sse([
+        { type: "start", seq: 1, cached: true, checked_at: "2026-10-31T23:01:39Z", n_numbers: n, numbers, hash_verified: true, verdict_check: "intact", tolerance: 0.001, engine_version: "geo-1.2.0", event_date: "2024-03-01", seed: 1 },
+        ...Array.from({ length: n }, (_, i) => ({ type: "number", seq: i + 2, field: `optical.n${i}`, label: `optical.n${i}`, stored: i / 100, recomputed: i / 100, match: true })),
+        { type: "result", seq: n + 2, status: "verified", ok: true, cached: true, total: n, checked: n, matched: n, unchecked: [], checked_at: "2026-10-31T23:01:39Z" },
+      ]);
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.route("**/api/health", (r) => r.fulfill({ json: { status: "ok", gemini: false, version: "t" } }));
+      await page.route("**/api/verify/**", (r) => r.fulfill({ status: 200, contentType: "text/event-stream", body }));
+      await page.goto(`/verify/${hash}?lang=en`);
+      await expect(page.locator(".verify-line")).toContainText(`All ${n} numbers`);
+      await expect(page.locator(".tally b").first()).toHaveText(String(n));
+      await expect(page.locator(".meter")).toHaveAttribute("aria-valuemax", String(n));
+      await expect(page.locator(".verify-table tbody tr")).toHaveCount(n);
+      const text = await page.locator(".verify").innerText();
+      expect(text).not.toContain(n === 85 ? "104" : "85 ");
+    });
+  }
+});

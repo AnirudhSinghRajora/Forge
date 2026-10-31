@@ -35,10 +35,15 @@ function Histogram({ sim, shownDraws, fill, activeAverage }: {
   const height = 150;
   const m = { l: 6, r: 6, t: 36, b: 24 };
   const pv = sim.plot_value;
-  const lo = Math.min(edges[0], pv ?? edges[0]);
-  const hi = Math.max(edges[edges.length - 1], pv ?? edges[0]);
+  // The axis is the draws' own range, and its end labels say so. A field beyond it gets a marker at
+  // that end with an arrow and its real value, never a line sitting on a number it is not.
+  const lo = edges[0];
+  const hi = edges[edges.length - 1];
   const span = hi - lo || 1;
   const x = linear(lo - span * 0.04, hi + span * 0.04, m.l, width - m.r);
+  const off: "low" | "high" | null = pv === null ? null : pv < lo ? "low" : pv > hi ? "high" : null;
+  const offLabel = off && pv !== null ? t("draw.off_scale", { label: t("placebo.yours"), v: change(pv) }) : "";
+  const pvX = off === "low" ? m.l : off === "high" ? width - m.r : pv !== null ? x(pv) : 0;
   const maxC = Math.max(...counts, 1);
   const y = linear(0, maxC, height - m.b, m.t);
   const binIdx = (v: number) => {
@@ -46,7 +51,7 @@ function Histogram({ sim, shownDraws, fill, activeAverage }: {
     return i < 0 ? (v < edges[0] ? 0 : counts.length - 1) : i;
   };
   // When this survey lands beside the field's own marker, its label moves down so both stay readable.
-  const near = activeAverage !== null && pv !== null && Math.abs(x(activeAverage) - x(pv)) < 70;
+  const near = activeAverage !== null && pv !== null && Math.abs(x(activeAverage) - pvX) < (off ? 170 : 70);
   const dotStacks = new Map<number, number>();
   return (
     <div className="chart drw-hist" ref={ref}>
@@ -71,7 +76,13 @@ function Histogram({ sim, shownDraws, fill, activeAverage }: {
             <text x={x(activeAverage) + (near ? 6 : 0)} y={near ? m.t + 10 : m.t - 10} textAnchor={near || x(activeAverage) < width * 0.25 ? "start" : x(activeAverage) > width * 0.75 ? "end" : "middle"} className="drw-now-label">{t("draw.this_survey")}</text>
           </g>
         )}
-        {pv !== null && (
+        {off && (
+          <g className="field-off" data-side={off}>
+            <path d={off === "low" ? `M${pvX} ${m.t - 16} l9 -5 v10 z` : `M${pvX} ${m.t - 16} l-9 -5 v10 z`} className="field-off-arrow" />
+            <text x={off === "low" ? pvX + 13 : pvX - 13} y={m.t - 12} textAnchor={off === "low" ? "start" : "end"} className="field-ref-label">{offLabel}</text>
+          </g>
+        )}
+        {pv !== null && !off && (
           <g>
             <line x1={x(pv)} x2={x(pv)} y1={m.t - 8} y2={height - m.b} className="field-ref" />
             <text x={x(pv)} y={m.t - 12} textAnchor={x(pv) < width * 0.25 ? "start" : x(pv) > width * 0.75 ? "end" : "middle"} className="field-ref-label">{t("placebo.yours")}</text>
@@ -241,7 +252,7 @@ function ShareBlock({ ev, v, applies }: { ev: Evidence; v: VillageWitness | null
       <h3 className="h-mini">{t("draw.share_h")}</h3>
       <p className="small">{t(applies ? "draw.share_why" : "draw.share_why_illus")}</p>
       {typeof v?.nearby_real_cases === "number" && v.nearby_real_cases > 0 && (
-        <p className="nearby"><b className="mono">{v.nearby_real_cases}</b> {t("draw.nearby")}</p>
+        <p className="nearby"><b className="mono">{v.nearby_real_cases}</b> {t(v.nearby_real_cases === 1 ? "draw.nearby_one" : "draw.nearby")}</p>
       )}
       <div className="btn-row wrap">
         {"share" in navigator && <button className="btn" onClick={share}><Icon name="share" /> {t("draw.share_btn")}</button>}

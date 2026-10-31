@@ -1,6 +1,9 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useI18n, translateRubric, keyLabel, cropLabel, type Key } from "../i18n";
-import { ApiError, getCase, pdfUrl, startInvestigation, type CaseEnvelope, type ExhibitStatus } from "../api";
+import { ApiError, getCase, pdfUrl, startAdvisories, startInvestigation, type CaseEnvelope, type ExhibitStatus } from "../api";
+import { useHealth } from "../health";
+import { WitnessChat } from "../components/WitnessChat";
+import { ImageOpinion, StatementQuestion } from "../components/Advisories";
 import { linkProps, navigate } from "../router";
 import { Icon } from "../components/Icon";
 import { Stamp } from "../components/Stamp";
@@ -347,6 +350,19 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
   }, [live, caseId]);
   const onRetried = useCallback(() => setPollUntil(Date.now() + 120000), []);
 
+  // A record sealed before Gemini was connected has never been looked at. Asked for once per visit,
+  // and the server starts only what is missing, so this cannot cost more than the page is worth.
+  const { health } = useHealth();
+  const gemini = health?.gemini === true;
+  const lookedFor = useRef<string | null>(null);
+  const sealedHash = env?.evidence?.evidence_hash ?? null;
+  const missingLook = !!env && !!sealedHash && (!env.exhibits?.image_opinion || !env.exhibits?.statement_check);
+  useEffect(() => {
+    if (!gemini || !missingLook || lookedFor.current === caseId) return;
+    lookedFor.current = caseId;
+    startAdvisories(caseId).then((r) => { if (r.started.length) setPollUntil(Date.now() + 120000); }).catch(() => {});
+  }, [gemini, missingLook, caseId]);
+
   if (err) {
     const gone = err instanceof ApiError && err.status === 404;
     return <div className="page narrow">{gone ? <p className="notice">{t("case.not_found")}</p> : <ErrorNote error={err} onRetry={() => load()} />}</div>;
@@ -435,6 +451,7 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
             </>
           )}
           {explanation && !provisional && <p className="explanation">{explanation}</p>}
+          {gemini && !provisional && <p className="gemini-line">{t("gemini.line")}</p>}
           {!explanation && v && lang === "te" && <p className="small faint">{t("verdict.te_missing")}</p>}
           {!provisional && <Voice caseId={caseId} text={voiceText} />}
           {ev.llm_used === false && <p className="small faint">{t("verdict.no_llm")}</p>}
@@ -477,6 +494,9 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
           </div>
         </aside>
       </header>
+
+      {v && !provisional && <StatementQuestion caseId={caseId} entry={statuses.statement_check as ExhibitStatus | undefined} onAnswered={() => load()} />}
+      {v && !provisional && <WitnessChat caseId={caseId} />}
 
       {v && (v.caveats.length > 0 || v.reasons.length > 0) && (
         <section className="why-grid">
@@ -545,6 +565,7 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
 
         <Exhibit id="ex-a" mark={t("ex.a")} title={t("ex.ba_t")} lead={t("ex.ba_l")}>
           {gate("chips", <BeforeAfter chips={ev.chips} optical={ev.optical} />)}
+          <ImageOpinion entry={statuses.image_opinion as ExhibitStatus | undefined} />
           <table className="ledger ledger-keynums">
             <tbody>
               <tr><th>{t("nums.pre")}</th><td className="mono">{num(ev.optical.pre?.ndvi_median, 3)}</td></tr>

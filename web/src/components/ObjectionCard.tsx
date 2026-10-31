@@ -1,21 +1,14 @@
-import { useI18n, keyLabel, type Key } from "../i18n";
+import { useI18n, type Key } from "../i18n";
 import { Stamp } from "./Stamp";
 import { Icon } from "./Icon";
+import { splitFacts, TechnicalFacts } from "./Facts";
 import type { Objection } from "../types";
-
-function value(v: unknown, notMeasured: string): React.ReactNode {
-  if (v === null || v === undefined) return <span className="faint">{notMeasured}</span>;
-  if (typeof v === "number") return <span className="mono">{v}</span>;
-  if (typeof v === "boolean") return <span className="mono">{String(v)}</span>;
-  if (typeof v === "string") return <span className="mono">{v}</span>;
-  return <span className="mono small break">{JSON.stringify(v)}</span>;
-}
 
 export function ObjectionCard({ o, index, fresh }: { o: Objection; index?: number; fresh?: boolean }) {
   const { t, lang } = useI18n();
-  const challenge = lang === "hi" ? o.challenge_hi : o.challenge_en;
-  const finding = lang === "hi" ? o.finding_hi : o.finding_en;
-  const entries = Object.entries(o.measured ?? {});
+  const challenge = lang === "hi" ? o.challenge_hi : lang === "te" ? o.challenge_te ?? o.challenge_en : o.challenge_en;
+  const finding = lang === "hi" ? o.finding_hi : lang === "te" ? o.finding_te ?? o.finding_en : o.finding_en;
+  const { shown, raw } = splitFacts(Object.entries(o.measured ?? {}), lang, t, true);
   return (
     <article className={`exchange exchange-${o.outcome} ${fresh ? "fresh" : ""}`}>
       <div className="ex-who ex-surveyor">
@@ -30,18 +23,19 @@ export function ObjectionCard({ o, index, fresh }: { o: Objection; index?: numbe
             <p lang="en">{o.test}</p>
           </details>
         )}
-        {entries.length > 0 && (
+        {shown.length > 0 && (
           <table className="ledger ledger-tight">
             <tbody>
-              {entries.map(([k, v]) => (
-                <tr key={k}>
-                  <th>{keyLabel(k, lang)}</th>
-                  <td>{value(v, t("missing.short"))}</td>
+              {shown.map((f) => (
+                <tr key={f.key}>
+                  <th>{f.label}</th>
+                  <td className={f.missing ? "faint" : "mono"}>{f.value}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
+        <TechnicalFacts raw={raw} />
       </div>
       <div className="ex-who ex-witness">
         <span className="ex-role"><Icon name="scale" size={18} /> {t("exam.witness")}</span>

@@ -31,6 +31,7 @@ SURFACE = "#ffffff"
 
 STATISTIC_LABELS = {
     "median_delta_ndvi": "Change in greenness (NDVI)",
+    "mean_delta_ndvi": "Change in greenness (NDVI)",
     "delta_ndvi": "Change in greenness (NDVI)",
     "median_vh_change_db": "Change in radar signal (VH, dB)",
     "vh_change_db": "Change in radar signal (VH, dB)",

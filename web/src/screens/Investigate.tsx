@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useI18n, keyLabel, type Key } from "../i18n";
+import { useI18n, type Key } from "../i18n";
 import { ApiError, getCase, startInvestigation } from "../api";
 import { readSse } from "../sse";
 import { navigate, linkProps } from "../router";
@@ -7,7 +7,8 @@ import { Icon } from "../components/Icon";
 import { Stamp } from "../components/Stamp";
 import { ObjectionCard } from "../components/ObjectionCard";
 import { ErrorNote, Loading, useNow, usePrefersReducedMotion } from "../components/Bits";
-import { clock, dayLabel } from "../format";
+import { clock, dateTimeLabel, dayLabel } from "../format";
+import { splitFacts, TechnicalFacts } from "../components/Facts";
 import type { Objection, TraceEvent } from "../types";
 
 type Conn = "connecting" | "open" | "retrying" | "closed" | "gone";
@@ -146,45 +147,40 @@ function asObjection(ev: TraceEvent): Objection | null {
 
 const HIDDEN = new Set(["exhibit", "exhibits", "exhibits_pending", "exhibits_started", "provisional", "revised", "sealed", "signature", "pending", "n_clauses", "clause_ids", "unknowns", "intimation", "route", "reason", "objection", "reasons", "scene", "from", "to", "frm", "seq", "headline_hi", "headline_en", "headline_te", "rejected", "caveats", "budget", "country_code", "fallback_used", "tool", "args", "llm", "choice", "excluded", "start", "end", "duration_s", "action", "report", "open_followups", "round", "needed", "corroborated_by", "conceded", "evidence_hash", "due_at", "grid_note", "centroid", "crs", "warnings", "scenes", "rationale", "error", "error_ref"]);
 
-function flatten(d: Record<string, unknown>, prefix = "", depth = 0): [string, string][] {
-  const out: [string, string][] = [];
+function flatten(d: Record<string, unknown>, prefix = "", depth = 0): [string, unknown][] {
+  const out: [string, unknown][] = [];
   for (const [k, v] of Object.entries(d)) {
     if (HIDDEN.has(k)) continue;
     // A tool's result is the event itself, so its fields are named without the wrapper.
     const key = prefix && prefix !== "result" ? `${prefix}.${k}` : k;
     if (v === null || v === undefined) continue;
-    if (typeof v === "number" || typeof v === "boolean") out.push([key, String(v)]);
-    else if (typeof v === "string") { if (v.length <= 60) out.push([key, v]); }
-    else if (Array.isArray(v)) {
-      if (v.every((x) => typeof x === "string" || typeof x === "number")) {
-        if (v.length && v.length <= 6) out.push([key, v.join(", ")]);
-        else if (v.length) out.push([key, `${v.length}×`]);
-      } else if (v.length) out.push([key, `${v.length}×`]);
-    } else if (typeof v === "object" && depth < 1) {
-      out.push(...flatten(v as Record<string, unknown>, key, depth + 1));
-    }
+    if (Array.isArray(v)) { if (v.length) out.push([key, v]); }
+    else if (typeof v === "object" && depth < 1) out.push(...flatten(v as Record<string, unknown>, key, depth + 1));
+    else if (typeof v !== "string" || v.length <= 60) out.push([key, v]);
   }
   return out;
 }
 
 function Numbers({ detail }: { detail: Record<string, unknown> }) {
-  const { lang } = useI18n();
-  const rows = useMemo(() => flatten(detail), [detail]);
+  const { t, lang } = useI18n();
+  const { shown, raw } = useMemo(() => splitFacts(flatten(detail), lang, t), [detail, lang, t]);
   const [open, setOpen] = useState(false);
-  const { t } = useI18n();
-  if (rows.length === 0) return null;
-  const visible = open ? rows : rows.slice(0, 8);
+  if (shown.length === 0 && raw.length === 0) return null;
+  const visible = open ? shown : shown.slice(0, 8);
   return (
     <>
-      <dl className="trace-numbers">
-        {visible.map(([k, v]) => (
-          <div key={k}>
-            <dt>{keyLabel(k, lang)}</dt>
-            <dd className="mono break">{v}</dd>
-          </div>
-        ))}
-      </dl>
-      {rows.length > 8 && <button className="linkish small" onClick={() => setOpen((o) => !o)}>{open ? t("trace.less") : t("trace.more", { n: rows.length - 8 })}</button>}
+      {shown.length > 0 && (
+        <dl className="trace-numbers">
+          {visible.map((f) => (
+            <div key={f.key}>
+              <dt>{f.label}</dt>
+              <dd className="mono break">{f.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {shown.length > 8 && <button className="linkish small" onClick={() => setOpen((o) => !o)}>{open ? t("trace.less") : t("trace.more", { n: shown.length - 8 })}</button>}
+      <TechnicalFacts raw={raw} />
     </>
   );
 }
@@ -269,7 +265,8 @@ function TraceLine({ ev, base, fresh, n }: { ev: TraceEvent; base: number; fresh
 }
 
 export default function Investigate({ caseId }: { caseId: string }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
+  const [openedAt] = useState(() => Date.now());
   const [runId, setRunId] = useState<string | null>(() => new URLSearchParams(location.search).get("run"));
   const [boot, setBoot] = useState<unknown>(null);
   const [attempt, setAttempt] = useState(0);
@@ -306,7 +303,10 @@ export default function Investigate({ caseId }: { caseId: string }) {
   const last = visible[visible.length - 1];
   const done = events.some((e) => e.type === "done");
   const fullyShown = shown >= events.length;
-  const finalStatus = events.find((e) => e.type === "done")?.detail.status;
+  const doneEvent = events.find((e) => e.type === "done");
+  const finalStatus = doneEvent?.detail.status;
+  // Finished before this page opened: what follows is a recording, and it says so, with its time.
+  const replay = !!doneEvent && new Date(doneEvent.ts).getTime() < openedAt - 5000;
   const failed = done && (finalStatus === "failed" || finalStatus === "interrupted");
   const lastError = [...events].reverse().find((e) => e.type === "error");
   const hasVerdict = events.some((e) => e.type === "verdict" && !isProvisional(e));
@@ -364,7 +364,7 @@ export default function Investigate({ caseId }: { caseId: string }) {
       <header className="trace-head">
         <p className="eyebrow">{t("trace.eyebrow")}</p>
         <h1 className="h-page">{t(failed ? "trace.failed" : done ? "trace.title_done" : "trace.title")}</h1>
-        <p className="lede">{t("trace.lede")}</p>
+        <p className="lede">{replay ? t("trace.lede_replay", { when: dateTimeLabel(events[0].ts, lang) }) : t(done ? "trace.lede_done" : "trace.lede")}</p>
       </header>
 
       {!runId && <Loading what={t("trace.starting")} />}

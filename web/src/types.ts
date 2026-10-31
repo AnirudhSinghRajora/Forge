@@ -52,7 +52,7 @@ export interface NewsItem { title: string; url: string; date?: string | null }
 export interface TimelinePoint { date: string; sensor: "s2" | "s1"; ndvi?: number | null; vh_db?: number | null; vv_db?: number | null; qa?: QAStatus | null }
 export interface Objection {
   id: string; challenge_hi: string; challenge_en: string; test: string; measured: Record<string, unknown>; outcome: ObjectionOutcome;
-  finding_hi: string; finding_en: string;
+  finding_hi: string; finding_en: string; challenge_te?: string | null; finding_te?: string | null;
 }
 export interface Verdict {
   level: VerdictLevel; headline_hi: string; headline_en: string; headline_te?: string | null; reasons: string[]; caveats: string[];
@@ -105,8 +105,8 @@ export interface TraceEvent {
   seq: number; run_id: string; ts: string; type: TraceType; node: string; title_hi: string; title_en: string; detail: Record<string, unknown>;
 }
 
-export interface Parsed { crop?: string | null; event_type?: EventType | null; event_date?: string | null; event_time?: string | null; transcript?: string | null; confidence?: number | null; llm_used?: boolean; date_note?: string | null }
+export interface Parsed { crop?: string | null; event_type?: EventType | null; event_date?: string | null; event_time?: string | null; transcript?: string | null; confidence?: number | null; llm_used?: boolean; date_note?: string | null; clarifying_question?: string | null }
 export interface CreateCaseResponse { case_id: string; parsed: Parsed; needs: string[]; questions?: Record<string, Record<string, string>> }
 export interface PlotResponse { area_ha: number; warnings: string[]; warnings_hi?: string[]; warning_codes?: string[] }
 export interface AskCitation { clause_id?: string; doc?: string; page?: number | null; text?: string; url?: string | null }
-export interface AskResponse { answer?: string | null; answer_hi?: string | null; answer_en?: string | null; citations?: (AskCitation | string)[]; not_covered?: boolean; covered?: boolean }
+export interface AskResponse { answer?: string | null; answer_hi?: string | null; answer_en?: string | null; citations?: (AskCitation | string)[]; not_covered?: boolean; covered?: boolean; evidence_fields?: string[]; llm_used?: boolean; mode?: string; lang?: string }
