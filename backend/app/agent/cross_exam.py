@@ -21,6 +21,9 @@ ORDER = (
 BARE_MIN = 0.6
 NEIGHBOUR_BARE_MIN = 0.30
 HISTORY_SIMILAR = -0.10
+# Stricter than HISTORY_SIMILAR: past years are a rough control, so only a clear excess rebuts ripening.
+# This decides the objection's outcome and a caveat, never a verdict level.
+RIPENING_SETTLED = -0.15
 PRE_NDVI_MIN = 0.3
 VALID_FRAC_MIN = 0.8
 TOO_SMALL_HA = 0.2
@@ -73,7 +76,7 @@ def _history_settles(ev: Evidence) -> bool:
     """This field's own past years show it does not normally fall this much now."""
     h = ev.history
     return bool(h and not h.downweighted and h.excess_vs_history is not None
-                and h.excess_vs_history <= HISTORY_SIMILAR)
+                and h.excess_vs_history <= RIPENING_SETTLED)
 
 
 def _no_post(ev: Evidence, hi: str, en: str) -> tuple[str, str]:
@@ -138,10 +141,10 @@ def check_harvest(ev: Evidence) -> Objection:
         return out(
             "rebutted",
             f"कटाई नहीं दिखती: खेत का {pct(bare)}% हिस्सा ही खाली मिट्टी है। यह गिरावट ({signed(delta)}) इस खेत के पिछले "
-            f"वर्षों में इसी समय की गिरावट ({typical:+.2f}) से ज़्यादा है, जो सामान्य पकाव के ख़िलाफ़ जाता है। पर पिछले साल "
+            f"वर्षों में इसी समय की गिरावट ({typical:+.2f}) से ज़्यादा है, जो सामान्य पकाव से ज़्यादा लगता है। पर पिछले साल "
             "सिर्फ़ मोटी तुलना हैं: उनकी तारीख़ें और फ़सल की अवस्था अलग हो सकती है।",
             f"No cut shows: only {pct(bare)}% of the plot is bare. This fall ({signed(delta)}) is also more "
-            f"than this field's past years at this time ({typical:+.2f}), which argues against ordinary "
+            f"than this field's past years at this time ({typical:+.2f}), which looks like more than ordinary "
             "ripening. Past years are only a rough control: their dates and crop stage can differ.",
         )
     if bare <= BARE_MIN:

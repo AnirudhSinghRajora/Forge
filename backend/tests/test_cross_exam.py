@@ -223,7 +223,12 @@ def test_bare_and_partial_decline_is_unresolved():
 
 
 def test_harvest_rebuttal_by_history_gives_that_reason_and_its_limit():
-    o = get(evidence(delta=-0.34, bare=0.0, history=history_ok(excess=-0.12)), "harvest")
+    o = get(evidence(delta=-0.34, bare=0.0, history=history_ok(excess=-0.2)), "harvest")
     assert o.outcome == "rebutted"
     assert "past years" in o.finding_en and "rough control" in o.finding_en
     assert "does not look like harvest" not in o.finding_en
+
+
+def test_a_small_excess_over_past_years_leaves_ripening_unresolved():
+    o = get(evidence(delta=-0.34, bare=0.0, history=history_ok(excess=-0.12)), "harvest")
+    assert o.outcome == "unresolved"

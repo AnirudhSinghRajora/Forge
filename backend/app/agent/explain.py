@@ -195,9 +195,9 @@ def tests_line(ev: Evidence) -> tuple[str, str, str] | None:
             "మీ పొలం చుట్టుపక్కల పొలాల కంటే ఎక్కువగా మారింది: ఇది మీ పొలానికే పరిమితమైన మార్పులా ఉంది.",
         )
     return (
-        "आपका खेत न पास के खेतों से ज़्यादा बदला, न दूर के खेतों से।",
-        "Your field did not change more than nearby fields, or more than distant ones.",
-        "మీ పొలం సమీప పొలాల కంటే గానీ, దూరంలోని పొలాల కంటే గానీ ఎక్కువగా మారలేదు.",
+        "यह साफ़ नहीं दिखता कि आपका खेत पास के या दूर के खेतों से ज़्यादा बदला।",
+        "Your field did not clearly change more than nearby fields, or more than distant ones.",
+        "మీ పొలం సమీప పొలాల కంటే గానీ, దూరంలోని పొలాల కంటే గానీ స్పష్టంగా ఎక్కువగా మారలేదు.",
     )
 
 

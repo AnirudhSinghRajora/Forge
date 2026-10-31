@@ -240,3 +240,13 @@ Thirty seeds on the same data: far p moved by a factor of about 4-8 on plots nea
 - **LLM text never carries the verdict.** Verdict, explanation, testimony and cross-examination use deterministic templates. LLM polish of those is off unless `LLM_POLISH=true`. The LLM stays for parsing a report, policy answers under validation, translation of non-verdict text where templates don't exist, TTS, and finding related reports.
 - **"Verified" means what it says.** The check recomputes satellite numbers. The seal adds a digest of verdict level and corroboration inputs, so a change to those is detectable, and the page says plainly what was recomputed and what was only checked for tampering.
 - **Map shortcuts move the map only.** No preset dates. A shortcut shows its reported date as text with a source link.
+
+## Addendum 9, 1 Nov 2026, 4:53 AM: Gen AI that is visible and cannot move a verdict
+This is a Gen AI buildathon. Verdicts stay deterministic (Addendum 8). Gemini does real work around them, and every Gemini feature falls back to a clear "not available" state:
+- **Understands the farmer:** Hindi, Telugu and Hinglish voice or text into structured facts, plus a clarifying question when the report is ambiguous.
+- **Ask the witness:** the farmer asks about their own result in their language ("why weak?", "what should I do next?"). Answers are grounded only in that case's Evidence JSON and cited clauses, pass the digit validator and phrase denylist, and cite the evidence fields or clause ids used. Refuses what the evidence doesn't cover.
+- **Spots contradictions:** compares the farmer's statement with the evidence (date, event, crop stage) and asks a question. It proposes; only the farmer or the deterministic date check changes anything.
+- **Second opinion on images:** before/after images read by a vision model, labelled advisory, never fed into the rubric, and any disagreement is shown as "needs a person to look".
+- **Speech and related reports:** testimony read aloud; grounded search for related reports.
+
+The pitch says this plainly: "Gemini understands, explains and questions. Code measures and decides. A model can't talk the verdict up."

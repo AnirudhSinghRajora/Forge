@@ -24,7 +24,7 @@ Do these in order. Hosted timing: `TODO(deploy)`. Measure it here, and use your 
 **If you make a case by hand in the app:** a map shortcut moves the map and shows a reported date with its source. It presets nothing, so you type the date from the table. Any other date re-samples and can change the numbers, and so can a field drawn even slightly differently. On a re-sampled result, say what's on your screen. Don't answer "insured" for these cases.
 
 5. **Test the PDF.** Download it for the strongest case, and test the QR with a phone on mobile data. If the QR doesn't open the deployed URL, check `PUBLIC_WEB_URL`.
-6. **Know the limits.** New investigations are limited to 12 per IP per hour, and new verify downloads to 3. If judges share a network, raise `RATE_INVESTIGATIONS_PER_HOUR` and `RATE_VERIFY_PER_HOUR` first (`deploy/README.md`).
+6. **Know the limits.** New investigations are limited to 12 per IP per hour, and new verify downloads to 3. If judges share a network, raise `RATE_INVESTIGATIONS_PER_HOUR` and `RATE_VERIFY_PER_HOUR` beforehand (`deploy/README.md`).
 7. **Practise the wait-free path:** have all tabs open, in story order.
 
 ## The script

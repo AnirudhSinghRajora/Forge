@@ -289,7 +289,7 @@ Measured on the development machine, on a slow link shared with other jobs ([sec
 | Verify: the field's own 20 numbers | 31 to 41 s across the three records |
 | Verify: a full check, re-downloaded | 395 s and 338 s (104 numbers), 281 s (85 numbers) |
 
-The 90 s cold target is not met from this machine. Section 8 has tool-by-tool cold times.
+The 90 s cold target is not met from this machine. In the built container, on an empty disk and a pin never run before (Kirtan, Hisar), on this link of about 0.39 MB/s: first provisional result at 75 s, everything sealed at 497 s, about 1 GB of memory, and a 552 KB PDF. Section 8 has tool-by-tool cold times.
 
 ## Limitations
 

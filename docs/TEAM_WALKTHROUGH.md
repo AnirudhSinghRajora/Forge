@@ -390,7 +390,7 @@ That's a fair worry, and it's disclosed. The far test and post-scene rule came a
 
 ### 11. "Your run took minutes. How does this scale?"
 
-Honestly, we haven't load-tested it. On one development machine on a slow shared link, a verdict on warm data takes 10 to 20 s, and a warm run with part of the data cached gave verdicts at about 70-75 s. Our 90 s cold target wasn't met from this machine (engine-results 8 has the tool times). Hosted timing isn't in this document until it's measured. Reads are windowed, and each byte is downloaded once per run. Runs, rate limits and the scheduler live in one process, so it's one instance today. Scaling further would mean separate workers and a shared cache, which we haven't built.
+Honestly, we haven't load-tested it. In the built container on an empty disk, on a link of about 0.39 MB/s, a pin never run before gave a first provisional result at 75 s and sealed at 497 s. On one development machine on a slow shared link, a verdict on warm data takes 10 to 20 s, and a warm run with part of the data cached gave verdicts at about 70-75 s. Our 90 s cold target wasn't met from this machine (engine-results 8 has the tool times). Hosted timing isn't in this document until it's measured. Reads are windowed, and each byte is downloaded once per run. Runs, rate limits and the scheduler live in one process, so it's one instance today. Scaling further would mean separate workers and a shared cache, which we haven't built.
 
 ### 12. "Weather shows no hail codes. Why say corroborated?"
 

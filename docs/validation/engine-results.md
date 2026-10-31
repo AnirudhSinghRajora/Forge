@@ -363,3 +363,7 @@ Pins differ in scene count, and the "before" and "after" runs were at different 
 The far test's reads are a large known part of what remains in `optical_compare`: six windows, three bands, two scenes. I did not measure the split. Reducing them changes which placebos are drawn, so it would be a method change, and it was left alone because the locked runs depend on it.
 
 Verify timings from BACKEND's records (`backend/var`; the live record's hash starts `97b0da03e868`): all 20 field numbers in 41 s and 26 s on two runs; all 104 numbers in 1066 s while sharing the link. My own full `replay` of the typical plot also matched all 104 numbers exactly, in 1587 s while sharing the link with a locked run's download.
+
+## 7c. Sealed records against the seed table
+
+The app's seed comes from the polygon and the event date, so its records sit at one seed each, which is not one of the 30 in section 7a. On the final records the strongest plot has ring p 0.0597 (11 of 200), just above that table's 30-seed range of 0.0249 to 0.0498, and the typical plot has 155 ring placebos, just below its 157 to 174. Thirty seeds do not bound what another seed can give. Both records were recomputed from the archives and matched exactly. Neither value changes the level: the strongest plot's far p is 0.005 on every seed, and the typical plot has no field signal on 29 of 30 seeds.

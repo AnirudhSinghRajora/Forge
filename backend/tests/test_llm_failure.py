@@ -132,7 +132,7 @@ def test_testimony_states_both_answers_in_plain_words():
     local = with_verdict(evidence(p=placebo(p=0.02), far=placebo(p=0.4)))
     assert "looks local to your field" in testimony.templates(local)[1]
     neither = with_verdict(evidence(p=placebo(p=0.4), far=placebo(p=0.4)))
-    assert "did not change more" in testimony.templates(neither)[1]
+    assert "did not clearly change more" in testimony.templates(neither)[1]
 
 
 def test_testimony_says_no_damage_visible_honestly():
