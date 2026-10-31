@@ -10,6 +10,7 @@ from app.evidence.schema import SceneQA
 from app.tools.geo import flatten_numbers, plot_info, scene_archive, utm_epsg
 from app.tools.geo import indices as ix
 from app.tools.geo.base import PlotError, r4
+from app.tools.geo.blocks import Layout, assemble, needed_blocks, source_indices, supported
 from app.tools.geo.far import annulus_mask, sector_windows
 from app.tools.geo.grid import Grid, parse_plot
 from app.tools.geo.placebo import PlacementResult, build_placebo_fields, p_value, sample_placements
@@ -462,3 +463,49 @@ class TestFlatten:
 
     def test_empty_is_empty(self):
         assert flatten_numbers() == {}
+
+
+class TestBlocks:
+    """The block reader must return exactly what a direct window read returns."""
+
+    def layout(self, res=10.0, left=1000.0, top=5000.0):
+        return Layout(left, top, res, res, 40, 40, 16, 16, "uint16", 0, 32643)
+
+    def source(self):
+        return np.arange(1600, dtype=np.uint16).reshape(40, 40) + 1
+
+    def blocks_for(self, layout, src, rows, cols):
+        return {
+            (r, c): src[r * 16: (r + 1) * 16, c * 16: (c + 1) * 16]
+            for r, c in needed_blocks(layout, rows, cols)
+        }
+
+    def test_same_resolution_matches_a_crop(self):
+        layout, src = self.layout(), self.source()
+        grid = Grid(32643, 1050.0, 4900.0, 20, 15)
+        rows, cols = source_indices(layout, grid)
+        got = assemble(layout, rows, cols, self.blocks_for(layout, src, rows, cols), 0)
+        assert np.array_equal(got, src[10:25, 5:25])
+
+    def test_coarser_source_repeats_each_pixel(self):
+        layout, src = self.layout(res=20.0), self.source()
+        grid = Grid(32643, 1040.0, 4960.0, 6, 4)
+        rows, cols = source_indices(layout, grid)
+        assert rows.tolist() == [2, 2, 3, 3] and cols.tolist() == [2, 2, 3, 3, 4, 4]
+        got = assemble(layout, rows, cols, self.blocks_for(layout, src, rows, cols), 0)
+        assert np.array_equal(got, np.repeat(np.repeat(src[2:4, 2:5], 2, axis=0), 2, axis=1))
+
+    def test_window_past_the_raster_edge_is_filled(self):
+        layout, src = self.layout(), self.source()
+        grid = Grid(32643, 1350.0, 4650.0, 10, 10)
+        rows, cols = source_indices(layout, grid)
+        got = assemble(layout, rows, cols, self.blocks_for(layout, src, rows, cols), 0)
+        assert np.array_equal(got[:5, :5], src[35:40, 35:40])
+        assert (got[5:, :] == 0).all() and (got[:, 5:] == 0).all()
+
+    def test_support_rules(self):
+        assert supported(self.layout(), Grid(32643, 1050.0, 4900.0, 5, 5))
+        assert supported(self.layout(res=20.0), Grid(32643, 1050.0, 4900.0, 5, 5))
+        assert not supported(self.layout(), Grid(32644, 1050.0, 4900.0, 5, 5))
+        assert not supported(self.layout(), Grid(32643, 1055.0, 4900.0, 5, 5))
+        assert not supported(self.layout(), Grid(32643, 1050.0, 4900.0, 5, 5, 40))

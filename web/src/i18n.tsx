@@ -383,6 +383,7 @@ const S = {
   "tq.threshold": ["सीमा", "పరిమితి", "threshold"],
   "field.passes_pending": ["सैटेलाइट के गुज़रने की सूची अभी बन रही है।", "ఉపగ్రహ ప్రయాణాల జాబితా ఇంకా తయారవుతోంది.", "The list of satellite passes is still computing."],
   "field.passes_failed": ["सैटेलाइट के गुज़रने की सूची इस बार नहीं बन पाई।", "ఉపగ్రహ ప్రయాణాల జాబితా ఈసారి తయారు కాలేదు.", "The list of satellite passes could not be made this time."],
+  "draw.scen_key": ["पट्टी: 90% ड्रॉ का फैलाव। खड़ी रेखा: बीच का औसत। नीला बिंदु: संदर्भ के लिए आपका खेत।", "పట్టీ: 90% డ్రాల వ్యాప్తి. నిలువు గీత: మధ్య సగటు. నీలి చుక్క: సూచన కోసం మీ పొలం.", "Bar: the spread of 90% of draws. Upright line: the middle average. Blue dot: your field, for reference."],
   "ex.label": ["प्रदर्श", "ఆధారం", "Exhibit"],
   "ex.draw": ["3", "3", "3"],
   "ex.van": ["2", "2", "2"],

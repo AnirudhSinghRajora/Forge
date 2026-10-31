@@ -345,3 +345,77 @@ test.describe("judges trying to break it", () => {
     await expect(page.locator(".filed")).toHaveCount(0);
   });
 });
+
+test.describe("verdict first, exhibits later", () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+  const shell = (over: object, env: object) => async (route: Route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === "/api/health") return route.fulfill({ json: { status: "ok", gemini: false, version: "t" } });
+    if (u.pathname.match(/^\/api\/cases\/[^/]+$/)) {
+      const e = evidence(over);
+      return route.fulfill({ json: { case: { id: "c", lat: 29.5, lon: 75, active_run_id: null, latest_run: { id: "r", status: "done", started_at: new Date(Date.now() - 200000).toISOString() } }, evidence: e, actions: [], sealed: true, verdict_ready: true, exhibits: {}, ...env } });
+    }
+    if (u.pathname.includes("/retry")) return route.fulfill({ json: { run_id: "r2", exhibit: "village", status: "pending" } });
+    if (u.pathname.startsWith("/api/artifacts/")) return route.fulfill({ contentType: "image/png", body: testPng(8, 170, 120, 90) });
+    return route.fulfill({ status: 404, json: { detail: "x" } });
+  };
+
+  test("pending and failed exhibits say so, and retry is offered", async ({ page }) => {
+    const retries: string[] = [];
+    page.on("request", (r) => { if (r.url().includes("/retry")) retries.push(r.url()); });
+    await page.route("**/api/**", shell({ scale_fade: null, village: null, chips: [] }, {
+      sealed: true,
+      exhibits: { scale_fade: { status: "pending" }, village: { status: "failed", reason: "not finished within 600 s" }, chips: { status: "not_applicable", reason: "no pair" }, timeline: { status: "done" } },
+    }));
+    await page.goto("/case/c");
+    await expect(page.locator(".computing")).toHaveCount(1);
+    await expect(page.locator(".activity")).toBeVisible();
+    const retry = page.locator(".signature").nth(2).getByRole("button", { name: /फिर कोशिश/ });
+    await expect(retry).toBeVisible();
+    await retry.click();
+    await expect.poll(() => retries.length).toBe(1);
+    await page.screenshot({ path: `${SHOTS}/exhibits-states-d.png`, fullPage: true });
+  });
+
+  test("a provisional insufficient never reads as a finding", async ({ page }) => {
+    const base = evidence();
+    await page.route("**/api/**", shell(
+      { evidence_hash: null, verdict: { ...base.verdict, level: "insufficient", headline_hi: "अभी पक्की बात कहने लायक सबूत नहीं हैं", headline_en: "Not enough evidence" } },
+      { sealed: false, exhibits: { chips: { status: "pending" } }, case: { id: "c", lat: 29.5, lon: 75, active_run_id: "r", latest_run: { id: "r", status: "running", started_at: new Date(Date.now() - 90000).toISOString() } } },
+    ));
+    await page.goto("/case/c");
+    await expect(page.getByRole("heading", { name: "अभी नतीजा बन रहा है" })).toBeVisible();
+    await expect(page.getByText("अभी पक्की बात कहने लायक सबूत नहीं हैं")).toHaveCount(0);
+    await expect(page.locator(".testimony")).toHaveCount(0);
+  });
+
+  test("a null affected-only scenario gives its reason, and all-cropland numbers stay", async ({ page }) => {
+    const base = evidence();
+    const v = base.village as { lottery: Record<string, unknown> };
+    await page.route("**/api/**", shell({ village: { ...base.village, lottery: { ...v.lottery, affected_only_median: null, affected_only_p05: null, affected_only_p95: null, affected_only_n_candidates: 3, affected_only_reason: "Only 3 parcels dropped past the threshold." } } }, {}));
+    await page.goto("/case/c?lang=en");
+    await expect(page.getByText("Only 3 parcels dropped past the threshold.")).toBeVisible();
+    await expect(page.locator(".scen").first().locator(".scen-nums")).toBeVisible();
+    await expect(page.getByText("These two are bounds, not an estimate.", { exact: false })).toBeVisible();
+    await expect(page.getByText("nobody outside the insurer can see that list", { exact: false })).toBeVisible();
+    const text = (await page.locator("body").innerText()).toLowerCase();
+    expect(text).not.toContain("unfair");
+    expect(text).not.toContain("lottery");
+  });
+
+  test("the plain reading follows the values: holds, fades, none", async ({ page }) => {
+    const base = evidence();
+    const fadeWith = (vals: number[]) => ({ ...base.scale_fade, levels: [10, 100, 500, 1000, 3000].map((b, i) => ({ block_m: b, plot_cell_value: vals[i], context_min: null, chip_path: `test/fade_${b}.png` })) });
+    await page.route("**/api/**", shell({ scale_fade: fadeWith([-0.1275, -0.1233, -0.1196, -0.13, -0.0811]) }, {}));
+    await page.goto("/case/c?lang=en");
+    await expect(page.getByText("Your whole area changed together", { exact: false })).toBeAttached();
+    await page.unroute("**/api/**");
+    await page.route("**/api/**", shell({ scale_fade: fadeWith([-0.4372, -0.3518, -0.2667, -0.1635, -0.0983]) }, {}));
+    await page.goto("/case/c?lang=en");
+    await expect(page.getByText("only 22% of the change remains", { exact: false })).toBeAttached();
+    await page.unroute("**/api/**");
+    await page.route("**/api/**", shell({ scale_fade: fadeWith([0.0087, 0.0205, 0.0199, 0.0167, 0.0088]) }, {}));
+    await page.goto("/case/c?lang=en");
+    await expect(page.getByText("This field shows no real fall", { exact: false })).toBeAttached();
+  });
+});

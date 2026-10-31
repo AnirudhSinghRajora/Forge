@@ -440,6 +440,7 @@ export function TenFieldDraw({ ev }: { ev: Evidence }) {
                 : t("draw.affected_too_few", { n: sim.affected_only_n_candidates })}
           />
         </div>
+        <p className="small faint">{t("draw.scen_key")}</p>
         <p className="scens-truth">{t("draw.bounds")}</p>
         <p className="scens-claim">{t("draw.claim_list")}</p>
       </section>
