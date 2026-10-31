@@ -59,6 +59,9 @@ MAX_LOOPS = 2
 SENTINEL2_REVISIT_DAYS = 5
 SAME_FIELD_M = 50
 PC = "Microsoft Planetary Computer"
+LLM_PLAN_S = 15
+LLM_REPHRASE_S = 10
+LLM_EXPLAIN_S = 50
 
 _TIMEOUTS_S = {
     "weather": 25, "alerts": 12, "news": 30, "search_optical": 25, "qa_scene": 45,
@@ -66,6 +69,7 @@ _TIMEOUTS_S = {
     "render_chips": 80, "village_witness": 80, "scale_fade": 80,
 }
 _CORE_TOOLS = {"optical_compare", "sar_compare"}
+_DOCUMENTATION_TOOLS = {"village_witness", "scale_fade", "render_chips", "timeline"}
 MAX_CORE_TIMEOUT_S = 130
 # The verdict always lands inside the soft budget. Documentation after it (the village step and the
 # chips) may run past it, up to this, because a sealed record is worth a slower finish.
@@ -146,6 +150,7 @@ class Ctx:
     lock: threading.Lock = field(default_factory=threading.Lock)
     timeline_future: Any = None
     sar_future: Any = None
+    chips_future: Any = None
     archive_failed: bool = False  # a satellite search itself failed, as opposed to finding nothing
 
     def elapsed(self) -> float:
@@ -183,6 +188,8 @@ class Ctx:
         if tool in _CORE_TOOLS:
             # A slow answer to the core question beats no answer, so these can use what is left.
             timeout = max(timeout, min(self.seconds_left() - 5, MAX_CORE_TIMEOUT_S))
+        elif tool in _DOCUMENTATION_TOOLS:
+            timeout = max(5.0, min(timeout, self.seconds_left() + DOCUMENTATION_GRACE_S))
         begin = time.monotonic()
         future = _TOOLS.submit(fn)
         try:
@@ -550,7 +557,7 @@ def n_planner(state: State, ctx: Ctx) -> dict:
             f"Max daily rain: {w.max_daily_mm if w else None} mm. Tool calls left: {ctx.calls_left()}. "
             f"Seconds left: {round(ctx.seconds_left())}."
         )
-        choice = llm.plan(context, PLAN_OPTIONS)
+        choice = llm.bounded(LLM_PLAN_S, llm.plan, context, PLAN_OPTIONS)
     if choice is not None:
         veto = plan_veto(choice.name, ev)
         if veto:
@@ -982,9 +989,10 @@ def n_history(state: State, ctx: Ctx) -> dict:
 def _rephrase(objections: list) -> dict[str, tuple[str, str]]:
     if not llm.available():
         return {}
-    raw = llm.rephrase_challenges(
+    raw = llm.bounded(
+        LLM_REPHRASE_S, llm.rephrase_challenges,
         [{"id": o.id, "challenge_hi": o.challenge_hi, "challenge_en": o.challenge_en}
-         for o in objections]
+         for o in objections],
     )
     return raw or {}
 
@@ -1165,10 +1173,35 @@ def n_verdict(state: State, ctx: Ctx) -> dict:
 # village
 
 
+def start_chips(ctx: Ctx, state: State, ev: Evidence) -> None:
+    """After the verdict the scene pair is final, so the images can render beside the village step."""
+    if ctx.chips_future is not None:
+        return
+    pre, post = ev.optical.pre, ev.optical.post
+    polygon = state["polygon"]
+    sar = ev.sar if ev.sar and ev.sar.usable else None
+
+    def render():
+        if not (pre and post):
+            return None
+        out_dir = get_settings().artifacts_dir / ctx.case_id / ctx.run_id
+        return ctx.call(
+            "seal", "render_chips",
+            lambda: _geo().render_chips(polygon, pre.scene_id, post.scene_id, out_dir,
+                                        sar.pre_scene_id if sar else None,
+                                        sar.post_scene_id if sar else None),
+            "पहले और बाद की तस्वीरें बन रही हैं", "Rendering before and after images",
+            summarize=lambda r: {"chips": [c.kind for c in r]},
+        )
+
+    ctx.chips_future = _TOOLS.submit(render)
+
+
 def n_village(state: State, ctx: Ctx) -> dict:
     """Signatures 1 and 2. They need GEO's exports; without them the fields stay an honest null."""
     ev: Evidence = state["evidence"]
     geo = _geo()
+    start_chips(ctx, state, ev)
     village_fn = getattr(geo, "village_witness", None)
     fade_fn = getattr(geo, "scale_fade", None)
     pre, post = ev.optical.pre, ev.optical.post
@@ -1418,8 +1451,29 @@ def n_act(state: State, ctx: Ctx) -> dict:
 def n_explain(state: State, ctx: Ctx) -> dict:
     ev: Evidence = state["evidence"]
     ctx.emit("step_started", "explain", "नतीजा सरल भाषा में लिखा जा रहा है", "Writing the result in plain language")
-    report = explain.explain(ev)
-    testimony.fill(ev)
+    # Templates first, so a hung LLM can cost no more than the time limit, and nothing else.
+    explain.fill_templates(ev)
+    testimony.fill_templates(ev)
+    report = {"hi": "template", "en": "template", "te": "none"}
+    if llm.available():
+        polished = ev.model_copy(deep=True)
+
+        def polish():
+            result = explain.explain(polished)
+            testimony.polish(polished)
+            return result
+
+        result = llm.bounded(LLM_EXPLAIN_S, polish)
+        if result is not None:
+            report = result
+            for name in ("explanation_hi", "explanation_en", "explanation_te", "testimony_hi",
+                         "testimony_en", "testimony_te", "llm_used"):
+                setattr(ev, name, getattr(polished, name))
+            ev.verdict.headline_te = polished.verdict.headline_te
+        else:
+            ctx.emit("warning", "explain", "LLM समय पर जवाब नहीं दे पाया, इसलिए तय पाठ दिखाया जा रहा है",
+                     "The LLM did not answer in time, so the deterministic text is shown",
+                     limit_s=LLM_EXPLAIN_S)
     ctx.emit("action", "explain", "समझाने का पाठ तैयार", "Explanation ready", action="explanation",
              report=report, llm_used=ev.llm_used, tts_available=llm.available())
     return {"evidence": ev}
@@ -1455,30 +1509,15 @@ def n_seal(state: State, ctx: Ctx) -> dict:
     polygon, seed = state["polygon"], state["seed"]
     geo = _geo()
     ctx.emit("step_started", "seal", "सबूत पर मुहर लगाई जा रही है", "Sealing the evidence")
-    def do_chips():
-        pre, post = ev.optical.pre, ev.optical.post
-        if not (pre and post):
-            return None
-        out_dir = get_settings().artifacts_dir / ctx.case_id / ctx.run_id
-        sar = ev.sar if ev.sar and ev.sar.usable else None
-        return ctx.call(
-            "seal", "render_chips",
-            lambda: geo.render_chips(polygon, pre.scene_id, post.scene_id, out_dir,
-                                     sar.pre_scene_id if sar else None,
-                                     sar.post_scene_id if sar else None),
-            "पहले और बाद की तस्वीरें बन रही हैं", "Rendering before and after images",
-            summarize=lambda r: {"chips": [c.kind for c in r]},
-        )
-
-    chips_future = _TOOLS.submit(do_chips)
+    start_chips(ctx, state, ev)
     try:
-        chips = chips_future.result()
+        chips = ctx.chips_future.result(timeout=max(3.0, ctx.seconds_left() + DOCUMENTATION_GRACE_S))
         if chips:
             root = get_settings().artifacts_dir.resolve()
             for chip in chips:
                 chip.path = _relative_artifact(chip.path, root)
             ev.chips = chips
-    except ToolFailed:
+    except (ToolFailed, FutureTimeout):
         pass
     if ctx.timeline_future is not None:
         try:

@@ -17,6 +17,8 @@ import logging
 import sys
 import threading
 import wave
+from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass
 from datetime import date
 from typing import TypeVar
@@ -39,6 +41,22 @@ last_errors: dict[str, str] = {}
 
 def available() -> bool:
     return get_settings().gemini_enabled
+
+
+_BOUNDED = ThreadPoolExecutor(max_workers=8, thread_name_prefix="llm")
+
+
+def bounded(seconds: float, fn, *args, **kwargs):
+    """Calls fn with a hard wall-clock limit and returns None past it, or on any failure. A hung LLM
+    must never hold up a verdict, since the deterministic path has already been built."""
+    future = _BOUNDED.submit(fn, *args, **kwargs)
+    try:
+        return future.result(timeout=seconds)
+    except FutureTimeout:
+        log.warning("gemini call to %s exceeded %.0f s", getattr(fn, "__name__", "?"), seconds)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("gemini call to %s failed: %s", getattr(fn, "__name__", "?"), exc)
+    return None
 
 
 def client():

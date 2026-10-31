@@ -34,6 +34,7 @@ export default function Verify({ hash }: { hash: string }) {
   const [conn, setConn] = useState<Conn>("connecting");
   const [start, setStart] = useState<Start | null>(null);
   const [result, setResult] = useState<Result | null>(null);
+  const [progress, setProgress] = useState<{ message_hi?: string; message_en?: string } | null>(null);
   const [run, setRun] = useState(0);
   const [startedAt, setStartedAt] = useState(() => Date.now());
   const [restartNote, setRestartNote] = useState(false);
@@ -58,6 +59,7 @@ export default function Verify({ hash }: { hash: string }) {
             let msg: Record<string, unknown>;
             try { msg = JSON.parse(m.data) as Record<string, unknown>; } catch { return; }
             if (msg.type === "start") setStart(msg as Start);
+            else if (msg.type === "progress") setProgress(msg as { message_hi?: string; message_en?: string });
             else if (msg.type === "number") setArrived((r) => [...r, toRow(msg)]);
             else if (msg.type === "result") { sawResult = true; setResult(msg as unknown as Result); }
           },
@@ -172,7 +174,7 @@ export default function Verify({ hash }: { hash: string }) {
 
           {running && arrived.length === 0 && (
             <p className="loading" role="status">
-              <span className="spinner" aria-hidden="true" /> {conn === "connecting" ? t("verify.connecting") : t("verify.working", { n: total })}
+              <span className="spinner" aria-hidden="true" /> {conn === "connecting" ? t("verify.connecting") : (lang === "hi" ? progress?.message_hi : progress?.message_en) ?? t("verify.working", { n: total })}
             </p>
           )}
           {running && arrived.length === 0 && elapsed > 20 && <p className="small faint">{t("verify.slow")}</p>}

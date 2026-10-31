@@ -141,3 +141,18 @@ def test_planner_veto(monkeypatch):
     ev.event.type = "cyclone"
     assert plan_veto("sar_first", ev) is None
     assert plan_veto("search_optical", ev) is None
+
+
+def test_hung_llm_cannot_hold_up_a_run(monkeypatch):
+    import time
+
+    start = time.monotonic()
+    assert llm.bounded(0.05, time.sleep, 2) is None
+    assert time.monotonic() - start < 1
+
+
+def test_raising_llm_is_a_none_from_bounded():
+    def boom():
+        raise RuntimeError("x")
+
+    assert llm.bounded(1, boom) is None

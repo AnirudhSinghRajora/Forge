@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     gemini_model_flash: str = "gemini-3.8-flash"
     gemini_model_tts: str = "gemini-3.8-flash-tts"
     gemini_model_embed: str = "gemini-embedding-2"
-    gemini_timeout_s: float = 30.0
+    gemini_timeout_s: float = 20.0
 
     database_url: str | None = None
     var_dir: Path = BACKEND_DIR / "var"

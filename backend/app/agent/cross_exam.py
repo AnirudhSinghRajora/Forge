@@ -6,6 +6,7 @@ on. The graph emits one `objection` trace event per entry, in this order, so the
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import date
 
@@ -24,6 +25,7 @@ PRE_NDVI_MIN = 0.3
 VALID_FRAC_MIN = 0.8
 TOO_SMALL_HA = 0.2
 HISTORY_PRE_DIFF = 0.2
+WATER_PRE_MIN_PCT = 70
 
 _HI_MONTHS = ["जनवरी", "फ़रवरी", "मार्च", "अप्रैल", "मई", "जून", "जुलाई", "अगस्त", "सितंबर", "अक्टूबर",
               "नवंबर", "दिसंबर"]
@@ -156,12 +158,36 @@ def check_harvest(ev: Evidence) -> Objection:
     )
 
 
+def _pre_event_water(ev: Evidence) -> list[int]:
+    """Water share of the plot on pre-event images where QA found it mostly water."""
+    shares = []
+    for q in ev.optical.scenes_considered:
+        if q.date > ev.event.date:
+            continue
+        for reason in q.reasons:
+            m = re.search(r"(\d+)% of plot pixels classified as water", reason)
+            if m and int(m[1]) >= WATER_PRE_MIN_PCT:
+                shares.append(int(m[1]))
+    return shares
+
+
 def check_wrong_plot(ev: Evidence) -> Objection:
     challenge_hi = "क्या यह आपका ही खेत है? घटना से पहले यहाँ फ़सल थी भी?"
     challenge_en = "Is this even your field? Was there a crop here before the event?"
     test = f"Plot median NDVI on the last accepted scene before the event >= {PRE_NDVI_MIN}."
     pre = ev.optical.pre
     if pre is None:
+        water = _pre_event_water(ev)
+        if len(water) >= 2:
+            shares = ", ".join(f"{w}%" for w in water)
+            return _obj(
+                "wrong_plot", challenge_hi, challenge_en, test,
+                {"pre_ndvi_median": None, "pre_event_water_pct": water}, "conceded",
+                f"घटना से पहले की तस्वीरों में यह जगह पानी दिखती है ({shares}), यहाँ खड़ी फ़सल नहीं दिखती। कृपया खेत की "
+                "सीमा दोबारा जाँच लें।",
+                f"Before the event the images show this place as water ({shares}), with no standing "
+                "crop visible. Please re-check the field boundary.",
+            )
         return _obj(
             "wrong_plot", challenge_hi, challenge_en, test,
             {"pre_ndvi_median": None}, "unresolved",

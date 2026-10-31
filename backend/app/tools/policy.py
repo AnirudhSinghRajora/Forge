@@ -198,7 +198,7 @@ def retrieve(query: str, k: int = 4) -> list[dict]:
     if not pool:
         return []
     bm25_rank = {idx: rank for rank, idx in enumerate(pool)}
-    embed_rank = _embedding_ranks(corpus, query, pool)
+    embed_rank = llm.bounded(12, _embedding_ranks, corpus, query, pool) if llm.available() else None
     if embed_rank:
         fused = {
             i: 1 / (RRF_K + bm25_rank[i]) + 1 / (RRF_K + embed_rank.get(i, len(pool)))
@@ -317,10 +317,11 @@ def ask(question: str, lang: str = "hi") -> dict:
     if not hits:
         return not_covered
 
-    generated = llm.answer_from_clauses(
-        question, [{"clause_id": str(h["clause_id"]), "text": h["text"][:MAX_CLAUSE_CHARS]}
-                   for h in hits[:5]], lang,
-    )
+    generated = llm.bounded(
+        30, llm.answer_from_clauses, question,
+        [{"clause_id": str(h["clause_id"]), "text": h["text"][:MAX_CLAUSE_CHARS]} for h in hits[:5]],
+        lang,
+    ) if llm.available() else None
     if generated is not None and generated.cited_clause_ids:
         by_id = {str(h["clause_id"]): h for h in hits}
         cited = [by_id[c] for c in generated.cited_clause_ids if c in by_id]

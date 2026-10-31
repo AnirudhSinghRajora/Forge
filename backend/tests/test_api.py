@@ -504,3 +504,25 @@ def test_redate_without_a_pair_keeps_the_farmers_evidence(client, monkeypatch):
     wrong_date = next(o for o in ev["cross_examination"] if o["id"] == "wrong_date")
     assert wrong_date["outcome"] == "conceded"
     assert len(calls) == 1
+
+
+def test_hung_llm_during_explain_still_gives_the_deterministic_text(client, monkeypatch):
+    import time
+
+    from app.agent import graph, llm
+
+    monkeypatch.setattr(graph, "LLM_EXPLAIN_S", 0.2)
+    monkeypatch.setattr(graph, "LLM_PLAN_S", 0.1)
+    monkeypatch.setattr(graph, "LLM_REPHRASE_S", 0.1)
+    monkeypatch.setattr(llm, "available", lambda: True)
+    for name in ("narrate", "translate", "plan", "rephrase_challenges", "_plain_text", "grounded_sources"):
+        monkeypatch.setattr(llm, name, lambda *a, **k: time.sleep(3))
+    monkeypatch.setattr(llm, "parse_text", lambda *a, **k: None)
+    install_fake_geo(monkeypatch)
+    case_id = new_case(client)
+    began = time.monotonic()
+    events = wait_done(client, client.post(f"/api/cases/{case_id}/investigate").json()["run_id"])
+    assert time.monotonic() - began < 10
+    ev = client.get(f"/api/cases/{case_id}").json()["evidence"]
+    assert ev["llm_used"] is False and ev["explanation_hi"] and ev["testimony_en"]
+    assert any(e["node"] == "explain" and e["type"] == "warning" for e in events)

@@ -9,6 +9,7 @@ Telugu NEEDS NATIVE REVIEW: not checked by a native speaker.
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 from app.agent import explain as explain_mod
 from app.agent import llm, rubric
@@ -142,14 +143,25 @@ def _polish(text: str, lang: str) -> str | None:
                            [llm._text_part(prompt)])
 
 
-def fill(ev: Evidence) -> None:
-    hi, en, te = templates(ev)
-    ev.testimony_hi, ev.testimony_en, ev.testimony_te = hi, en, te
+def fill_templates(ev: Evidence) -> None:
+    ev.testimony_hi, ev.testimony_en, ev.testimony_te = templates(ev)
+
+
+def polish(ev: Evidence) -> None:
+    """Gemini may polish a template, through the validator only. A rejection keeps the template."""
     if not llm.available():
         return
     allowed = explain_mod.allowed_numbers(ev)
-    for lang, text in (("hi", hi), ("en", en), ("te", te)):
-        polished = explain_mod.checked(_polish(text, lang), allowed, f"testimony {lang}")
+    originals = (("hi", ev.testimony_hi), ("en", ev.testimony_en), ("te", ev.testimony_te))
+    with ThreadPoolExecutor(max_workers=3, thread_name_prefix="testimony") as pool:
+        results = list(pool.map(lambda item: _polish(item[1], item[0]), originals))
+    for (lang, _), raw in zip(originals, results, strict=True):
+        polished = explain_mod.checked(raw, allowed, f"testimony {lang}")
         if polished:
             setattr(ev, f"testimony_{lang}", polished)
             ev.llm_used = True
+
+
+def fill(ev: Evidence) -> None:
+    fill_templates(ev)
+    polish(ev)

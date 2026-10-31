@@ -6,6 +6,7 @@ only for headlines, and Gemini's translation (also validated) replaces it when a
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from app.agent import llm, rubric, validate
@@ -217,6 +218,13 @@ def checked(text: str | None, allowed: set[float], what: str) -> str | None:
     return text
 
 
+def fill_templates(ev: Evidence) -> None:
+    """The deterministic text, in place. It is complete on its own, with or without any LLM."""
+    template_hi, template_en = template_explanation(ev, ev.verdict.level)
+    ev.explanation_hi, ev.explanation_en = template_hi, template_en
+    ev.verdict.headline_te = headlines(ev.verdict.level, ev.event.type)[2]
+
+
 def explain(ev: Evidence) -> dict:
     """Fills explanations and Telugu headline fields. Returns which LLM attempts were used."""
     level = ev.verdict.level
@@ -227,19 +235,18 @@ def explain(ev: Evidence) -> dict:
               "rejected": []}
 
     summary = digest(ev)
+    ev.explanation_hi, ev.explanation_en = template_hi, template_en
     if llm.available():
-        for lang in ("hi", "en"):
-            raw = llm.narrate(summary, lang)
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="narrate") as pool:
+            narrated = dict(zip(("hi", "en"), pool.map(lambda code: llm.narrate(summary, code),
+                                                       ("hi", "en")), strict=True))
+        for lang, raw in narrated.items():
             if checked(raw, allowed, f"narrative {lang}"):
                 setattr(ev, f"explanation_{lang}", raw)
                 report[lang] = "llm"
                 ev.llm_used = True
             elif raw:
                 report["rejected"].append(f"narrative_{lang}")
-    if ev.explanation_hi is None:
-        ev.explanation_hi = template_hi
-    if ev.explanation_en is None:
-        ev.explanation_en = template_en
 
     ev.verdict.headline_te = head_te
     if llm.available():

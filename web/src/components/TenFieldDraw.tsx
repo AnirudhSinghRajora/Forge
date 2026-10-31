@@ -46,6 +46,8 @@ function Histogram({ sim, shownDraws, fill, activeAverage }: {
     const i = edges.findIndex((e, j) => j < counts.length && v >= e && v < edges[j + 1]);
     return i < 0 ? (v < edges[0] ? 0 : counts.length - 1) : i;
   };
+  // When this survey lands beside the field's own marker, its label moves down so both stay readable.
+  const near = activeAverage !== null && pv !== null && Math.abs(x(activeAverage) - x(pv)) < 70;
   const dotStacks = new Map<number, number>();
   return (
     <div className="chart drw-hist" ref={ref}>
@@ -67,7 +69,7 @@ function Histogram({ sim, shownDraws, fill, activeAverage }: {
         {activeAverage !== null && (
           <g>
             <line x1={x(activeAverage)} x2={x(activeAverage)} y1={m.t - 6} y2={height - m.b} className="drw-now" />
-            <text x={x(activeAverage)} y={m.t - 10} textAnchor={x(activeAverage) < width * 0.25 ? "start" : x(activeAverage) > width * 0.75 ? "end" : "middle"} className="drw-now-label">{t("draw.this_survey")}</text>
+            <text x={x(activeAverage) + (near ? 6 : 0)} y={near ? m.t + 10 : m.t - 10} textAnchor={near || x(activeAverage) < width * 0.25 ? "start" : x(activeAverage) > width * 0.75 ? "end" : "middle"} className="drw-now-label">{t("draw.this_survey")}</text>
           </g>
         )}
         {pv !== null && (

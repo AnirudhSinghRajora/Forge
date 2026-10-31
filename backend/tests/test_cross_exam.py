@@ -116,3 +116,29 @@ def test_measured_values_are_copied_from_evidence():
     o = get(evidence(p=placebo(p=0.02, n=200, k=3)), "regional_trend")
     assert (o.measured["n_placebos"], o.measured["n_at_least_as_extreme"]) == (200, 3)
     assert "3" in o.finding_en and "200" in o.finding_en
+
+
+def test_wrong_plot_conceded_when_the_plot_was_water_before_the_event():
+    from datetime import timedelta
+
+    from tests.conftest import EVENT, qa
+
+    ev = evidence(optical=False)
+    ev.optical.scenes_considered = [
+        qa("a", EVENT - timedelta(days=5), "suspect", ["Q2: 99% of plot pixels classified as water; could be"]),
+        qa("b", EVENT - timedelta(days=10), "suspect", ["Q2: 74% of plot pixels classified as water; could be"]),
+    ]
+    o = cross_exam.check_wrong_plot(ev)
+    assert o.outcome == "conceded" and o.measured["pre_event_water_pct"] == [99, 74]
+
+
+def test_one_wet_image_does_not_concede_wrong_plot():
+    from datetime import timedelta
+
+    from tests.conftest import EVENT, qa
+
+    ev = evidence(optical=False)
+    ev.optical.scenes_considered = [
+        qa("a", EVENT - timedelta(days=5), "suspect", ["Q2: 99% of plot pixels classified as water; could be"]),
+    ]
+    assert cross_exam.check_wrong_plot(ev).outcome == "unresolved"

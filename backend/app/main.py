@@ -221,10 +221,12 @@ def create_case(
     if llm.available():
         llm_parsed = None
         if audio is not None:
-            llm_parsed = llm.parse_audio(audio.file.read(), audio.content_type or "audio/webm", lang)
+            llm_parsed = llm.bounded(
+                60, llm.parse_audio, audio.file.read(), audio.content_type or "audio/webm", lang
+            )
             audio_failed = llm_parsed is None
         elif text:
-            llm_parsed = llm.parse_text(text, lang)
+            llm_parsed = llm.bounded(25, llm.parse_text, text, lang)
         if llm_parsed is not None:
             parsed = llm.merge_parsed(llm_parsed, parsed)
     elif audio is not None:
