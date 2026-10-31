@@ -108,12 +108,13 @@ def test_rerunning_creates_new_cases(client, monkeypatch):
     assert warm(client, "godavari-arnab")["case_id"] != warm(client, "godavari-arnab")["case_id"]
 
 
-def test_godavari_has_no_invented_stage_or_selection_note(client, monkeypatch):
+def test_godavari_has_no_invented_stage_and_discloses_its_selection(client, monkeypatch):
     fake_geo_on_real_plot(monkeypatch)
     row = warm(client, "godavari-arnab")
     body = client.get(f"/api/cases/{row['case_id']}").json()
     assert body["case"]["crop_stage"] is None and body["case"]["insured"] is None
-    assert body["selection_note"] is None and body["evidence"]["claim_path"]["route"] == "undetermined"
+    assert "51 usable plots" in body["selection_note"]["en"]
+    assert body["evidence"]["claim_path"]["route"] == "undetermined"
 
 
 def test_a_rejected_case_is_reported_and_does_not_stop_the_rest(client, monkeypatch, capsys):

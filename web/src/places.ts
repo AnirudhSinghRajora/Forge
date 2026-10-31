@@ -33,9 +33,9 @@ export const PLACES: Place[] = [
     reported: BHIWANI_REPORTED,
     source: { url: TRIBUNE_BHIWANI, name: "The Tribune" },
     selected: {
-      hi: "यह खेत नियम से चुना गया है, नतीजा देखकर नहीं: उस पट्टी के 40 यादृच्छिक खेतों में बीच वाला (मध्यिका)।",
-      te: "ఈ పొలాన్ని ఫలితం చూసి కాదు, నియమం ప్రకారం ఎంచుకున్నాం: ఆ పట్టీలోని 40 యాదృచ్ఛిక పొలాలలో మధ్యస్థమైనది.",
-      en: "This plot was chosen by rule, not for its result: the median of 40 random plots from the band.",
+      hi: "यह खेत नियम से चुना गया है, नतीजा देखकर नहीं: उस पट्टी के मूल 40 यादृच्छिक खेतों में बीच वाला (मध्यिका)।",
+      te: "ఈ పొలాన్ని ఫలితం చూసి కాదు, నియమం ప్రకారం ఎంచుకున్నాం: ఆ పట్టీలోని అసలు 40 యాదృచ్ఛిక పొలాలలో మధ్యస్థమైనది.",
+      en: "This plot was chosen by rule, not for its result: the median of the original 40 random plots from the band.",
     },
   },
   {
@@ -54,12 +54,17 @@ export const PLACES: Place[] = [
   },
   {
     id: "arnab-godavari",
-    lat: 16.45,
-    lon: 81.9,
-    zoom: 12,
-    label: { hi: "गोदावरी: चक्रवात अर्णब का तट", te: "గోదావరి: ఆర్నబ్ తుఫాను తీరం", en: "Godavari: where Cyclone Arnab came ashore" },
+    lat: 16.906738,
+    lon: 81.975164,
+    zoom: 15,
+    label: { hi: "गोदावरी: अनपर्ति के पास, 51 में सबसे मज़बूत", te: "గోదావరి: అనపర్తి సమీపంలో, 51లో బలమైనది", en: "Godavari: near Anaparthi, strongest of 51 scanned" },
     reported: { hi: "चक्रवात की ख़बर: 28 अक्टूबर 2026", te: "తుఫాను నివేదిక: 28 అక్టోబర్ 2026", en: "Cyclone reported: 28 October 2026" },
     source: { url: "https://mausam.imd.gov.in/Forecast/marquee_data/25.%20National%20Bulletin%20No%2025-28Oct2026_0830IST.pdf", name: "IMD" },
+    selected: {
+      hi: "यह खेत एक स्कैन से चुना गया है: अनपर्ति के पास स्कैन किए गए 51 उपयोगी खेतों में सबसे ज़्यादा गिरावट वाला। यह आम खेत नहीं है। फ़सल कटाई से कुछ ही दिन दूर थी, और यही खेत दूसरे सालों में भी गिरा था, इसलिए सामान्य पकाव भी ऐसा दिख सकता है।",
+      te: "ఈ పొలాన్ని స్కాన్ నుంచి ఎంచుకున్నాం: అనపర్తి సమీపంలో స్కాన్ చేసిన 51 ఉపయోగపడే పొలాలలో అత్యధిక తగ్గుదల ఉన్నది. ఇది సాధారణ పొలం కాదు. పంట కోతకు కొద్ది రోజుల దూరంలో ఉంది, ఇదే పొలం ఇతర సంవత్సరాల్లోనూ తగ్గింది, కాబట్టి సాధారణంగా పండటం కూడా ఇలాగే కనిపించవచ్చు.",
+      en: "This plot was picked from a scan: the strongest of 51 usable plots scanned near Anaparthi. It is not a typical field. The crop was days from harvest, and the same plot also fell in other years, so normal ripening could look similar.",
+    },
   },
   {
     id: "ratia-fatehabad-hail",

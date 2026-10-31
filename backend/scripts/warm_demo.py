@@ -66,8 +66,9 @@ PLOTS = (
              "Hail damaged the standing wheat, March 2024.", crop_stage="standing"),
     DemoPlot("bhiwani-typical", 28.715212, 76.231138, 104.7, "2024-03-03", "wheat", "hail",
              "Hail damaged the standing wheat, March 2024.", crop_stage="standing"),
-    # IMD's landfall point (events.md A1). It has not been checked for cropland.
-    DemoPlot("godavari-arnab", 16.45, 81.90, 100.0, "2026-10-28", "paddy", "cyclone",
+    # Beside Anaparthi: the strongest of 51 usable plots scanned there (engine-results.md section 4), so
+    # its selection note says so. Its crop was days from harvest and the plot also fell in other years.
+    DemoPlot("godavari-arnab", 16.906738, 81.975164, 112.3, "2026-10-28", "paddy", "cyclone",
              "Cyclone Arnab damaged the paddy, October 2026."),
     # Jallopur's cropland point, a named village in Ratia tehsil (events.md B2).
     DemoPlot("ratia-hail", 29.69151, 75.49735, 100.0, "2026-10-24", "paddy", "hail",

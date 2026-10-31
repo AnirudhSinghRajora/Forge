@@ -10,7 +10,7 @@ METRE_LAT = 1 / 111_320
 
 def test_each_scanned_plot_has_its_own_note_in_every_language():
     for centroid, kind, phrase in ((STRONGEST, "strongest", "strongest of 200 random plots scanned in this area"),
-                                   (TYPICAL, "typical", "median of 40 random plots from the band")):
+                                   (TYPICAL, "typical", "median of the original 40 random plots from the band")):
         note = disclosures.selection_note(centroid)
         assert note["kind"] == kind and phrase in note["en"]
         assert note["hi"] and note["te"]

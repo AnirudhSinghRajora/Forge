@@ -25,11 +25,17 @@ SELECTED_PLOTS = (
     },
     {
         "kind": "typical", "lat": 28.715212, "lon": 76.231138,
-        "en": "This plot was chosen by rule, not for its result: the median of 40 random plots from "
-              "the band.",
-        "hi": "यह खेत नियम से चुना गया है, नतीजा देखकर नहीं: उस पट्टी के 40 यादृच्छिक खेतों में बीच वाला (मध्यिका)।",
-        "te": "ఈ పొలాన్ని ఫలితం చూసి కాదు, నియమం ప్రకారం ఎంచుకున్నాం: ఆ పట్టీలోని 40 యాదృచ్ఛిక పొలాలలో "
+        "en": "This plot was chosen by rule, not for its result: the median of the original 40 random "
+              "plots from the band.",
+        "hi": "यह खेत नियम से चुना गया है, नतीजा देखकर नहीं: उस पट्टी के मूल 40 यादृच्छिक खेतों में बीच वाला (मध्यिका)।",
+        "te": "ఈ పొలాన్ని ఫలితం చూసి కాదు, నియమం ప్రకారం ఎంచుకున్నాం: ఆ పట్టీలోని అసలు 40 యాదృచ్ఛిక పొలాలలో "
               "మధ్యస్థమైనది.",
+    },
+    {
+        "kind": "strongest", "lat": 16.906738, "lon": 81.975164,
+        "en": "This plot was picked from a scan: the strongest of 51 usable plots scanned near Anaparthi. It is not a typical field. The crop was days from harvest, and the same plot also fell in other years, so normal ripening could look similar.",
+        "hi": "यह खेत एक स्कैन से चुना गया है: अनपर्ति के पास स्कैन किए गए 51 उपयोगी खेतों में सबसे ज़्यादा गिरावट वाला। यह आम खेत नहीं है। फ़सल कटाई से कुछ ही दिन दूर थी, और यही खेत दूसरे सालों में भी गिरा था, इसलिए सामान्य पकाव भी ऐसा दिख सकता है।",
+        "te": "ఈ పొలాన్ని స్కాన్ నుంచి ఎంచుకున్నాం: అనపర్తి సమీపంలో స్కాన్ చేసిన 51 ఉపయోగపడే పొలాలలో అత్యధిక తగ్గుదల ఉన్నది. ఇది సాధారణ పొలం కాదు. పంట కోతకు కొద్ది రోజుల దూరంలో ఉంది, ఇదే పొలం ఇతర సంవత్సరాల్లోనూ తగ్గింది, కాబట్టి సాధారణంగా పండటం కూడా ఇలాగే కనిపించవచ్చు.",
     },
 )
 
