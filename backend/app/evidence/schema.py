@@ -122,7 +122,10 @@ class NeighbourEvidence(BaseModel):
     neighbour_median_delta: float | None
     plot_minus_neighbour: float | None
     neighbour_bare_fraction_post: float | None = None
-    placebo: PlaceboTest | None = None
+    placebo: PlaceboTest | None = None  # ring: is this field different from its immediate neighbours?
+    far_placebo: PlaceboTest | None = None  # 5-12 km: is it different from fields outside the storm area?
+    pretrend_delta: float | None = None  # same statistic on the last accepted pre-event pair
+    pretrend_placebo: PlaceboTest | None = None
     counterfactual: Counterfactual | None = None
 
 

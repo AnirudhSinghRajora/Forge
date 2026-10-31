@@ -173,3 +173,36 @@ Full detail: `docs/submission/facts.md` and `docs/validation/events.md`.
 - Not "farmers can't contest": written notice and grievance routes exist. Say "they have no evidence of their own".
 - Keep the two systems separate. YES-TECH sets area yield under basic cover, and that is the Vanishing's context. A localized claim goes to a joint survey, or the 10-parcel sample above 25%. The 70/30 satellite weighting (21.5.9.4) is run by the State committee in a dispute; a farmer's PDF does not trigger it and the result binds the farmer too. Do not use 70/30 as a selling point.
 - Rajasthan pending claims in old docs are wrong (official table: ₹1,525.2 cr). Use `facts.md` for every number. Haryana's ₹450 cr and ₹350 cr are farmers' claims in one report and must be attributed as such.
+
+## Addendum 3, 31 Oct 2026, 10:40 PM: cold-run speed is the top priority
+A first run on a new pin took about 240 s and still lost the signature tools to timeouts; a repeat took 8.7 s. Judges will drop their own pins, so warming demo cases does not solve this.
+
+**Hosting region:** Sentinel data on Planetary Computer is served from Amsterdam. Host the container in the Netherlands or West Europe (e.g. Cloud Run `europe-west4`, Fly `ams`), not Mumbai. This replaces the `asia-south1` decision.
+
+**Run shape, targets measured cold on a new pin from this machine:**
+1. Verdict-relevant evidence first; first useful trace within 5 s and a verdict inside 90 s.
+2. Each context window is read once per run and shared by compare, village, scale fade and chips.
+3. Exhibits that do not affect the verdict (village, scale fade, chips, history where optional) finish after the verdict and fill in live. The hash is sealed only when they settle, with a clear "still computing" state. An exhibit that fails later says so and offers a retry; it never takes the verdict down.
+4. No tool may report success with fewer real numbers than it claims.
+
+## Addendum 4, 31 Oct 2026, 11:05 PM: the evidence method, corrected
+GEO's validation found two faults. (1) Field-vs-ring placebo has low power inside a swath, because the ring shares the damage: plots with NDVI 0.75 → 0.39 reached only p≈0.035, and most damaged plots missed p≤0.05. (2) p≤0.10 is not trustworthy: measured false-positive rate 15.4% against a nominal 10%, while p≤0.05 measured 5.0% (one scene pair; holdout pending).
+
+**The witness answers two different questions, and both answers are useful:**
+- **Far test: did this field change more than comparable fields outside the storm area?** Same-shape placebos in a 5-12 km annulus (`NeighbourEvidence.far_placebo`). This detects the event.
+- **Ring test: did it change more than its immediate neighbours?** The existing placebo. This describes how local the loss is. "Far yes, ring no" is reported as "your whole area was hit, not only your field". It is never presented as weakness.
+- For events bigger than 12 km (a whole delta under a cyclone) the far test loses power as well, so history and the pre-event trend carry that case. Say so.
+
+**Rules, fixed before the holdout runs (rubric v3):**
+- Field signal = `plot_delta_ndvi` at threshold AND (`far p ≤ 0.025` OR `ring p ≤ 0.025`), Bonferroni across the two tests.
+- `strong`: delta ≤ −0.15, field signal, corroborated, no conceded objection.
+- `moderate`: delta ≤ −0.10, field signal, corroborated; or SAR placebo p ≤ 0.05 with corroboration; or new water ≥ 0.2 with corroboration. **The p ≤ 0.10 tier is removed.**
+- Add a pre-trend check: the same statistic on the last accepted pre-event pair. A field already falling before the event gets a conceded objection.
+- **Post scene:** first accepted scene at least 5 days after the event; if none exists, the earliest accepted scene, with the verdict noting it may be too early. Hail damage develops: Bhiwani's band moved −0.066 on 4 Mar and −0.146 on 9 Mar. This rule was chosen after seeing Bhiwani, which must be disclosed, so it gets tested on an event not used to design it.
+
+**Validation order, each reported whatever it shows, no retuning after the holdout:**
+1. Other-year controls at Bhiwani (2022, 2023, 2025). Until they clear, nobody calls the band hail.
+2. Holdout false-positive rate for rubric v3 on 13 → 18 Oct 2025, plus a no-event March window.
+3. An independent event not used in design: Sirsa hail, 14 Mar 2025 (events.md C2).
+
+**Second data source:** Earth Search (`earth-search.aws.element84.com/v1`, public, no account) has Sentinel-2 `S2C_44QND_20261031_0_L2A` over the Godavari delta, 40% tile cloud, not yet on Planetary Computer. Add it as a fallback source for Sentinel-2. `ReplayCore` and provenance record which archive each scene came from, and QA and offset handling apply unchanged. Planetary Computer stays primary.

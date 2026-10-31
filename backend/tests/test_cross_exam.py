@@ -142,3 +142,21 @@ def test_one_wet_image_does_not_concede_wrong_plot():
         qa("a", EVENT - timedelta(days=5), "suspect", ["Q2: 99% of plot pixels classified as water; could be"]),
     ]
     assert cross_exam.check_wrong_plot(ev).outcome == "unresolved"
+
+
+def test_harvest_counts_a_whole_field_drop_without_the_uniform_label():
+    """Live case: wheat 30 Mar 2024, delta -0.44, 93% of pixels dropped, pattern 'none'."""
+    ev = evidence(delta=-0.44, bare=0.62, pattern="none", neighbour_bare=0.5)
+    ev.optical.drop_frac = 0.93
+    objections, _ = cross_exam.run(ev)
+    assert next(o for o in objections if o.id == "harvest").outcome == "conceded"
+
+
+def test_bare_land_that_did_not_change_is_not_harvest():
+    ev = evidence(delta=-0.001, bare=0.97, pattern="none", neighbour_bare=0.9)
+    assert get(ev, "harvest").outcome == "rebutted" and "already" in get(ev, "harvest").finding_en
+
+
+def test_bare_and_partial_decline_is_unresolved():
+    ev = evidence(delta=-0.3, bare=0.7, pattern="patchy", neighbour_bare=0.5)
+    assert get(ev, "harvest").outcome == "unresolved"

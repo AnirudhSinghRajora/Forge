@@ -26,6 +26,8 @@ VALID_FRAC_MIN = 0.8
 TOO_SMALL_HA = 0.2
 HISTORY_PRE_DIFF = 0.2
 WATER_PRE_MIN_PCT = 70
+HARVEST_MIN_DELTA = -0.10
+WHOLE_FIELD_DROP = 0.8
 
 _HI_MONTHS = ["जनवरी", "फ़रवरी", "मार्च", "अप्रैल", "मई", "जून", "जुलाई", "अगस्त", "सितंबर", "अक्टूबर",
               "नवंबर", "दिसंबर"]
@@ -81,7 +83,7 @@ def check_harvest(ev: Evidence) -> Objection:
     challenge_hi = "यह नुकसान नहीं, कटाई है। फ़सल कट गई तो हरियाली तो घटेगी ही।"
     challenge_en = "This isn't damage, it's harvest. Of course greenness falls once a crop is cut."
     test = (
-        f"Bare fraction after the event > {BARE_MIN} and uniform pattern, and comparable neighbours "
+        f"Bare fraction after the event > {BARE_MIN} and the whole field fell, and comparable neighbours "
         f"also bare (>= {NEIGHBOUR_BARE_MIN}), and this plot's history shows a similar drop."
     )
     bare = ev.optical.post_bare_fraction
@@ -109,23 +111,35 @@ def check_harvest(ev: Evidence) -> Objection:
             "harvest after the event?",
         ))
     delta = ev.optical.plot_delta_ndvi
-    if not (bare > BARE_MIN and pattern == "uniform"):
-        if bare <= BARE_MIN:
-            return out(
-                "rebutted",
-                f"कटाई जैसा नहीं दिखता: घटना के बाद खेत का {pct(bare)}% हिस्सा ही खाली मिट्टी है (कटाई में 60% से "
-                f"ज़्यादा होता है), और गिरावट का पैटर्न '{_PATTERN_HI.get(pattern or 'none')}' है।",
-                f"This does not look like harvest: only {pct(bare)}% of the plot is bare after the "
-                f"event (harvest leaves over 60%), and the pattern of decline is '{pattern or 'none'}'.",
-            )
-        change = signed(delta) if delta is not None else "-"
+    drop_frac = ev.optical.drop_frac
+    measured["drop_frac"] = drop_frac
+    if bare <= BARE_MIN:
         return out(
             "rebutted",
-            f"खेत का {pct(bare)}% हिस्सा खाली मिट्टी है, पर इन तस्वीरों के बीच बदलाव {change} ही है और पैटर्न "
-            f"'{_PATTERN_HI.get(pattern or 'none')}' है। इनके बीच कटाई नहीं दिखती; हो सकता है ज़मीन पहले से खाली हो।",
-            f"{pct(bare)}% of the plot is bare, but it changed by only {change} between these images, "
-            f"with pattern '{pattern or 'none'}'. No harvest shows between them; the land may already "
-            "have been bare.",
+            f"कटाई जैसा नहीं दिखता: घटना के बाद खेत का {pct(bare)}% हिस्सा ही खाली मिट्टी है (कटाई में 60% से "
+            f"ज़्यादा होता है), और गिरावट का पैटर्न '{_PATTERN_HI.get(pattern or 'none')}' है।",
+            f"This does not look like harvest: only {pct(bare)}% of the plot is bare after the "
+            f"event (harvest leaves over 60%), and the pattern of decline is '{pattern or 'none'}'.",
+        )
+    if delta is not None and delta > HARVEST_MIN_DELTA:
+        change = signed(delta)
+        return out(
+            "rebutted",
+            f"खेत का {pct(bare)}% हिस्सा खाली मिट्टी है, पर इन तस्वीरों के बीच बदलाव {change} ही है। इनके बीच कटाई नहीं "
+            "दिखती; हो सकता है ज़मीन पहले से खाली हो।",
+            f"{pct(bare)}% of the plot is bare, but it changed by only {change} between these images. "
+            "No harvest shows between them; the land may already have been bare.",
+        )
+    # The whole field fell. A real harvest can miss the strict "uniform" pattern when its spread is
+    # wide (live case: 93% of pixels dropped, IQR over 0.12), so the share that dropped counts too.
+    whole_field = pattern == "uniform" or (drop_frac is not None and drop_frac >= WHOLE_FIELD_DROP)
+    if not whole_field:
+        return out(
+            "unresolved",
+            f"खेत का {pct(bare)}% हिस्सा खाली मिट्टी है, पर गिरावट पूरे खेत में नहीं है। तस्वीर से यह तय नहीं हो सकता। क्या "
+            "आपने घटना के बाद फ़सल काटी थी?",
+            f"{pct(bare)}% of the plot is bare, but the decline does not cover the whole field. The "
+            "image alone cannot settle this. Did you harvest after the event?",
         )
 
     neighbours_support = None if neighbour_bare is None else neighbour_bare >= NEIGHBOUR_BARE_MIN
@@ -134,8 +148,8 @@ def check_harvest(ev: Evidence) -> Objection:
         history_support = excess > HISTORY_SIMILAR
     concede = (history_support is True) or (neighbours_support is True and history_support is None)
     if concede:
-        hi_bits = [f"खेत का {pct(bare)}% हिस्सा खाली मिट्टी है और गिरावट पूरे खेत में एक जैसी है"]
-        en_bits = [f"{pct(bare)}% of the plot is bare and the decline is uniform across it"]
+        hi_bits = [f"खेत का {pct(bare)}% हिस्सा खाली मिट्टी है और गिरावट पूरे खेत में है"]
+        en_bits = [f"{pct(bare)}% of the plot is bare and the decline covers the whole field"]
         if neighbours_support:
             hi_bits.append(f"आसपास के मिलते-जुलते खेतों में भी {pct(neighbour_bare)}% ज़मीन खाली है")
             en_bits.append(f"comparable fields nearby are also {pct(neighbour_bare)}% bare")
@@ -149,10 +163,10 @@ def check_harvest(ev: Evidence) -> Objection:
         )
     return out(
         "unresolved",
-        f"खेत का {pct(bare)}% हिस्सा खाली मिट्टी है और गिरावट एक जैसी है, जो कटाई जैसी लगती है, पर आसपास "
+        f"खेत का {pct(bare)}% हिस्सा खाली मिट्टी है और गिरावट पूरे खेत में है, जो कटाई जैसी लगती है, पर आसपास "
         "के खेत या इस खेत का पुराना रिकॉर्ड इसकी पुष्टि नहीं करते। तस्वीर से यह तय नहीं हो सकता। क्या आपने "
         "घटना के बाद फ़सल काटी थी?",
-        f"{pct(bare)}% of the plot is bare and the decline is uniform, which looks like harvest, but "
+        f"{pct(bare)}% of the plot is bare and the whole field fell, which looks like harvest, but "
         "neither nearby fields nor this plot's history confirm it. The image alone cannot settle "
         "this. Did you harvest after the event?",
     )
