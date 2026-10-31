@@ -7,17 +7,21 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import select
 
-from app.agent import claim_path, runner
+from app import errors
+from app.agent import claim_path, rubric, runner
 from app.agent.parse import today_ist
 from app.config import get_settings
 from app.db import Action, Case, EvidenceRow, Plot, session_scope
 
 log = logging.getLogger(__name__)
 MAX_RECHECKS_PER_TICK = 5
+NO_SCENE_WAIT = timedelta(hours=12)  # a Sentinel-2 pass comes about every five days
+OUTAGE_WAIT = timedelta(hours=1)
+RUN_RETRY_WAIT = timedelta(hours=1)  # only felt if the run dies before it decides a new re-check
 
 
 def archive_alerts_safe() -> dict:
@@ -29,15 +33,20 @@ def archive_alerts_safe() -> dict:
         return report
     except Exception as exc:  # an unreachable feed must not stop anything else  # noqa: BLE001
         log.warning("SACHET archive failed: %s", exc)
-        return {"error": f"{type(exc).__name__}: {exc}"}
+        return {"error": type(exc).__name__}
 
 
 def _open_rechecks() -> list[dict]:
-    """Cases with an open re-check action that are due and have no run active."""
+    """Open re-checks that are due, oldest first, with no run active. Anything past its window is
+    closed here, since no new image could change it. Filtering comes first, so that a case that keeps
+    coming round cannot use up a tick's slots and starve the others."""
     now = datetime.now(UTC)
+    today = today_ist()
     out = []
     with session_scope() as s:
-        rows = s.scalars(select(Action).where(Action.type == "recheck", Action.status == "open")).all()
+        rows = s.scalars(
+            select(Action).where(Action.type == "recheck", Action.status == "open").order_by(Action.due_at)
+        ).all()
         for action in rows:
             if action.due_at is not None and action.due_at > now:
                 continue
@@ -49,58 +58,92 @@ def _open_rechecks() -> list[dict]:
             ).first()
             if plot is None or case is None or evidence is None or case.event_date is None:
                 continue
+            retry_now = action.payload.get("basis") == "archive-retry"
+            event_text = (evidence.json.get("event") or {}).get("date")
+            event_date = date.fromisoformat(event_text) if event_text else case.event_date
+            window_end = event_date + timedelta(days=rubric.RECHECK_WINDOW_DAYS)
+            if not retry_now and today > window_end:
+                action.status = "closed"
+                action.payload = {**action.payload, "closed_reason": "post_event_window_passed"}
+                if case.status == "rechecking":
+                    case.status = "open"
+                continue
+            if runner.active_run_id(action.case_id):
+                continue
             considered = (evidence.json.get("optical") or {}).get("scenes_considered") or []
             out.append({
-                "case_id": case.id, "polygon": plot.geometry, "event_date": case.event_date,
-                "known": {s_["id"] for s_ in considered},
-                "retry_now": action.payload.get("basis") == "archive-retry",
+                "action_id": action.id, "case_id": case.id, "polygon": plot.geometry,
+                "event_date": event_date, "window_end": window_end,
+                "known": {s_["id"] for s_ in considered}, "retry_now": retry_now,
             })
     return out
+
+
+def _postpone(action_id: str, wait: timedelta) -> None:
+    """Sends this one to the back of the queue. A run that starts replaces it with its own decision."""
+    with session_scope() as s:
+        action = s.get(Action, action_id)
+        if action is not None and action.status == "open":
+            action.due_at = datetime.now(UTC) + wait
 
 
 def recheck_open_cases() -> dict:
     """A new run with trigger=scheduler only if a new scene passes QA after the event."""
     from app.tools import geo
 
-    started, checked, errors = [], 0, []
+    started, checked, errors_seen = [], 0, []
     today = today_ist()
     for item in _open_rechecks()[:MAX_RECHECKS_PER_TICK]:
-        if runner.active_run_id(item["case_id"]):
-            continue
         checked += 1
-        if item["retry_now"]:
-            # The scene was fine and only the archive was slow, so this needs no new pass.
-            run_id, _ = runner.start_run(item["case_id"], "scheduler")
-            started.append({"case_id": item["case_id"], "run_id": run_id, "scene": None})
-            continue
         try:
+            if item["retry_now"]:
+                # The scene was fine and only the archive was slow, so this needs no new pass.
+                _postpone(item["action_id"], RUN_RETRY_WAIT)
+                run_id, _ = runner.start_run(item["case_id"], "scheduler")
+                started.append({"case_id": item["case_id"], "run_id": run_id, "scene": None})
+                continue
             start = item["event_date"] + timedelta(days=1)
-            scenes = geo.search_optical(item["polygon"], start, today) if start <= today else []
+            end = min(item["window_end"], today)
+            scenes = geo.search_optical(item["polygon"], start, end) if start <= end else []
             for scene in sorted(scenes, key=lambda x: x.datetime):
                 if scene.id in item["known"]:
                     continue
                 if geo.qa_scene(scene, item["polygon"]).status == "accepted":
+                    _postpone(item["action_id"], RUN_RETRY_WAIT)
                     run_id, _ = runner.start_run(item["case_id"], "scheduler")
                     started.append({"case_id": item["case_id"], "run_id": run_id, "scene": scene.id})
                     break
-        except Exception as exc:  # a satellite outage only postpones the re-check to the next tick  # noqa: BLE001
-            log.warning("re-check failed for %s: %s", item["case_id"], exc)
-            errors.append({"case_id": item["case_id"], "error": f"{type(exc).__name__}: {exc}"})
-    return {"checked": checked, "started": started, "errors": errors}
+            else:
+                _postpone(item["action_id"], NO_SCENE_WAIT)
+        except runner.QueueFull:
+            log.info("the run queue is full; the remaining re-checks wait for the next tick")
+            break
+        except Exception as exc:  # a satellite outage only postpones the re-check  # noqa: BLE001
+            log.warning("re-check failed for %s: %s", item["case_id"], errors.scrub(exc))
+            _postpone(item["action_id"], OUTAGE_WAIT)
+            errors_seen.append({"case_id": item["case_id"], "error": type(exc).__name__})
+    return {"checked": checked, "started": started, "errors": errors_seen}
 
 
 def update_deadlines() -> dict:
-    """Keeps case status in step with the route and the clock."""
-    changed = 0
+    """Keeps case status in step with the route and the clock. A case it cannot read does not stop
+    the others, and each one commits on its own."""
+    changed, failed = 0, []
     with session_scope() as s:
-        cases = s.scalars(select(Case).where(Case.status.in_(("open", "intimation_due")))).all()
-        for case in cases:
-            path, _ = claim_path.for_case(case, "en")
-            status = "intimation_due" if path.countdown_applies else "open"
-            if case.status != status:
-                case.status = status
-                changed += 1
-    return {"cases_changed": changed}
+        ids = s.scalars(select(Case.id).where(Case.status.in_(("open", "intimation_due")))).all()
+    for case_id in ids:
+        try:
+            with session_scope() as s:
+                case = s.get(Case, case_id)
+                path, _ = claim_path.for_case(case, "en")
+                status = "intimation_due" if path.countdown_applies else "open"
+                if case.status != status:
+                    case.status = status
+                    changed += 1
+        except Exception as exc:  # noqa: BLE001
+            log.warning("could not update deadlines for %s: %s", case_id, errors.scrub(exc))
+            failed.append(case_id)
+    return {"cases_changed": changed, "cases_failed": failed}
 
 
 def tick() -> dict:
@@ -110,7 +153,7 @@ def tick() -> dict:
             report[name] = job()
         except Exception as exc:
             log.exception("job %s failed", name)
-            report[name] = {"error": f"{type(exc).__name__}: {exc}"}
+            report[name] = {"error": type(exc).__name__}
     return report
 
 

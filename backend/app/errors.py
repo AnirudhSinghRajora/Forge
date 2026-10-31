@@ -25,7 +25,7 @@ def new_ref() -> str:
 def report(log: logging.Logger, context: str, exc: BaseException) -> str:
     """Logs the detail against a new reference and returns the reference for the user."""
     ref = new_ref()
-    log.error("%s [ref %s]: %s: %s", context, ref, type(exc).__name__, scrub(exc))
+    log.error("%s [ref %s]: %s: %s", context, ref, type(exc).__name__, scrub(exc), exc_info=exc)
     return ref
 
 

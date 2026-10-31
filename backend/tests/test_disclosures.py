@@ -14,7 +14,8 @@ def test_each_scanned_plot_has_its_own_note_in_every_language():
         note = disclosures.selection_note(centroid)
         assert note["kind"] == kind and phrase in note["en"]
         assert note["hi"] and note["te"]
-        assert set(note) == {"hi", "te", "en", "kind"}
+        assert set(note) == {"hi", "te", "en", "kind", "source"}
+        assert note["source"].endswith("docs/validation/engine-results.md")
 
 
 def test_distance_limit_is_about_300_m():

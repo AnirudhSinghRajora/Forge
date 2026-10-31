@@ -252,10 +252,12 @@ def check_wrong_date(ev: Evidence, farmer_date: date | None = None) -> tuple[Obj
     challenge_en = "You have the date wrong. Nothing happened that day."
     test = (
         "Model-indicated rain, hail codes or strong gusts within two days of the reported date, or "
-        "an official alert or cited news for it. No weather signal never counts against the farmer."
+        "an official alert for this hazard. No weather signal never counts against the farmer, and "
+        "related news reports are not part of this test."
     )
     w = ev.weather
     used = ev.event.date
+    matched = rubric.matching_alerts(ev)
     measured = {
         "event_date": used.isoformat(), "date_source": ev.event.date_source,
         "farmer_date": farmer_date.isoformat() if farmer_date else None,
@@ -265,20 +267,18 @@ def check_wrong_date(ev: Evidence, farmer_date: date | None = None) -> tuple[Obj
         "max_gust_kmh": w.max_gust_kmh if w else None,
         "proposed_event_date": w.proposed_event_date.isoformat()
         if w and w.proposed_event_date else None,
-        "official_alerts": len(ev.alerts), "cited_news": len(ev.news),
+        "official_alerts": len(matched),
     }
 
     def out(outcome, hi, en):
         return _obj("wrong_date", challenge_hi, challenge_en, test, measured, outcome, hi, en)
 
     moved = farmer_date is not None and farmer_date != used
-    if ev.alerts or ev.news:
+    if matched:
         return out(
             "rebutted",
-            f"{date_hi(used)} के आसपास के लिए {len(ev.alerts)} सरकारी चेतावनी और {len(ev.news)} ख़बरों "
-            "का स्रोत मिला।",
-            f"{len(ev.alerts)} official alerts and {len(ev.news)} cited news sources cover the days "
-            f"around {date_en(used)}.",
+            f"{date_hi(used)} के आसपास इसी आपदा के लिए {len(matched)} सरकारी चेतावनी मिली।",
+            f"{len(matched)} official alerts for this hazard cover the days around {date_en(used)}.",
         ), None
     if w is not None and w.corroborated:
         rain = w.max_daily_mm if w.max_daily_mm is not None else 0.0

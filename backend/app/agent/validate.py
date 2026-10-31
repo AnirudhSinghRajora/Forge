@@ -38,6 +38,33 @@ _BANNED = re.compile(
     r"|agriculture insurance company|\bAIC\b|icici lombard|bajaj allianz|hdfc ergo|reliance general"
     r"|sbi general|universal sompo|future generali|chola ?ms|tata aig|kshema|iffco.tokio"
     r"|oriental insurance|united india|national insurance|new india assurance"
+    # Promises about an outcome
+    r"|\bwill (?:get|be) paid|\bwill be approved|\bwill get (?:the |your )?(?:claim|money|payment|compensation)"
+    r"|गारंटी(?! नहीं)|హామీ ఇస్తు|హామీ ఉంది"
+    r"|भुगतान मिलेगा|पैसे मिलेंगे|दावा मंज़ूर|दावा मंजूर|मंज़ूर हो जाएगा|मंजूर हो जाएगा|मंज़ूर होगा|मंजूर होगा"
+    r"|డబ్బులు వస్తాయి|చెల్లిస్తారు|ఆమోదిస్తారు|ఆమోదం లభిస్తుంది|ఆమోదం వస్తుంది"
+    # key_rules.json, late_intimation: no "late is fine"
+    r"|(?:you can|may|free to) report (?:at )?any ?time|report (?:at )?any ?time"
+    r"|कभी भी (?:सूचना|रिपोर्ट|बता)|ఎప్పుడైనా (?:నివేదించ|సమాచారం|తెలియజేయ)"
+    # Causation: the evidence is "consistent with", and never proof
+    r"|(?<!not )(?<!never )\bproves?\b|\bproven\b|\bproof (?:of|that)\b(?<!not proof of)(?<!no proof of)"
+    r"|साबित (?:करता|करती|करते|होता|होती|होते|हो गया|हो जाता)|प्रमाणित करता|నిరూపిస్తుంది|రుజువు చేస్తుంది|రుజువు అవుతుంది"
+    # key_rules.json, technology_and_evidence
+    r"|(?:insurers?|insurance compan(?:y|ies)|compan(?:y|ies)|banks?)\s+(?:must|has to|have to|shall|needs? to|(?:is|are) required to|(?:is|are) bound to)\s+accept"
+    r"|required to accept|स्वीकार करना (?:ही )?होगा|स्वीकार करना पड़ेगा|मानना पड़ेगा|అంగీకరించాలి|అంగీకరించాల్సిందే"
+    r"|yes-?tech[^.।]{0,80}(?:insurance[- ]unit|बीमा इकाई|బీమా యూనిట్)"
+    r"|(?:insurance[- ]unit[- ]level|बीमा इकाई (?:के )?स्तर|బీమా యూనిట్ స్థాయి)[^.।]{0,80}yes-?tech"
+    # key_rules.json, the conflicting paddy inundation statements
+    r"|inundation of paddy is covered|paddy[^.।]{0,40}inundation[^.।]{0,40}(?<!not )(?<!isn't )\bcovered\b"
+    r"|धान[^.।]{0,40}जलभराव[^.।]{0,40}कवर (?:है|होता)|వరి[^.।]{0,40}ముంపు[^.।]{0,40}కవర్ (?:అవుతుంది|ఉంది)"
+)
+# A number written in words is one the digit check cannot see, so a share of loss may not be spelled out.
+_SPELLED_PERCENT = re.compile(
+    r"(?i)\b(?:(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[- ](?:one|two|three|four|five|six|seven|eight|nine))?"
+    r"|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen"
+    r"|one|two|three|four|five|six|seven|eight|nine|(?:a |one )?hundred)\s*(?:percent|per cent|pc\b|%)"
+    r"|(?:दस|बीस|तीस|चालीस|पचास|साठ|सत्तर|अस्सी|नब्बे|सौ|पच्चीस|पचहत्तर)\s*(?:प्रतिशत|फ़ीसदी|फीसदी|फ़ीसद|फीसद)"
+    r"|(?:పది|ఇరవై|ముప్పై|నలభై|యాభై|అరవై|డెబ్బై|ఎనభై|తొంభై|వంద|ఇరవై ఐదు|డెబ్బై ఐదు)\s*(?:శాతం)"
 )
 
 
@@ -98,5 +125,5 @@ def validate_text(text: str, allowed: Iterable[float]) -> ValidationResult:
     normalized = _NAMES.sub(" ", normalize_digits(text))
     allowed = set(allowed)
     bad = [t for t in _NUMBER.findall(normalized) if not _matches(t, allowed)]
-    banned = sorted({m.group(0) for m in _BANNED.finditer(normalized)})
+    banned = sorted({m.group(0) for pattern in (_BANNED, _SPELLED_PERCENT) for m in pattern.finditer(normalized)})
     return ValidationResult(ok=not bad and not banned, bad_tokens=bad, banned=banned)

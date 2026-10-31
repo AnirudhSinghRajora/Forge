@@ -13,6 +13,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 
+from app.agent.parse import valid_clock_time
 from app.config import get_settings
 from app.db import Action, session_scope
 from app.evidence.schema import ClaimPath, Deadline
@@ -84,8 +85,9 @@ def _rule(name: str) -> dict | None:
 
 def event_datetime(event_date: date, event_time: str | None) -> tuple[datetime, bool]:
     """Event moment in IST. With no time given it takes the day's start, the conservative reading:
-    the true deadline cannot fall earlier than this."""
-    if event_time:
+    the true deadline cannot fall earlier than this. A stored time that is not a real clock time counts
+    as no time, so one bad row can never take a page or a job down."""
+    if valid_clock_time(event_time):
         hour, minute = (int(x) for x in event_time.split(":"))
         return datetime.combine(event_date, time(hour, minute), IST), False
     return datetime.combine(event_date, time(0, 0), IST), True
@@ -162,7 +164,8 @@ def channels() -> list[dict]:
     return out
 
 
-def draft_intimation(case: dict, evidence: dict, path: ClaimPath, deadlines: list[Deadline]) -> dict:
+def draft_intimation(case: dict, evidence: dict, path: ClaimPath, deadlines: list[Deadline],
+                     base_url: str | None = None) -> dict:
     """The farmer's own intimation text. Its required fields come only from intimation_contents."""
     contents = _rule("intimation_contents")
     if contents is None:
@@ -206,7 +209,9 @@ def draft_intimation(case: dict, evidence: dict, path: ClaimPath, deadlines: lis
         en_lines.append(f"Latitude, longitude: {lat}, {lon}")
         te_lines.append(f"అక్షాంశం, రేఖాంశం: {lat}, {lon}")
     if evidence_hash := evidence.get("evidence_hash"):
-        link = f"{get_settings().public_web_url.rstrip('/')}/verify/{evidence_hash}"
+        # Without a configured address, a stored draft has no origin yet; each read fills it in.
+        base = base_url or get_settings().public_web_url or ""
+        link = f"{base.rstrip('/')}/verify/{evidence_hash}"
         hi_lines.append(f"सैटेलाइट सबूत (सहायक रिकॉर्ड): {link}")
         en_lines.append(f"Satellite evidence (supporting record): {link}")
         te_lines.append(f"ఉపగ్రహ ఆధారం (సహాయక రికార్డు): {link}")

@@ -48,6 +48,7 @@ ul { margin: 2pt 0 6pt; padding-left: 13pt; } li { margin-bottom: 2pt; }
 .seal img { width: 90pt; height: 90pt; }
 .selection { font-size: 11pt; font-weight: 600; line-height: 1.35; border: 1.5pt solid #1d1c1a; padding: 7pt 10pt; margin: 10pt 0 0; break-inside: avoid; }
 .disclaimer { font-size: 8.4pt; color: #4a4843; margin-top: 10pt; }
+.scope { font-size: 8.6pt; font-weight: 600; color: #3e3c37; margin: -4pt 0 8pt; }
 </style>
 </head>
 <body>
@@ -60,41 +61,43 @@ ul { margin: 2pt 0 6pt; padding-left: 13pt; } li { margin-bottom: 2pt; }
   <div class="qr"><img src="{{ qr }}" alt="QR"><div>/verify</div></div>
 </div>
 
-{% if selection_note %}<div class="selection">{{ selection_note }}</div>{% endif %}
+{% if selection_note %}<div class="selection">{{ selection_note }}{% if selection_source %}<div class="small mono">{{ selection_source }}</div>{% endif %}</div>{% endif %}
 
 <div class="verdict {{ level }}">
-  <div class="level">{{ L.verdict }} · {{ level }} · rubric {{ ev.verdict.rubric_version if ev.verdict else '' }}</div>
+  <div class="level">{{ L.verdict }} · {{ level_name }}{% if ev.verdict %} · rubric {{ ev.verdict.rubric_version }}{% endif %}</div>
   <div class="line">{{ headline }}</div>
 </div>
+<div class="scope">{{ L.scope }}</div>
 {% if near_note %}<div class="caveat">{{ near_note }}</div>{% endif %}
 
 <div class="meta">
   <div><b>{{ L.field }}</b>{{ '%.2f'|format(ev.plot.area_ha) }} ha · {{ '%.5f'|format(ev.plot.centroid[1]) }}, {{ '%.5f'|format(ev.plot.centroid[0]) }}</div>
-  <div><b>Event</b>{{ ev.event.type }} · {{ ev.event.date }} ({{ ev.event.date_source }})</div>
-  <div><b>Crop</b>{{ ev.event.crop or L.no_data }}</div>
-  <div><b>District</b>{{ [case.district, case.state]|select|join(', ') or L.no_data }}</div>
+  <div><b>{{ L.event }}</b>{{ event_name }} · {{ event_day }} ({{ date_source_name }})</div>
+  <div><b>{{ L.crop }}</b>{{ crop_name or L.no_data }}</div>
+  <div><b>{{ L.district }}</b>{{ [case.district, case.state]|select|join(', ') or L.no_data }}</div>
 </div>
 
 {% if explanation %}<h2>{{ L.explanation }}</h2><p>{{ explanation }}</p>{% endif %}
-{% if ev.verdict %}
-<ul class="small">{% for r in ev.verdict.reasons %}<li>{{ r }}</li>{% endfor %}{% for c in ev.verdict.caveats %}<li>{{ c }}</li>{% endfor %}</ul>
+{% if reason_lines %}
+<p class="small"><b>{{ L.tech_en }}</b></p>
+<ul class="small" lang="en">{% for r in reason_lines %}<li>{{ r }}</li>{% endfor %}</ul>
 {% endif %}
 {% if testimony %}<h2>{{ L.testimony }}</h2><div class="testimony">{{ testimony }}</div>{% endif %}
 
 {% if ev.claim_path %}
-<h2>{{ L.route }}: {{ ev.claim_path.route }}</h2>
+<h2>{{ L.route }}: {{ route_name }}</h2>
 {% for r in ev.claim_path.reasons %}<p>{{ r }}</p>{% endfor %}
-{% if deadline %}<p><b>{{ L.deadline }}:</b> {{ ist(deadline.due_at) }} · {{ L[deadline.status] }} · clause {{ deadline.basis }}{% if not case.event_time %} · start of the event day assumed{% endif %}</p>{% endif %}
+{% if deadline %}<p><b>{{ L.deadline }}:</b> {{ ist(deadline.due_at) }} · {{ L[deadline.status] }} · {{ L.clause }} {{ deadline.basis }}{% if not case.event_time %} · {{ L.time_assumed }}{% endif %}</p>{% endif %}
 {% if ev.claim_path.next_steps %}<p><b>{{ L.next }}</b></p><ul>{% for s in ev.claim_path.next_steps %}<li>{{ s }}</li>{% endfor %}</ul>{% endif %}
 {% if ev.claim_path.evidence_use %}<p><b>{{ L.use }}:</b> {{ ev.claim_path.evidence_use }}</p>{% endif %}
-{% if ev.claim_path.unknowns %}<p class="small"><b>{{ L.unknowns }}:</b> {{ ev.claim_path.unknowns|join(', ') }}</p>{% endif %}
+{% if ev.claim_path.unknowns %}<p class="small"><b>{{ L.unknowns }}:</b> {{ unknown_names|join(', ') }}</p>{% endif %}
 {% endif %}
 
 <h2>{{ L.before_after }}</h2>
 {% if pre_chip and post_chip %}
 <div class="pair">
-  <figure><img src="{{ pre_chip }}" alt=""><figcaption>{{ L.before }}: {{ pre_date }}</figcaption></figure>
-  <figure><img src="{{ post_chip }}" alt=""><figcaption>{{ L.after }}: {{ post_date }}</figcaption></figure>
+  <figure><img src="{{ pre_chip }}" alt=""><figcaption>{{ L.before }}: {{ day(pre_date) }}</figcaption></figure>
+  <figure><img src="{{ post_chip }}" alt=""><figcaption>{{ L.after }}: {{ day(post_date) }}</figcaption></figure>
 </div>
 {% else %}<p class="small">{{ L.no_data }}</p>{% endif %}
 <div class="pair">
@@ -108,12 +111,12 @@ ul { margin: 2pt 0 6pt; padding-left: 13pt; } li { margin-bottom: 2pt; }
 {% if far_img %}
 <h2>{{ L.far }}</h2>
 <figure><img src="{{ far_img }}" alt=""></figure>
-<p class="small">{% if far_p is not none %}{{ far.n_at_least_as_extreme }} / {{ far.n_placebos }} · p = {{ '%.3f'|format(far_p) }} (threshold 0.025){% if far_near %} · <b>{{ L.near }}</b>{% endif %}{% else %}{{ far.insufficient_reason or L.no_data }}{% endif %}</p>
+<p class="small">{% if far_p is not none %}{{ far.n_at_least_as_extreme }} / {{ far.n_placebos }} · p = {{ '%.3f'|format(far_p) }} ({{ L.threshold }} 0.025){% if far_near %} · <b>{{ L.near }}</b>{% endif %}{% else %}{{ far.insufficient_reason or L.no_data }}{% endif %}</p>
 {% endif %}
 {% if placebo_img %}
 <h2>{{ L.placebo }} ({{ placebo_sensor }})</h2>
 <figure><img src="{{ placebo_img }}" alt=""></figure>
-<p class="small">{% if placebo_p is not none %}{{ placebo.n_at_least_as_extreme }} / {{ placebo.n_placebos }} · p = {{ '%.3f'|format(placebo_p) }}{% if placebo_near %} · <b>{{ L.near }}</b>{% endif %}{% if placebo.n_non_overlapping is not none %} · non-overlapping: {{ placebo.n_non_overlapping }}{% endif %}{% else %}{{ placebo.insufficient_reason or L.no_data }}{% endif %}</p>
+<p class="small">{% if placebo_p is not none %}{{ placebo.n_at_least_as_extreme }} / {{ placebo.n_placebos }} · p = {{ '%.3f'|format(placebo_p) }}{% if placebo_near %} · <b>{{ L.near }}</b>{% endif %}{% if placebo.n_non_overlapping is not none %} · {{ L.non_overlap }}: {{ placebo.n_non_overlapping }}{% endif %}{% else %}{{ placebo.insufficient_reason or L.no_data }}{% endif %}</p>
 {% endif %}
 {% if twin_img %}<h2>{{ L.twin }}</h2><figure><img src="{{ twin_img }}" alt=""><figcaption>{{ ev.neighbours.counterfactual.method }}</figcaption></figure>{% endif %}
 
@@ -122,9 +125,9 @@ ul { margin: 2pt 0 6pt; padding-left: 13pt; } li { margin-bottom: 2pt; }
 {% if draw_applicability %}<p>{{ draw_applicability }}</p>{% endif %}
 {% if draw_img %}
 <figure><img src="{{ draw_img }}" alt=""></figure>
-<p class="small">5th-95th percentile: {{ '%+.2f'|format(draw.average_p05) }} to {{ '%+.2f'|format(draw.average_p95) }}{% if draw.share_below_half_of_plot is not none %} · under half of this field's change: {{ '%.0f'|format(draw.share_below_half_of_plot * 100) }}%{% endif %} · {{ draw.n_candidate_parcels }} candidate parcels · seed {{ draw.seed }} · clause 21.5.8</p>
+<p class="small">{{ L.p5_95 }}: {{ '%+.2f'|format(draw.average_p05) }} {{ L.to }} {{ '%+.2f'|format(draw.average_p95) }}{% if draw.share_below_half_of_plot is not none %} · {{ L.under_half }}: {{ '%.0f'|format(draw.share_below_half_of_plot * 100) }}%{% endif %} · {{ draw.n_candidate_parcels }} {{ L.candidates }} · {{ L.seed }} {{ draw.seed }} · {{ L.clause }} 21.5.8</p>
 {% elif draw %}<p class="small">{{ draw.insufficient_reason }}</p>{% endif %}
-<p class="small">Affected share of comparable cropland ({{ ev.village.radius_m }} m, {{ ev.village.sensor }}): {% if ev.village.affected_share is not none %}{{ '%.0f'|format(ev.village.affected_share * 100) }}%{% else %}{{ L.no_data }}{% endif %} · {{ ev.village.affected_definition }} · real cases nearby in our records: {{ ev.village.nearby_real_cases if ev.village.nearby_real_cases is not none else L.no_data }}</p>
+<p class="small">{{ L.affected }} ({{ ev.village.radius_m }} m, {{ ev.village.sensor }}): {% if ev.village.affected_share is not none %}{{ '%.0f'|format(ev.village.affected_share * 100) }}%{% else %}{{ L.no_data }}{% endif %} · {{ ev.village.affected_definition }} · {{ L.nearby }}: {{ ev.village.nearby_real_cases if ev.village.nearby_real_cases is not none else L.no_data }}</p>
 <div class="caveat">{{ draw_caveat }}</div>
 {% endif %}
 {% if vanish_img %}
@@ -136,12 +139,12 @@ ul { margin: 2pt 0 6pt; padding-left: 13pt; } li { margin-bottom: 2pt; }
 <h2>{{ L.weather }}</h2>
 {% if weather_img %}<figure><img src="{{ weather_img }}" alt=""></figure>{% endif %}
 {% if ev.weather %}
-<p class="small">{{ ev.weather.source }} · {{ ist(ev.weather.fetched_at) }} · event window: {{ ev.weather.precip_mm_event_window if ev.weather.precip_mm_event_window is not none else L.no_data }} mm · hail-code hours: {{ ev.weather.hail_code_hours if ev.weather.hail_code_hours is not none else L.no_data }} · thunder hours: {{ ev.weather.thunder_hours if ev.weather.thunder_hours is not none else L.no_data }} · max gust: {{ ev.weather.max_gust_kmh if ev.weather.max_gust_kmh is not none else L.no_data }} km/h</p>
+<p class="small">{{ ev.weather.source }} · {{ ist(ev.weather.fetched_at) }} · {{ L.window }}: {{ ev.weather.precip_mm_event_window if ev.weather.precip_mm_event_window is not none else L.no_data }} mm · {{ L.hail_h }}: {{ ev.weather.hail_code_hours if ev.weather.hail_code_hours is not none else L.no_data }} · {{ L.thunder_h }}: {{ ev.weather.thunder_hours if ev.weather.thunder_hours is not none else L.no_data }} · {{ L.gust }}: {{ ev.weather.max_gust_kmh if ev.weather.max_gust_kmh is not none else L.no_data }} km/h</p>
 <div class="caveat">{{ ev.weather.grid_note }}</div>
 {% else %}<p class="small">{{ L.no_data }}</p>{% endif %}
-<p><b>{{ L.alerts }}:</b> {% if ev.alerts %}{% endif %}{% if not ev.alerts %}{{ L.none }}{% endif %}</p>
+<p><b>{{ L.alerts }}:</b> {% if not ev.alerts %}{{ L.none }}{% endif %}</p>
 {% if ev.alerts %}<ul class="small">{% for a in ev.alerts %}<li>{{ a.source }} · {{ ist(a.issued) }} · {{ a.area }}: {{ a.headline }}</li>{% endfor %}</ul>{% endif %}
-<p><b>{{ L.news }}:</b> {% if not ev.news %}{{ L.none }}{% endif %}</p>
+<p><b>{{ L.related }}:</b> {% if not ev.news %}{{ L.none }}{% endif %}</p>
 {% if ev.news %}<ul class="small">{% for n in ev.news %}<li>{{ n.title }}: <span class="mono">{{ n.url }}</span></li>{% endfor %}</ul>{% endif %}
 
 <h2>{{ L.cross }}</h2>
@@ -160,21 +163,21 @@ ul { margin: 2pt 0 6pt; padding-left: 13pt; } li { margin-bottom: 2pt; }
 {% if ev.optical.scenes_considered %}
 <h2>{{ L.scenes }}</h2>
 <table>
-  <thead><tr><th>Date</th><th>Scene</th><th>QA</th><th>Cloud %</th><th>Reasons</th></tr></thead>
-  <tbody>{% for q in ev.optical.scenes_considered %}<tr><td style="white-space:nowrap">{{ q.date }}</td><td class="mono">{{ q.id }}</td><td>{{ q.status }}</td><td>{{ '%.1f'|format(q.metadata_cloud_pct) if q.metadata_cloud_pct is not none else '' }}</td><td>{{ q.reasons|join('; ') }}</td></tr>{% endfor %}</tbody>
+  <thead><tr><th>{{ L.t_date }}</th><th>{{ L.t_scene }}</th><th>{{ L.t_qa }}</th><th>{{ L.t_cloud }}</th><th>{{ L.t_reasons }}</th></tr></thead>
+  <tbody>{% for q in ev.optical.scenes_considered %}<tr><td style="white-space:nowrap">{{ day(q.date) }}</td><td class="mono">{{ q.id }}</td><td>{{ q.status }}</td><td>{{ '%.1f'|format(q.metadata_cloud_pct) if q.metadata_cloud_pct is not none else '' }}</td><td>{{ q.reasons|join('; ') }}</td></tr>{% endfor %}</tbody>
 </table>
 {% endif %}
 
 <h2>{{ L.provenance }}</h2>
 <table>
-  <thead><tr><th>Field</th><th>Source</th><th>Asset</th><th>Retrieved</th></tr></thead>
+  <thead><tr><th>{{ L.t_field }}</th><th>{{ L.t_source }}</th><th>{{ L.t_asset }}</th><th>{{ L.t_retrieved }}</th></tr></thead>
   <tbody>{% for p in ev.provenance %}<tr><td>{{ p.field }}</td><td>{{ p.source }}</td><td class="mono">{{ p.asset or p.url or '' }}</td><td style="white-space:nowrap">{{ ist(p.retrieved_at) }}</td></tr>{% endfor %}</tbody>
 </table>
 
 {% if numbers %}
-<h2>Replay numbers</h2>
+<h2>{{ L.replay }}</h2>
 <table>
-  <thead><tr><th>Field</th><th>Value</th><th>Field</th><th>Value</th></tr></thead>
+  <thead><tr><th>{{ L.t_field }}</th><th>{{ L.t_value }}</th><th>{{ L.t_field }}</th><th>{{ L.t_value }}</th></tr></thead>
   <tbody>{% for batch in numbers|batch(2) %}<tr>{% for k, v in batch %}<td class="mono">{{ k }}</td><td>{{ v if v is not none else '-' }}</td>{% endfor %}</tr>{% endfor %}</tbody>
 </table>
 {% endif %}
@@ -189,9 +192,10 @@ ul { margin: 2pt 0 6pt; padding-left: 13pt; } li { margin-bottom: 2pt; }
   <img src="{{ qr }}" alt="QR">
   <div>
     <p>{{ L.verify_note }}</p>
+    <p><b>{{ L.scope }}</b></p>
     <p class="mono">sha256: {{ ev.evidence_hash }}</p>
     <p class="mono">{{ verify_url }}</p>
-    <p class="small">engine {{ ev.replay.engine_version if ev.replay else '' }} · seed {{ ev.replay.seed if ev.replay else '' }}</p>
+    <p class="small">{{ L.engine }} {{ ev.replay.engine_version if ev.replay else '' }} · {{ L.seed }} {{ ev.replay.seed if ev.replay else '' }}</p>
   </div>
 </div>
 <p class="disclaimer">{{ L.disclaimer }}</p>

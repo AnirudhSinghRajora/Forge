@@ -33,7 +33,7 @@ def test_templates_exist_for_every_level():
 def test_explanation_falls_back_to_template_without_llm():
     ev = with_verdict(evidence())
     report = explain.explain(ev)
-    assert report["hi"] == "template" and report["te"] == "none" and not ev.llm_used
+    assert report["hi"] == "template" and report["te"] == "template" and not ev.llm_used
     assert "0.70" in ev.explanation_hi and "0.45" in ev.explanation_en
     assert ev.explanation_te is None and ev.verdict.headline_te
 

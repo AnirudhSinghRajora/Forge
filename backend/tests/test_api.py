@@ -570,7 +570,8 @@ def test_failed_exhibit_keeps_the_verdict_and_can_be_retried(client, monkeypatch
     body = client.get(f"/api/cases/{case_id}").json()
     assert body["sealed"] and body["evidence"]["verdict"]
     assert body["exhibits"]["village"]["status"] == "failed"
-    assert "slow archive" in body["exhibits"]["village"]["reason"]
+    reason = body["exhibits"]["village"]["reason"]
+    assert "slow archive" not in reason and "ref " in reason  # the detail stays in the log
     first_hash = body["evidence"]["evidence_hash"]
     assert client.get(f"/api/cases/{case_id}/evidence.pdf").status_code == 200
 

@@ -10,6 +10,8 @@ from __future__ import annotations
 import math
 
 NEAR_M = 300.0
+# Where the scan these labels describe is written up, for anyone who wants to check the selection.
+VALIDATION_DOC = "https://github.com/AnirudhSinghRajora/Forge/blob/main/docs/validation/engine-results.md"
 
 SELECTED_PLOTS = (
     {
@@ -39,11 +41,11 @@ def _metres(lon_a: float, lat_a: float, lon_b: float, lat_b: float) -> float:
 
 
 def selection_note(centroid) -> dict | None:
-    """{hi, te, en, kind} for a [lon, lat] within about 300 m of a scanned plot, otherwise None."""
+    """{hi, te, en, kind, source} for a [lon, lat] within about 300 m of a scanned plot, otherwise None."""
     if not centroid or len(centroid) < 2 or centroid[0] is None or centroid[1] is None:
         return None
     lon, lat = float(centroid[0]), float(centroid[1])
     for plot in SELECTED_PLOTS:
         if _metres(lon, lat, plot["lon"], plot["lat"]) <= NEAR_M:
-            return {key: plot[key] for key in ("hi", "te", "en", "kind")}
+            return {**{key: plot[key] for key in ("hi", "te", "en", "kind")}, "source": VALIDATION_DOC}
     return None

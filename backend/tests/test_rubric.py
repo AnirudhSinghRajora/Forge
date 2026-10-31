@@ -285,5 +285,5 @@ def test_the_near_line_reaches_testimony_and_explanation_in_every_language():
                          rubric_version=result.version)
     for text, line in zip(testimony.templates(ev), (explain.NEAR_LINE[0], explain.NEAR_LINE[1], explain.NEAR_LINE[2]), strict=True):
         assert line in text
-    hi, en = explain.template_explanation(ev, result.level)
+    hi, en, te = explain.template_explanation(ev, result.level)
     assert explain.NEAR_LINE[0] in hi and explain.NEAR_LINE[1] in en

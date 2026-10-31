@@ -43,14 +43,18 @@ def in_service_area(lon: float, lat: float) -> bool:
 
 
 class PlotRejected(ValueError):
-    def __init__(self, code: str, message_hi: str, message_en: str):
+    def __init__(self, code: str, message_hi: str, message_en: str, message_te: str | None = None):
         super().__init__(message_en)
         self.code = code
         self.message_hi = message_hi
         self.message_en = message_en
+        self.message_te = message_te
 
     def as_detail(self) -> dict:
-        return {"code": self.code, "message_hi": self.message_hi, "message_en": self.message_en}
+        detail = {"code": self.code, "message_hi": self.message_hi, "message_en": self.message_en}
+        if self.message_te:
+            detail["message_te"] = self.message_te
+        return detail
 
 
 def check_pin(lat: float, lon: float) -> None:
@@ -105,6 +109,14 @@ def validate_polygon(raw: dict | None) -> PlotResult:
         raise bad from exc
     if geom.is_empty or len(geom.exterior.coords) < 4:
         raise bad
+    if len(geom.interiors) > 0:
+        # Only the outer ring would be kept, so the hole would silently count as field.
+        raise PlotRejected(
+            "polygon_has_hole",
+            "खेत की सीमा में छेद नहीं हो सकता। कृपया केवल बाहरी सीमा बनाएँ।",
+            "The field boundary cannot have a hole in it. Please draw only the outer edge.",
+            "పొలం సరిహద్దులో రంధ్రం ఉండకూడదు. దయచేసి బయటి అంచు మాత్రమే గీయండి.",
+        )
     if not geom.is_valid:
         raise PlotRejected(
             "polygon_self_intersecting",

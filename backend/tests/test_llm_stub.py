@@ -107,7 +107,7 @@ def test_search_returns_only_cited_urls(gemini_stub):
         {"type": "url_citation", "url": "https://news.example/a", "title": "example", "start_index": 0,
          "end_index": 4}])])
     sources = llm.grounded_sources("q")
-    assert sources == [{"url": "https://news.example/a", "title": "example", "snippet": "Hail"}]
+    assert sources == [{"url": "https://news.example/a", "title": "example"}]
 
 
 def test_tts_reads_wav(gemini_stub):

@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from app import errors
 from app.config import get_settings
 from app.db import cache_get, cache_put
 from app.evidence.schema import WeatherDay, WeatherEvidence
@@ -126,26 +127,26 @@ def _load(lat: float, lon: float, start: date, end: date, today: date) -> tuple[
     hit = cache_get(om_key)
     if hit and now - _as_aware(hit.fetched_at) < ttl:
         return "open-meteo", hit.payload, _as_aware(hit.fetched_at)
-    errors = []
+    failures = []  # names only: an httpx message holds the URL, and so the API key
     try:
         payload = _fetch_open_meteo(lat, lon, start, end)
         cache_put(om_key, "open-meteo", settings.open_meteo_historical_url, payload)
         return "open-meteo", payload, now
     except (httpx.HTTPError, ValueError) as exc:
-        errors.append(f"open-meteo: {exc}")
-        log.warning("open-meteo failed, trying NASA POWER: %s", exc)
+        failures.append(f"open-meteo: {type(exc).__name__}")
+        log.warning("open-meteo failed, trying NASA POWER: %s", errors.scrub(exc))
     try:
         payload = _fetch_power(lat, lon, start, end)
         cache_put(power_key, "nasa-power", settings.nasa_power_url, payload)
         return "nasa-power", payload, now
     except (httpx.HTTPError, ValueError, KeyError) as exc:
-        errors.append(f"nasa-power: {exc}")
-        log.warning("NASA POWER failed: %s", exc)
+        failures.append(f"nasa-power: {type(exc).__name__}")
+        log.warning("NASA POWER failed: %s", errors.scrub(exc))
     for provider, key in (("open-meteo", om_key), ("nasa-power", power_key)):
         hit = cache_get(key)
         if hit:  # an older real response, carrying its true fetch time
             return provider, hit.payload, _as_aware(hit.fetched_at)
-    raise WeatherUnavailable("; ".join(errors))
+    raise WeatherUnavailable("; ".join(failures))
 
 
 def _sum(values: list[float | None]) -> float | None:
@@ -328,7 +329,7 @@ def _radar_cell(point: tuple, data: dict, now: datetime) -> dict | None:
         hail = sum(1 for c in codes if c in HAIL_CODES)
         thunder = sum(1 for c in codes if c in THUNDER_CODES)
         rain = d.precip_mm or 0.0
-        if rain >= RADAR_HEAVY_MM or hail or thunder:
+        if rain >= RADAR_HEAVY_MM or hail or thunder:  # a storm code in the model, or heavy rain
             heavy.append((d, rain, hail, thunder))
     if not heavy:
         return None
@@ -347,6 +348,8 @@ def _radar_cell(point: tuple, data: dict, now: datetime) -> dict | None:
         "hail_code_hours": hail,
         "thunder_hours": thunder,
         "hours_left": round(hours_left, 1),
+        # What put this cell on the list: a thunder code alone is a weak signal, and is labelled so.
+        "signal": "heavy_rain" if rain >= RADAR_HEAVY_MM else "hail_code" if hail else "thunder_code",
     }
 
 
@@ -365,8 +368,8 @@ def radar() -> dict:
             fetched_at = utc_now
         except (httpx.HTTPError, ValueError) as exc:
             if not hit:
-                raise WeatherUnavailable(str(exc)) from exc
-            log.warning("radar refresh failed, serving the cached response: %s", exc)
+                raise WeatherUnavailable(type(exc).__name__) from exc
+            log.warning("radar refresh failed, serving the cached response: %s", errors.scrub(exc))
             payload, fetched_at, stale = hit.payload, _as_aware(hit.fetched_at), True
     cells = [
         cell
@@ -381,11 +384,12 @@ def radar() -> dict:
         "points_checked": len(payload),
         "heavy_rain_mm_threshold": RADAR_HEAVY_MM,
         "window_hours": RADAR_WINDOW_H,
-        "basis": "hours_left counts from the start of the most recent heavy day in IST, the "
-                 "conservative reading. It is a prompt to check, not a statement about any field. "
+        "basis": "Signals from the last 72 hours, not live conditions. hours_left counts from the start "
+                 "of the most recent heavy day in IST, the conservative reading. It is a prompt to "
+                 "check, not a statement about any field. "
                  "The 72 hour rule applies only on localized and post-harvest covers the State has "
                  "notified, so each farmer's route has to be checked first.",
-        "basis_hi": "बचे हुए घंटे सबसे हाल के भारी दिन की शुरुआत (IST) से गिने गए हैं। यह जाँचने का इशारा है, किसी खेत "
+        "basis_hi": "ये पिछले 72 घंटों के संकेत हैं, इस समय का हाल नहीं। बचे हुए घंटे सबसे हाल के भारी दिन की शुरुआत (IST) से गिने गए हैं। यह जाँचने का इशारा है, किसी खेत "
                     "के बारे में दावा नहीं। 72 घंटे का नियम केवल राज्य द्वारा अधिसूचित स्थानीय आपदा और कटाई-बाद के कवर "
                     "पर लागू होता है, इसलिए हर किसान का रास्ता पहले देखना होगा।",
         "grid_note": GRID_NOTE,

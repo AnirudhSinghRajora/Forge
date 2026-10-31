@@ -26,6 +26,12 @@ def _runs(case_id, trigger="scheduler"):
         return [r.id for r in s.query(Run).filter_by(case_id=case_id, trigger=trigger).all()]
 
 
+def _make_due(case_id):
+    with session_scope() as s:
+        action = s.scalar(select(Action).where(Action.case_id == case_id, Action.type == "recheck"))
+        action.due_at = datetime.now(UTC) - timedelta(minutes=1)
+
+
 def test_recheck_waits_for_a_new_accepted_scene(client, monkeypatch):  # noqa: F811
     from app import jobs
 
@@ -35,6 +41,8 @@ def test_recheck_waits_for_a_new_accepted_scene(client, monkeypatch):  # noqa: F
     case_id = _first_run(client, monkeypatch, qa_scene=reject_post,
                          search_sar=lambda *a, **k: [])
     assert jobs.recheck_open_cases()["started"] == []  # no new scene yet
+    assert jobs.recheck_open_cases()["checked"] == 0  # and it waits its turn before asking again
+    _make_due(case_id)
 
     later = scene("S2_NEW", EVENT + timedelta(days=12))
 
@@ -146,6 +154,8 @@ def _planned(monkeypatch, name, args=None):
 
 
 def test_planner_vetoed_on_a_hail_report_with_no_weather(client, monkeypatch):  # noqa: F811
+    monkeypatch.setenv("LLM_PLANNER", "true")
+    get_settings.cache_clear()
     monkeypatch.setattr(weather, "fetch_weather", lambda *a, **k: conftest.weather(corroborated=False, max_mm=0.1))
     _planned(monkeypatch, "sar_first")
     install_fake_geo(monkeypatch)
@@ -157,6 +167,8 @@ def test_planner_vetoed_on_a_hail_report_with_no_weather(client, monkeypatch):  
 
 
 def test_planner_allowed_on_a_cyclone_goes_to_radar_first(client, monkeypatch):  # noqa: F811
+    monkeypatch.setenv("LLM_PLANNER", "true")
+    get_settings.cache_clear()
     _planned(monkeypatch, "sar_first")
     install_fake_geo(monkeypatch)
     case_id = new_case(client, text="25 Oct cyclone paddy")
@@ -167,6 +179,8 @@ def test_planner_allowed_on_a_cyclone_goes_to_radar_first(client, monkeypatch): 
 
 
 def test_planner_window_is_clamped(client, monkeypatch):  # noqa: F811
+    monkeypatch.setenv("LLM_PLANNER", "true")
+    get_settings.cache_clear()
     _planned(monkeypatch, "search_optical", {"post_window_days": 400})
     seen = []
 

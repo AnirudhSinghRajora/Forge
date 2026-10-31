@@ -18,12 +18,7 @@ from app.evidence.schema import Evidence
 
 log = logging.getLogger(__name__)
 
-_TE_MONTHS = ["జనవరి", "ఫిబ్రవరి", "మార్చి", "ఏప్రిల్", "మే", "జూన్", "జులై", "ఆగస్టు", "సెప్టెంబర్",
-              "అక్టోబర్", "నవంబర్", "డిసెంబర్"]
-
-
-def _date_te(d) -> str:
-    return f"{_TE_MONTHS[d.month - 1]} {d.day}"
+_date_te = explain_mod._date_te
 
 
 def _caveat_lines(ev: Evidence) -> tuple[list[str], list[str], list[str]]:
@@ -33,9 +28,10 @@ def _caveat_lines(ev: Evidence) -> tuple[list[str], list[str], list[str]]:
         en.append(explain_mod.NEAR_LINE[1])
         te.append(explain_mod.NEAR_LINE[2])
     if rubric.ripening_unresolved(ev):
-        hi.append("अगर मेरी फ़सल कटाई के क़रीब थी, तो यह गिरावट पकने से भी हो सकती है। बिना तुलना के मैं यह अलग नहीं कर सकता; अगली तस्वीर से मदद मिलेगी।")
-        en.append("If my crop was near harvest, this fall could also be ripening. Without a control I cannot tell them apart; a later image will help.")
-        te.append("నా పంట కోతకు దగ్గరగా ఉంటే, ఈ తగ్గుదల పంట పక్వానికి వచ్చినందువల్ల కూడా కావచ్చు. పోలిక లేకుండా నేను వేరు చేయలేను; తదుపరి చిత్రం సహాయపడుతుంది.")
+        later = rubric.recheck_possible(ev)
+        hi.append("अगर मेरी फ़सल कटाई के क़रीब थी, तो यह गिरावट पकने से भी हो सकती है। बिना तुलना के मैं यह अलग नहीं कर सकता" + ("; अगली तस्वीर से मदद मिलेगी।" if later else "।"))
+        en.append("If my crop was near harvest, this fall could also be ripening. Without a control I cannot tell them apart" + ("; a later image will help." if later else "."))
+        te.append("నా పంట కోతకు దగ్గరగా ఉంటే, ఈ తగ్గుదల పంట పక్వానికి వచ్చినందువల్ల కూడా కావచ్చు. పోలిక లేకుండా నేను వేరు చేయలేను" + ("; తదుపరి చిత్రం సహాయపడుతుంది." if later else "."))
     if rubric.sensors_disagree(ev):
         hi.append("तस्वीरें और रडार यहाँ एक बात नहीं कहते: तस्वीरों में बदलाव दिखता है, रडार उसका समर्थन नहीं करता।")
         en.append("The images and the radar disagree here: the images show a change, and the radar does not support it.")
@@ -116,9 +112,10 @@ def templates(ev: Evidence) -> tuple[str, str, str]:
         en.append(tests[1])
         te.append(tests[2])
     if rubric.post_too_early(ev):
-        hi.append("यह तस्वीर घटना के कुछ ही दिन बाद की है। नुकसान दिखने में समय लग सकता है, इसलिए अगली तस्वीर पर फिर देखा जाएगा।")
-        en.append("This image is from only days after the event. Damage can take time to show, so the next image will be checked too.")
-        te.append("ఈ చిత్రం సంఘటన జరిగిన కొన్ని రోజులకే తీసినది. నష్టం కనిపించడానికి సమయం పట్టవచ్చు, కాబట్టి తదుపరి చిత్రాన్ని కూడా చూస్తాం.")
+        later = rubric.recheck_possible(ev)
+        hi.append("यह तस्वीर घटना के कुछ ही दिन बाद की है। नुकसान दिखने में समय लग सकता है" + (", इसलिए अगली तस्वीर पर फिर देखा जाएगा।" if later else "।"))
+        en.append("This image is from only days after the event. Damage can take time to show" + (", so the next image will be checked too." if later else "."))
+        te.append("ఈ చిత్రం సంఘటన జరిగిన కొన్ని రోజులకే తీసినది. నష్టం కనిపించడానికి సమయం పట్టవచ్చు" + (", కాబట్టి తదుపరి చిత్రాన్ని కూడా చూస్తాం." if later else "."))
 
     if level in ("strong", "moderate"):
         word_hi, word_en, word_te = (
@@ -133,10 +130,19 @@ def templates(ev: Evidence) -> tuple[str, str, str]:
         hi.append("मुझमें नुकसान का साफ़ निशान नहीं दिखता। इसका मतलब यह नहीं कि नुकसान नहीं हुआ; उपग्रह हर नुकसान नहीं देख पाता।")
         en.append("No clear mark of damage shows on me. That does not mean there was none; a satellite cannot see everything.")
         te.append("నాపై నష్టం స్పష్టంగా కనిపించడం లేదు. నష్టం లేదని దీని అర్థం కాదు; ఉపగ్రహం అన్నీ చూడలేదు.")
+        if not rubric.corroboration(ev):
+            hi.append(explain_mod.NO_SUPPORT_LINE[0])
+            en.append(explain_mod.NO_SUPPORT_LINE[1])
+            te.append(explain_mod.NO_SUPPORT_LINE[2])
+    elif level == "insufficient" and ev.verdict is not None and rubric.RUN_INTERRUPTED in ev.verdict.reasons:
+        hi.append(explain_mod.INTERRUPTED_HEADLINES[0])
+        en.append(explain_mod.INTERRUPTED_HEADLINES[1])
+        te.append(explain_mod.INTERRUPTED_HEADLINES[2])
     elif level == "insufficient":
-        hi.append("अभी मैं पक्की गवाही नहीं दे सकता। अगली तस्वीर आने पर फिर बोलूँगा।")
-        en.append("I cannot give firm testimony yet. I will speak again when the next image arrives.")
-        te.append("ఇప్పుడు నేను ఖచ్చితమైన సాక్ష్యం ఇవ్వలేను. తదుపరి చిత్రం వచ్చాక మళ్లీ చెబుతాను.")
+        later = rubric.recheck_possible(ev)
+        hi.append("अभी मैं पक्की गवाही नहीं दे सकता।" + (" अगली तस्वीर आने पर फिर बोलूँगा।" if later else " इस घटना के बाद की तस्वीरों की समय-सीमा निकल चुकी है।"))
+        en.append("I cannot give firm testimony yet." + (" I will speak again when the next image arrives." if later else " The window for images after this event has passed."))
+        te.append("ఇప్పుడు నేను ఖచ్చితమైన సాక్ష్యం ఇవ్వలేను." + (" తదుపరి చిత్రం వచ్చాక మళ్లీ చెబుతాను." if later else " ఈ సంఘటన తర్వాతి చిత్రాల గడువు దాటిపోయింది."))
     else:
         hi.append("सच कहूँ तो मेरा बदलाव कटाई जैसा दिखता है, नुकसान जैसा नहीं। अगर मुझे काटा नहीं गया था तो यह बताइए।")
         en.append("In truth, my change looks like harvest, not damage. If I was not harvested, please say so.")

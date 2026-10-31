@@ -35,9 +35,10 @@ from typing import Any, TypedDict
 from langgraph.graph import END, StateGraph
 from sqlalchemy import select
 
+from app import errors
 from app.agent import claim_path, cross_exam, explain, llm, rubric, testimony, validate
 from app.agent.cross_exam import date_en, date_hi, signed
-from app.agent.parse import today_ist
+from app.agent.parse import event_date_problem, today_ist
 from app.agent.trace import Tracer
 from app.config import get_settings
 from app.db import Action, Case, EvidenceRow, Plot, cache_put, session_scope, utcnow
@@ -57,7 +58,7 @@ log = logging.getLogger(__name__)
 
 PRE_WINDOW_DAYS = 25
 POST_WINDOW_DAYS = 20
-MAX_POST_WINDOW_DAYS = 30
+MAX_POST_WINDOW_DAYS = rubric.RECHECK_WINDOW_DAYS
 MAX_QA_PER_SEARCH = 6
 QA_PREFETCH = 2
 PRE_WALK_S = 30  # one search step gets a bounded share of the budget, whatever the scenes do
@@ -147,7 +148,10 @@ def canonical_json(data: dict) -> str:
 
 
 def evidence_hash(core: ReplayCore) -> str:
-    return hashlib.sha256(canonical_json(core.model_dump(mode="json")).encode()).hexdigest()
+    data = core.model_dump(mode="json")
+    if data.get("verdict_digest") is None:  # a record sealed before the digest keeps its printed hash
+        data.pop("verdict_digest", None)
+    return hashlib.sha256(canonical_json(data).encode()).hexdigest()
 
 
 def make_seed(polygon: dict, event_date: date) -> int:
@@ -232,9 +236,11 @@ class Ctx:
                       f"{tool} did not finish within {timeout:.0f} s", tool=tool, timeout_s=round(timeout))
             raise ToolTimedOut(f"{tool} timed out after {timeout:.0f} s") from exc
         except Exception as exc:
-            self.emit("warning", node, f"{_TOOL_HI.get(tool, tool)} नहीं हो पाया", f"{tool} failed: {exc}",
-                      tool=tool, error=f"{type(exc).__name__}: {exc}")
-            raise ToolFailed(f"{tool} failed: {exc}") from exc
+            # The detail stays in the log: it can hold a signed archive URL or a key.
+            ref = errors.report(log, f"tool {tool} failed in run {self.run_id}", exc)
+            self.emit("warning", node, f"{_TOOL_HI.get(tool, tool)} नहीं हो पाया (संदर्भ {ref})",
+                      f"{tool} could not be completed (ref {ref})", tool=tool, error_ref=ref)
+            raise ToolFailed(f"{tool} could not be completed (ref {ref})") from exc
         detail = summarize(result) if summarize else {}
         self.emit("tool_result", node, f"{hi}: पूरा", f"{en}: done", tool=tool,
                   duration_s=round(time.monotonic() - begin, 1), result=detail)
@@ -309,10 +315,9 @@ def guard(name: str, ctx: Ctx, fn: Callable[[State, Ctx], dict]) -> Callable[[St
         try:
             update = fn(state, ctx) or {}
         except Exception as exc:  # partial failure must yield partial evidence, never a crash
-            log.exception("node %s failed in run %s", name, ctx.run_id)
-            ctx.emit("error", name, "इस चरण में दिक्कत आई; आगे की जाँच जारी है।",
-                     f"This step failed ({type(exc).__name__}); the investigation continues.",
-                     error=f"{type(exc).__name__}: {exc}")
+            ref = errors.report(log, f"node {name} failed in run {ctx.run_id}", exc)
+            ctx.emit("error", name, f"इस चरण में दिक्कत आई; आगे की जाँच जारी है। (संदर्भ {ref})",
+                     f"This step failed (ref {ref}); the investigation continues.", error_ref=ref)
         try:
             persist(ctx, update.get("evidence", state.get("evidence")))
         except Exception:
@@ -343,6 +348,12 @@ def n_parse(state: State, ctx: Ctx) -> dict:
         event_date=info["event_date"], event_time=info["event_time"],
     )
     update: dict = {"case": info, "polygon": polygon, "farmer_date": info["event_date"], "stop": None}
+    if info["event_date"] is not None and event_date_problem(info["event_date"]):
+        ctx.emit("error", "parse", "यह तारीख़ जाँच के दायरे से बाहर है। कृपया सही तारीख़ बताएँ।",
+                 "That date is outside what can be checked. Please give the right date.",
+                 needs=["event_date"])
+        update["stop"] = "needs_input"
+        return update
     if info["event_date"] is None:
         try:
             peak, _ = ctx.call(
@@ -391,9 +402,9 @@ def n_resolve_plot(state: State, ctx: Ctx) -> dict:
     try:
         info: PlotInfo = _geo().plot_info(polygon)
     except Exception as exc:  # noqa: BLE001
+        ref = errors.report(log, "the field boundary could not be used", exc)
         ctx.emit("error", "resolve_plot", "खेत की सीमा का इस्तेमाल नहीं हो सका। कृपया दोबारा बनाएँ।",
-                 f"The field boundary could not be used: {exc}. Please redraw it.",
-                 error=f"{type(exc).__name__}: {exc}", needs=["plot"])
+                 "The field boundary could not be used. Please redraw it.", error_ref=ref, needs=["plot"])
         return {"stop": "needs_input"}
     event = EventInfo(
         type=case["event_type"] or "unknown", date=case["event_date"],
@@ -435,8 +446,8 @@ def _weather_titles(w) -> tuple[str, str]:
 
 def n_gather_context(state: State, ctx: Ctx) -> dict:
     ev: Evidence = state["evidence"]
-    ctx.emit("step_started", "gather_context", "मौसम, सरकारी चेतावनी और ख़बरें देखी जा रही हैं",
-             "Checking weather, official alerts and news")
+    ctx.emit("step_started", "gather_context", "मौसम, सरकारी चेतावनी और संबंधित रिपोर्ट देखी जा रही हैं",
+             "Checking weather, official alerts and related reports")
     lon, lat = ev.plot.centroid
     place: dict = {}
     try:
@@ -480,14 +491,15 @@ def n_gather_context(state: State, ctx: Ctx) -> dict:
     def get_news():
         if not llm.available():
             ctx.emit("decision", "gather_context",
-                     "ख़बरों की खोज के लिए LLM उपलब्ध नहीं, इसलिए यह जाँच छोड़ी गई",
-                     "News search needs the LLM, which is not available, so it was skipped",
+                     "संबंधित रिपोर्ट की खोज के लिए LLM उपलब्ध नहीं, इसलिए यह खोज छोड़ी गई। नतीजे पर इसका असर नहीं।",
+                     "Searching for related reports needs the LLM, which is not available, so it was "
+                     "skipped. This does not affect the result.",
                      reason="no_llm")
             return []
         return ctx.call(
             "gather_context", "news",
             lambda: news.search(district, state_name, ev.event.type, ev.event.date),
-            "ख़बरें खोजी जा रही हैं", "Searching the news",
+            "संबंधित रिपोर्ट खोजी जा रही हैं", "Searching for related reports",
             summarize=lambda r: {"found": len(r), "urls": [n.url for n in r][:5]},
             district=district,
         )
@@ -571,7 +583,9 @@ def n_planner(state: State, ctx: Ctx) -> dict:
         default_en = "The event is from today, so an image after it may not exist yet; finding the image before it"
     update: dict = {"sar_first": False}
     choice = None
-    if llm.available():
+    # The model's choice can move the image search, and through it the level, so it stays off unless
+    # asked for: the same evidence gives the same level with or without an LLM (addendum 8).
+    if llm.available() and get_settings().llm_planner:
         w = ev.weather
         context = (
             f"Event type: {ev.event.type}. Reported date: {ev.event.date}. Days since: {days_since}. "
@@ -585,7 +599,7 @@ def n_planner(state: State, ctx: Ctx) -> dict:
         if veto:
             ctx.emit("decision", "planner", "मॉडल का सुझाव जाँच-नियम से रद्द हुआ; तय रास्ता अपनाया गया",
                      f"Planner suggestion vetoed by a code guard: {veto}", suggested=choice.name,
-                     veto=veto, rationale=choice.rationale, llm=True)
+                     veto=veto, llm=True)
         else:
             ev.llm_used = True
             if choice.name == "sar_first":
@@ -594,7 +608,7 @@ def n_planner(state: State, ctx: Ctx) -> dict:
             if isinstance(days, int) and 10 <= days <= MAX_POST_WINDOW_DAYS:
                 update["post_days"] = days
             ctx.emit("decision", "planner", f"योजना: {choice.name}", f"Plan: {choice.name}",
-                     choice=choice.name, args=choice.args, rationale=choice.rationale, llm=True)
+                     choice=choice.name, args=choice.args, llm=True)
             return update
     ctx.emit("decision", "planner", default_hi, default_en, choice="search_optical", llm=False,
              post_window_days=state.get("post_days", POST_WINDOW_DAYS), days_since_event=days_since)
@@ -1145,7 +1159,7 @@ def n_history(state: State, ctx: Ctx) -> dict:
 
 
 def _rephrase(objections: list) -> dict[str, tuple[str, str]]:
-    if not llm.available():
+    if not (llm.available() and get_settings().llm_polish):
         return {}
     raw = llm.bounded(
         LLM_REPHRASE_S, llm.rephrase_challenges,
@@ -1373,7 +1387,9 @@ def decide(ctx: Ctx, ev: Evidence, *, revised: bool = False) -> None:
         result = replace(result, reasons=[rubric.STILL_COMPUTING])
     elif ctx.archive_failed and result.level == "insufficient":
         result = replace(result, reasons=[rubric.ARCHIVE_UNREACHABLE])
-    head_hi, head_en, head_te = explain.headlines(result.level, ev.event.type)
+    head_hi, head_en, head_te = explain.headlines(
+        result.level, ev.event.type, recheck=provisional or rubric.recheck_possible(ev) or ctx.archive_failed,
+    )
     ev.verdict = Verdict(
         level=result.level, headline_hi=head_hi, headline_en=head_en, headline_te=head_te,
         reasons=result.reasons, caveats=result.caveats,
@@ -1384,17 +1400,42 @@ def decide(ctx: Ctx, ev: Evidence, *, revised: bool = False) -> None:
              caveats=result.caveats, rubric_version=result.version,
              corroborated_by=rubric.corroboration(ev), conceded=rubric.conceded(ev),
              revised=revised, sealed=False, exhibits_pending=pending, provisional=provisional)
-    ev.deadlines = [d for d in ev.deadlines if d.type != "recheck"]
-    if result.schedule_recheck and not provisional:
-        latest = max((q.date for q in ev.optical.scenes_considered), default=today_ist())
-        due = datetime.combine(
-            max(latest + timedelta(days=SENTINEL2_REVISIT_DAYS), today_ist() + timedelta(days=1)),
-            datetime.min.time(), UTC,
-        )
-        basis = "sentinel-2-revisit"
-        if rubric.comparison_incomplete(ev) or ctx.archive_failed:
-            due, basis = datetime.now(UTC) + timedelta(minutes=30), "archive-retry"
-        ev.deadlines.append(Deadline(type="recheck", due_at=due, basis=basis, status="open"))
+    _sync_recheck(ctx, ev, result, provisional)
+
+
+def _recheck_deadline(ctx: Ctx, ev: Evidence, result: rubric.RubricResult, provisional: bool) -> Deadline | None:
+    if not result.schedule_recheck or provisional:
+        return None
+    if rubric.comparison_incomplete(ev) or ctx.archive_failed:
+        return Deadline(type="recheck", due_at=datetime.now(UTC) + timedelta(minutes=30),
+                        basis="archive-retry", status="open")
+    today = today_ist()
+    latest = max((q.date for q in ev.optical.scenes_considered), default=today)
+    due_day = max(latest + timedelta(days=SENTINEL2_REVISIT_DAYS), today + timedelta(days=1))
+    if due_day > ev.event.date + timedelta(days=rubric.RECHECK_WINDOW_DAYS):
+        return None  # no pass can land in the window any more, so none is promised
+    return Deadline(type="recheck", due_at=datetime.combine(due_day, datetime.min.time(), UTC),
+                    basis="sentinel-2-revisit", status="open")
+
+
+def _sync_recheck(ctx: Ctx, ev: Evidence, result: rubric.RubricResult, provisional: bool) -> None:
+    """A re-check shown to anyone has a real job behind it, whichever verdict was last decided: the
+    deadline in the evidence and the Action row the scheduler reads change together."""
+    deadline = _recheck_deadline(ctx, ev, result, provisional)
+    ev.deadlines = [d for d in ev.deadlines if d.type != "recheck"] + ([deadline] if deadline else [])
+    with session_scope() as s:
+        for old in s.scalars(select(Action).where(
+            Action.case_id == ctx.case_id, Action.status == "open", Action.type == "recheck",
+        )).all():
+            s.delete(old)
+        if deadline is not None:
+            s.add(Action(
+                case_id=ctx.case_id, type="recheck", status="open", due_at=deadline.due_at,
+                payload={"reason": result.level, "basis": deadline.basis},
+            ))
+        case = s.get(Case, ctx.case_id)
+        if case is not None and case.status in ("open", "rechecking"):
+            case.status = "rechecking" if deadline is not None else "open"
 
 
 def n_verdict(state: State, ctx: Ctx) -> dict:
@@ -1535,6 +1576,7 @@ def _reexamine(ctx: Ctx, ev: Evidence, state: State) -> None:
         result = rubric.decide(ev)
         ev.verdict.reasons, ev.verdict.caveats = result.reasons, result.caveats
         ev.verdict.falsifiers_checked = result.falsifiers_checked
+        _sync_recheck(ctx, ev, result, False)
 
 
 def n_exhibits(state: State, ctx: Ctx) -> dict:
@@ -1573,8 +1615,8 @@ def n_exhibits(state: State, ctx: Ctx) -> dict:
             except ToolFailed as exc:
                 ctx.set_exhibit(name, "failed", str(exc))
             except Exception as exc:
-                log.exception("exhibit %s failed", name)
-                ctx.set_exhibit(name, "failed", f"{type(exc).__name__}: {exc}")
+                ref = errors.report(log, f"exhibit {name} failed", exc)
+                ctx.set_exhibit(name, "failed", f"it could not be computed (ref {ref}); it can be retried")
             _emit_exhibit(ctx, name)
             persist(ctx, ev)
         had_background = ctx.sar_future is not None or ctx.history_future is not None
@@ -1683,6 +1725,7 @@ def _rule_names_for(path) -> list[tuple[str, str]]:
         names.append(("intimation_contents", "What the intimation must contain"))
         names.append(("channels", "Where to report"))
         names.append(("late_intimation", "What the guidelines say about intimation timing"))
+        names.append(("grievance", "Where to go if you disagree with a survey"))
     if path.route == "post_harvest_addon":
         names.append(("post_harvest_14_day", "Post-harvest cover for a crop drying in the field"))
     if path.route == "localized_addon":
@@ -1741,18 +1784,11 @@ def n_act(state: State, ctx: Ctx) -> dict:
     recheck = next((d for d in ev.deadlines if d.type == "recheck"), None)
     with session_scope() as s:
         for old in s.scalars(select(Action).where(
-            Action.case_id == ctx.case_id, Action.status == "open",
-            Action.type.in_(("intimation_draft", "recheck")),
+            Action.case_id == ctx.case_id, Action.status == "open", Action.type == "intimation_draft",
         )).all():
             s.delete(old)
         s.add(Action(case_id=ctx.case_id, type="intimation_draft", payload=draft, status="open",
                      due_at=deadline.due_at if deadline else None))
-        if recheck is not None:
-            s.add(Action(
-                case_id=ctx.case_id, type="recheck", status="open", due_at=recheck.due_at,
-                payload={"reason": ev.verdict.level if ev.verdict else None,
-                         "basis": recheck.basis},
-            ))
         case = s.get(Case, ctx.case_id)
         if case.status != "submitted":
             case.status = (
@@ -1785,8 +1821,8 @@ def n_explain(state: State, ctx: Ctx) -> dict:
     # Templates first, so a hung LLM can cost no more than the time limit, and nothing else.
     explain.fill_templates(ev)
     testimony.fill_templates(ev)
-    report = {"hi": "template", "en": "template", "te": "none"}
-    if llm.available():
+    report = {"hi": "template", "en": "template", "te": "template"}
+    if llm.available() and get_settings().llm_polish:
         polished = ev.model_copy(deep=True)
 
         def polish():
@@ -1863,6 +1899,7 @@ def seal_core(ev: Evidence, polygon: dict, seed: int) -> ReplayCore:
             ev.optical if pre_id and post_id else None, ev.neighbours, sar, hist, ev.village,
             ev.scale_fade,
         ),
+        verdict_digest=rubric.verdict_digest(ev),
     )
 
 
@@ -1875,8 +1912,10 @@ def n_seal(state: State, ctx: Ctx) -> dict:
     ev.evidence_hash = evidence_hash(core)
     _refresh_draft(ctx, state, ev)
     ctx.emit("action", "seal",
-             f"सबूत की मुहर: {ev.evidence_hash[:12]}। कोई भी इसे सार्वजनिक सैटेलाइट डेटा से दोबारा जाँच सकता है।",
-             f"Evidence sealed: {ev.evidence_hash[:12]}. Anyone can recompute it from public satellite data.",
+             f"सबूत की मुहर: {ev.evidence_hash[:12]}। कोई भी इसके सैटेलाइट आँकड़े सार्वजनिक डेटा से दोबारा निकाल सकता है; "
+             "नतीजे और मौसम की जाँच केवल छेड़छाड़ के लिए होती है।",
+             f"Evidence sealed: {ev.evidence_hash[:12]}. Anyone can recompute its satellite numbers from public "
+             "data; the verdict and weather can be checked for tampering.",
              action="sealed", evidence_hash=ev.evidence_hash, n_numbers=len(core.numbers))
     return {"evidence": ev}
 
@@ -1958,10 +1997,11 @@ def retry_exhibit(run_id: str, case_id: str, name: str, tracer: Tracer) -> str:
                                       EvidenceRow.evidence_hash.is_not(None))
             .order_by(EvidenceRow.created_at.desc())
         ).first()
-        plot = s.scalar(select(Plot).where(Plot.case_id == case_id))
         case = s.get(Case, case_id)
         ev = Evidence.model_validate(row.json)
-        evidence_run, polygon, exhibits = row.run_id, plot.geometry, dict(row.exhibits or {})
+        # The polygon this record was sealed on. The Plot row can have been redrawn since.
+        polygon = (ev.replay.polygon if ev.replay else None) or ev.plot.geometry
+        evidence_run, exhibits = row.run_id, dict(row.exhibits or {})
         old_hash, old_core = row.evidence_hash, row.replay_core
         farmer_date = case.event_date
     ctx = Ctx(run_id=run_id, case_id=case_id, tracer=tracer,

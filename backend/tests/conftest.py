@@ -46,10 +46,11 @@ def isolated_app(tmp_path, monkeypatch, request):
     monkeypatch.setenv("ENABLE_SCHEDULER", "false")
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("DATABASE_URL", raising=False)
-    from app import config, db
+    from app import config, db, limits
 
     config.get_settings.cache_clear()
     db.init_db(f"sqlite:///{tmp_path / 'test.db'}")
+    limits.reset()
     yield
     config.get_settings.cache_clear()
 

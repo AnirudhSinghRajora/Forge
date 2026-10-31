@@ -2,25 +2,27 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 import json
 import logging
-import re
+import os
 import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated, get_args
 
 from fastapi import FastAPI, File, Form, Header, HTTPException, Query, Request, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
-from pydantic import BaseModel
+from pydantic import AfterValidator, BaseModel, StringConstraints
 from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
 
 from app.agent import parse as report_parse
-from app import disclosures
+from app import disclosures, errors, limits
 from app.agent import rubric, runner
 from app.agent.plot import PlotRejected, check_pin, validate_polygon
 from app.config import VERSION, get_settings
@@ -29,6 +31,10 @@ from app.evidence.schema import EventType, Evidence
 
 log = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+for _handler in logging.getLogger().handlers:
+    _handler.setFormatter(errors.ScrubbingFormatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+# httpx logs every request's URL at INFO, and a weather URL can carry the API key.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 EVENT_TYPES = set(get_args(EventType))
 INSURED_VALUES = {"yes", "no", "unknown"}
@@ -58,6 +64,8 @@ QUESTIONS = {
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     init_db()
+    if not get_settings().public_web_url:
+        log.warning("PUBLIC_WEB_URL is not set: PDF QR codes and verify links use each request's own origin")
     closed = runner.recover_interrupted()
     if closed:
         log.warning("closed %d runs interrupted by the last restart", closed)
@@ -78,28 +86,174 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         stop_scheduler()
 
 
+MAX_AUDIO_BODY_BYTES = 25 * 1024 * 1024
+MAX_AUDIO_BYTES = 24 * 1024 * 1024
+MAX_JSON_BODY_BYTES = 64 * 1024
+MAX_AFTER = 2**53  # larger than any event sequence, and small enough for every database integer
+AUDIO_CHUNK_BYTES = 1024 * 1024
+
+
+def _body_limit(method: str, path: str) -> int:
+    """Only creating a case can carry a voice note. Every other body is a small form or JSON."""
+    return MAX_AUDIO_BODY_BYTES if method == "POST" and path == "/api/cases" else MAX_JSON_BODY_BYTES
+
+
+class BodyLimit:
+    """Refuses an oversized body, whether it announces its length or streams past the limit."""
+
+    def __init__(self, inner):
+        self.inner = inner
+
+    @staticmethod
+    async def _refuse(send) -> None:
+        body = json.dumps({"detail": {
+            "code": "body_too_large",
+            "message_hi": "यह भेजी गई सामग्री बहुत बड़ी है।",
+            "message_en": "What was sent is too large.",
+            "message_te": "పంపినది చాలా పెద్దది.",
+        }}, ensure_ascii=False).encode()
+        await send({"type": "http.response.start", "status": 413,
+                    "headers": [(b"content-type", b"application/json"),
+                                (b"content-length", str(len(body)).encode())]})
+        await send({"type": "http.response.body", "body": body})
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.inner(scope, receive, send)
+            return
+        limit = _body_limit(scope["method"], scope["path"])
+        declared = dict(scope["headers"]).get(b"content-length", b"")
+        if declared.isdigit() and int(declared) > limit:
+            await self._refuse(send)
+            return
+        seen = 0
+        over = False
+        started = False
+
+        async def counted_receive():
+            nonlocal seen, over
+            message = await receive()
+            if message["type"] == "http.request":
+                seen += len(message.get("body", b""))
+                if seen > limit:
+                    over = True
+                    return {"type": "http.disconnect"}
+            return message
+
+        async def guarded_send(message):
+            nonlocal started
+            if over:
+                return  # whatever the route made of a cut-off body, the answer is the 413 below
+            started = True
+            await send(message)
+
+        try:
+            await self.inner(scope, counted_receive, guarded_send)
+        except Exception:
+            if not over:
+                raise
+        if over and not started:
+            await self._refuse(send)
+
+
 app = FastAPI(title="FasalSaakshi", version=VERSION, lifespan=lifespan)
-app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
-    expose_headers=["Content-Disposition"],
-)
+app.add_middleware(BodyLimit)
 
 
 @app.exception_handler(Exception)
 async def unhandled(_request: Request, exc: Exception) -> JSONResponse:
-    log.exception("unhandled error", exc_info=exc)
-    return JSONResponse(
-        status_code=500, content={"detail": f"internal error: {type(exc).__name__}: {exc}"}
-    )
+    ref = errors.report(log, "unhandled error", exc)
+    return JSONResponse(status_code=500, content={"detail": f"internal error (ref {ref})", "error_ref": ref})
+
+
+@app.exception_handler(RequestValidationError)
+async def invalid_request(_request: Request, exc: RequestValidationError) -> JSONResponse:
+    """Says what is wrong and never echoes the input, which can be huge or not even valid text."""
+    return JSONResponse(status_code=422, content={"detail": [
+        {"loc": [str(part) for part in e.get("loc", ())], "msg": str(e.get("msg", "invalid")), "type": str(e.get("type", ""))}
+        for e in exc.errors()
+    ]})
 
 
 # Helpers
 
 
+def _clean(value: str) -> str:
+    """A lone surrogate cannot be stored or sent, and a NUL cannot be stored in Postgres."""
+    if any(c == "\x00" or "\ud800" <= c <= "\udfff" for c in value):
+        raise ValueError("contains characters that are not valid text")
+    return value
+
+
+def _text(max_length: int):
+    return Annotated[str, StringConstraints(max_length=max_length), AfterValidator(_clean)]
+
+
+def _message(hi: str, en: str, te: str, code: str) -> dict:
+    return {"code": code, "message_hi": hi, "message_en": en, "message_te": te}
+
+
+def _check_form_text(value: str | None, max_length: int, name: str) -> None:
+    if value is None:
+        return
+    try:
+        _clean(value)
+    except ValueError as exc:
+        raise HTTPException(422, detail=f"{name} is not valid text") from exc
+    if len(value) > max_length:
+        raise HTTPException(422, detail=_message(
+            f"यह बहुत लंबा है। कृपया {max_length} अक्षरों में लिखें।",
+            f"This is too long. Please keep it under {max_length} characters.",
+            f"ఇది చాలా పొడవుగా ఉంది. దయచేసి {max_length} అక్షరాల్లో రాయండి.",
+            "text_too_long",
+        ))
+
+
+def _bad_audio() -> HTTPException:
+    return HTTPException(415, detail=_message(
+        "यह आवाज़ की फ़ाइल नहीं लगती। कृपया दोबारा रिकॉर्ड करें या लिखकर बताएँ।",
+        "This does not look like a voice recording. Please record again or type it.",
+        "ఇది వాయిస్ రికార్డింగ్ లాగా లేదు. దయచేసి మళ్ళీ రికార్డ్ చేయండి లేదా టైప్ చేయండి.",
+        "audio_not_recognised",
+    ))
+
+
+def _is_audio_container(head: bytes) -> bool:
+    """The containers browsers record into, for a client that labelled the upload generically."""
+    return (
+        head.startswith((b"\x1aE\xdf\xa3", b"OggS", b"ID3", b"fLaC", b"\xff\xfb", b"\xff\xf3", b"\xff\xf1", b"\xff\xf9"))
+        or (head[:4] == b"RIFF" and head[8:12] == b"WAVE")
+        or head[4:8] == b"ftyp"
+    )
+
+
+def _read_audio(audio: UploadFile) -> bytes:
+    """Read in chunks up to the cap. Accepted as audio by its declared type or by its first bytes."""
+    data = bytearray()
+    while chunk := audio.file.read(AUDIO_CHUNK_BYTES):
+        data += chunk
+        if len(data) > MAX_AUDIO_BYTES:
+            raise HTTPException(413, detail=_message(
+                "आवाज़ की यह रिकॉर्डिंग बहुत लंबी है। कृपया छोटी रिकॉर्डिंग भेजें या लिखकर बताएँ।",
+                "This recording is too long. Please send a shorter one or type it.",
+                "ఈ రికార్డింగ్ చాలా పెద్దది. దయచేసి చిన్నది పంపండి లేదా టైప్ చేయండి.",
+                "audio_too_large",
+            ))
+    declared = (audio.content_type or "").split(";")[0].strip().lower()
+    if not declared.startswith("audio/") and not _is_audio_container(bytes(data[:16])):
+        raise _bad_audio()
+    return bytes(data)
+
+
+def _date_error(when: date) -> None:
+    if (problem := report_parse.event_date_problem(when)) is not None:
+        raise HTTPException(422, detail=report_parse.EVENT_DATE_MESSAGES[problem])
+
+
 def _get_case(s, case_id: str) -> Case:
-    case = s.get(Case, case_id)
+    case = s.get(Case, case_id) if len(case_id) <= 64 and "\x00" not in case_id else None
     if case is None:
-        raise HTTPException(404, detail=f"unknown case {case_id}")
+        raise HTTPException(404, detail="unknown case")
     return case
 
 
@@ -143,7 +297,7 @@ def _case_dict(s, case: Case) -> dict:
             "id": latest.id, "status": latest.status, "trigger": latest.trigger,
             "started_at": latest.started_at.isoformat(),
             "finished_at": latest.finished_at.isoformat() if latest.finished_at else None,
-            "error": latest.error,
+            "error": errors.public_text(latest.error),
         } if latest else None,
         "created_at": case.created_at.isoformat(),
         "updated_at": case.updated_at.isoformat(),
@@ -159,15 +313,18 @@ def _action_dict(action: Action) -> dict:
 
 
 def _latest_evidence(s, case_id: str) -> EvidenceRow | None:
-    """The newest run with a verdict, else the newest sealed, else whatever exists. A re-run that
-    has no verdict yet never blanks the earlier result."""
+    """The newest sealed record, else the newest with a verdict, else whatever exists. An unsealed
+    re-run, finished or interrupted, never displaces a sealed result; the first run of a case shows
+    its verdict at once while its exhibits fill in."""
     rows = s.scalars(
         select(EvidenceRow).where(EvidenceRow.case_id == case_id)
         .order_by(EvidenceRow.created_at.desc())
     ).all()
-    if rows and (rows[0].verdict_level or rows[0].evidence_hash):
-        return rows[0]  # the verdict of the newest run shows at once, while its exhibits fill in
-    return next((r for r in rows if r.evidence_hash), rows[0] if rows else None)
+    return (
+        next((r for r in rows if r.evidence_hash), None)
+        or next((r for r in rows if r.verdict_level), None)
+        or (rows[0] if rows else None)
+    )
 
 
 def _route_needs(insured: str | None, crop_stage: str | None) -> list[str]:
@@ -202,6 +359,7 @@ def health() -> dict:
 
 @app.post("/api/cases")
 def create_case(
+    request: Request,
     lat: float = Form(...),
     lon: float = Form(...),
     lang: str = Form("hi"),
@@ -220,6 +378,9 @@ def create_case(
         raise HTTPException(422, detail=exc.as_detail()) from exc
     if lang not in ("hi", "en", "te"):
         raise HTTPException(422, detail="lang must be one of hi, en, te")
+    _check_form_text(text, report_parse.MAX_TEXT_CHARS, "text")
+    audio_bytes = _read_audio(audio) if audio is not None else None
+    limits.enforce(request, "cases", get_settings().rate_cases_per_hour)
 
     from app.agent import llm
 
@@ -229,7 +390,7 @@ def create_case(
         llm_parsed = None
         if audio is not None:
             llm_parsed = llm.bounded(
-                60, llm.parse_audio, audio.file.read(), audio.content_type or "audio/webm", lang
+                60, llm.parse_audio, audio_bytes, audio.content_type or "audio/webm", lang
             )
             audio_failed = llm_parsed is None
         elif text:
@@ -314,12 +475,12 @@ def put_plot(case_id: str, body: PlotBody) -> dict:
 
 
 class CasePatch(BaseModel):
-    crop: str | None = None
-    event_type: str | None = None
+    crop: _text(64) | None = None
+    event_type: _text(32) | None = None
     event_date: date | None = None
-    event_time: str | None = None
-    insured: str | None = None
-    crop_stage: str | None = None
+    event_time: _text(8) | None = None
+    insured: _text(16) | None = None
+    crop_stage: _text(32) | None = None
 
 
 @app.patch("/api/cases/{case_id}")
@@ -331,9 +492,9 @@ def patch_case(case_id: str, body: CasePatch) -> dict:
         raise HTTPException(422, detail=f"insured must be one of {sorted(INSURED_VALUES)}")
     if "crop_stage" in fields and body.crop_stage not in CROP_STAGES:
         raise HTTPException(422, detail=f"crop_stage must be one of {sorted(CROP_STAGES)}")
-    if body.event_date is not None and body.event_date > report_parse.today_ist():
-        raise HTTPException(422, detail="event_date cannot be in the future")
-    if body.event_time is not None and not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", body.event_time):
+    if body.event_date is not None:
+        _date_error(body.event_date)
+    if body.event_time is not None and not report_parse.valid_clock_time(body.event_time):
         raise HTTPException(422, detail="event_time must be HH:MM (24 hour, IST)")
     with session_scope() as s:
         case = _get_case(s, case_id)
@@ -358,16 +519,26 @@ def patch_case(case_id: str, body: CasePatch) -> dict:
 
 
 @app.post("/api/cases/{case_id}/investigate")
-def investigate(case_id: str) -> dict:
+def investigate(case_id: str, request: Request) -> dict:
     with session_scope() as s:
-        _get_case(s, case_id)
+        case = _get_case(s, case_id)
         if s.scalar(select(Plot.id).where(Plot.case_id == case_id)) is None:
             raise HTTPException(
                 422,
                 detail={"code": "needs_plot", "needs": ["plot"],
-                        "message_hi": QUESTIONS["plot"]["hi"], "message_en": QUESTIONS["plot"]["en"]},
+                        "message_hi": QUESTIONS["plot"]["hi"], "message_en": QUESTIONS["plot"]["en"],
+                        "message_te": QUESTIONS["plot"]["te"]},
             )
-    run_id, created = runner.start_run(case_id, "user")
+        if case.event_date is not None:
+            _date_error(case.event_date)  # a row written before this check existed
+    # Asking again while a run is active starts nothing, so it costs nothing.
+    if (active := runner.active_run_id(case_id)) is not None:
+        return {"run_id": active, "created": False}
+    limits.enforce(request, "investigations", get_settings().rate_investigations_per_hour)
+    try:
+        run_id, created = runner.start_run(case_id, "user")
+    except runner.QueueFull as exc:
+        raise limits.busy() from exc
     return {"run_id": run_id, "created": created}
 
 
@@ -393,20 +564,23 @@ def _with_live_route(evidence: dict, case: Case, lang: str) -> dict:
 
 
 @app.get("/api/cases/{case_id}")
-def get_case(case_id: str, lang: str | None = Query(None)) -> dict:
+def get_case(case_id: str, request: Request, lang: str | None = Query(None)) -> dict:
     with session_scope() as s:
         case = _get_case(s, case_id)
+        # The run first and the evidence second: a run that finishes between these two reads then
+        # shows as still active with its seal, which corrects itself on the next poll, and never as
+        # finished without one.
+        info = _case_dict(s, case)
         row = _latest_evidence(s, case_id)
         evidence = None
         if row is not None:
-            evidence = _with_live_route(dict(row.json), case, lang or case.lang)
+            evidence = _public_evidence(_with_live_route(dict(row.json), case, lang or case.lang))
         items = s.scalars(
             select(Action).where(Action.case_id == case_id).order_by(Action.created_at)
         ).all()
-        info = _case_dict(s, case)
         out = [_action_dict(a) for a in items]
         if evidence is not None:
-            _refresh_draft(out, info, evidence)
+            _refresh_draft(out, info, evidence, limits.web_base(request))
         # The plot the shown evidence was read on, which a later redraw does not change.
         centroid = ((evidence or {}).get("plot") or {}).get("centroid") or (info["plot"] or {}).get("centroid")
         return {
@@ -414,7 +588,9 @@ def get_case(case_id: str, lang: str | None = Query(None)) -> dict:
             "selection_note": disclosures.selection_note(centroid),
             "sealed": bool(row is not None and row.evidence_hash),
             "verdict_ready": bool(row is not None and row.verdict_level),
-            "exhibits": (row.exhibits or {}) if row is not None else {},
+            "exhibits": _public_exhibits(row.exhibits) if row is not None else {},
+            "corroboration": _corroboration(evidence),
+            "recheck_closed": _recheck_closed(evidence, out),
             "rubric": {
                 "version": rubric.RUBRIC_VERSION, "p_field": rubric.P_FIELD,
                 "strong_delta": rubric.STRONG_DELTA, "moderate_delta": rubric.MODERATE_DELTA,
@@ -422,6 +598,38 @@ def get_case(case_id: str, lang: str | None = Query(None)) -> dict:
                 "near_line_decides": _near_line_decides(evidence),
             },
         }
+
+
+def _public_evidence(evidence: dict) -> dict:
+    """A record written before these were dropped can still hold model-written text."""
+    if evidence.get("news"):
+        evidence["news"] = [{k: v for k, v in item.items() if k != "snippet"} for item in evidence["news"]]
+    return evidence
+
+
+def _public_exhibits(exhibits: dict | None) -> dict:
+    return {
+        name: {**entry, "reason": errors.public_text(entry.get("reason"), "it could not be computed; it can be retried")}
+        for name, entry in (exhibits or {}).items()
+    }
+
+
+def _corroboration(evidence: dict | None) -> dict | None:
+    """Which sources the level rested on. Related reports are never among them."""
+    if not evidence:
+        return None
+    ev = Evidence.model_validate(evidence)
+    return {"sources": rubric.corroboration(ev), "matching_alert_ids": [a.identifier for a in rubric.matching_alerts(ev)]}
+
+
+def _recheck_closed(evidence: dict | None, actions: list[dict]) -> bool:
+    """This result would call for a later image, and the window for one has passed."""
+    if not evidence or not evidence.get("verdict"):
+        return False
+    if any(a["type"] == "recheck" and a["status"] == "open" for a in actions):
+        return False
+    ev = Evidence.model_validate(evidence)
+    return rubric.decide(ev).schedule_recheck and not rubric.recheck_possible(ev)
 
 
 def _near_line_decides(evidence: dict | None) -> bool:
@@ -432,7 +640,7 @@ def _near_line_decides(evidence: dict | None) -> bool:
     return rubric.level_could_change(Evidence.model_validate(evidence), verdict["level"])
 
 
-def _refresh_draft(items: list[dict], info: dict, evidence: dict) -> None:
+def _refresh_draft(items: list[dict], info: dict, evidence: dict, base_url: str) -> None:
     """Route, deadline and filed status in the draft follow the current state of the case."""
     from app.evidence.schema import ClaimPath, Deadline
     from app.tools import actions as actions_tool
@@ -442,7 +650,7 @@ def _refresh_draft(items: list[dict], info: dict, evidence: dict) -> None:
         return
     path = ClaimPath.model_validate(evidence["claim_path"])
     deadlines = [Deadline.model_validate(d) for d in evidence.get("deadlines") or []]
-    payload = actions_tool.draft_intimation(info, evidence, path, deadlines)
+    payload = actions_tool.draft_intimation(info, evidence, path, deadlines, base_url)
     submission = next((a["payload"] for a in items if a["type"] == "submission"), None)
     payload["filed"] = bool(submission and submission.get("reference_no"))
     draft["payload"] = payload
@@ -452,7 +660,7 @@ RETRYABLE_EXHIBITS = {"sar", "history", "village", "scale_fade", "chips", "timel
 
 
 @app.post("/api/cases/{case_id}/exhibits/{name}/retry")
-def retry_exhibit(case_id: str, name: str) -> dict:
+def retry_exhibit(case_id: str, name: str, request: Request) -> dict:
     if name not in RETRYABLE_EXHIBITS:
         raise HTTPException(422, detail=f"exhibit must be one of {sorted(RETRYABLE_EXHIBITS)}")
     with session_scope() as s:
@@ -462,14 +670,42 @@ def retry_exhibit(case_id: str, name: str) -> dict:
             raise HTTPException(409, detail="the evidence is not sealed yet")
         status = (row.exhibits or {}).get(name, {}).get("status")
         if status not in ("failed", "not_applicable"):
-            raise HTTPException(409, detail=f"exhibit {name} is {status}, so there is nothing to retry")
-    run_id = runner.start_retry(case_id, name)
+            raise HTTPException(409, detail=f"exhibit {name} is {status or 'not recorded'}, so there is nothing to retry")
+        if (blocker := rubric.retry_blocker(Evidence.model_validate(row.json), name)) is not None:
+            raise HTTPException(409, detail={
+                "code": "exhibit_inputs_missing", "reason": blocker,
+                "message_hi": "यह हिस्सा दोबारा नहीं बन सकता, क्योंकि इसके लिए ज़रूरी तस्वीरें इस रिकॉर्ड में नहीं हैं।",
+                "message_en": f"This cannot be run again: {blocker}.",
+                "message_te": "దీన్ని మళ్ళీ నడపలేం, ఎందుకంటే దీనికి అవసరమైన చిత్రాలు ఈ రికార్డులో లేవు.",
+            })
+    if runner.active_run_id(case_id):
+        raise HTTPException(409, detail="another run is active on this case")
+    limits.enforce(request, "investigations", get_settings().rate_investigations_per_hour)
+    try:
+        run_id = runner.start_retry(case_id, name)
+    except runner.QueueFull as exc:
+        raise limits.busy() from exc
     if run_id is None:
         raise HTTPException(409, detail="another run is active on this case")
     return {"run_id": run_id, "exhibit": name, "status": "pending"}
 
 
 # The live trace
+
+
+def _public_event(payload: dict) -> dict:
+    """A trace event as a reader may see it, whenever it was written: an older one can hold raw
+    exception text or the model's own reasoning."""
+    detail = {k: v for k, v in (payload.get("detail") or {}).items() if k not in ("error", "rationale")}
+    return {**payload, "detail": detail, "title_en": errors.scrub(payload.get("title_en") or ""),
+            "title_hi": errors.scrub(payload.get("title_hi") or "")}
+
+
+def _last_event_id(value: str | None) -> int:
+    """str.isdigit() also accepts characters like a superscript two, which int() then refuses."""
+    if value and value.isascii() and value.isdigit() and len(value) <= 16:
+        return int(value)
+    return 0
 
 
 def _events_after(run_id: str, after: int) -> tuple[list[dict], str | None]:
@@ -481,20 +717,19 @@ def _events_after(run_id: str, after: int) -> tuple[list[dict], str | None]:
             select(RunEvent).where(RunEvent.run_id == run_id, RunEvent.seq > after)
             .order_by(RunEvent.seq)
         ).all()
-        return [r.payload for r in rows], run.status
+        return [_public_event(r.payload) for r in rows], run.status
 
 
 @app.get("/api/runs/{run_id}/stream")
 async def stream_run(
     run_id: str,
-    after: int = Query(0, ge=0),
+    after: int = Query(0, ge=0, le=MAX_AFTER),
     last_event_id: str | None = Header(None),
 ) -> EventSourceResponse:
     _, status = await asyncio.to_thread(_events_after, run_id, 10**9)
     if status is None:
-        raise HTTPException(404, detail=f"unknown run {run_id}")
-    if last_event_id and last_event_id.isdigit():
-        after = max(after, int(last_event_id))
+        raise HTTPException(404, detail="unknown run")
+    after = max(after, _last_event_id(last_event_id))
     poll = get_settings().sse_poll_s
 
     async def generate() -> AsyncIterator[dict]:
@@ -516,8 +751,38 @@ async def stream_run(
 # Documents
 
 
+_PDF_RENDERS = threading.BoundedSemaphore(2)  # each render is heavy on memory
+
+
+def _pdf_cache_path(evidence: Evidence, case: dict, exhibits: dict, lang: str, base_url: str) -> Path:
+    """Everything the page prints that is not fixed by the seal: the route as it stands now, the
+    deadline's status, what could not be computed, and where the QR code points."""
+    state = {
+        "lang": lang, "base_url": base_url, "event_time": case.get("event_time"),
+        "district": case.get("district"), "state": case.get("state"),
+        "claim_path": evidence.claim_path.model_dump(mode="json") if evidence.claim_path else None,
+        "deadlines": [d.model_dump(mode="json") for d in evidence.deadlines],
+        "failed": sorted((k, v.get("reason") or "") for k, v in exhibits.items() if v.get("status") == "failed"),
+    }
+    digest = hashlib.sha256(json.dumps(state, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:24]
+    folder = f"pdf_{evidence.evidence_hash[:16]}"
+    return get_settings().artifacts_dir / evidence.case_id / folder / f"{lang}_{digest}.pdf"
+
+
+def _write_atomic(path: Path, data: bytes) -> None:
+    """A failed cache write costs only a re-render."""
+    temporary = path.with_suffix(f".{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        temporary.write_bytes(data)
+        os.replace(temporary, path)
+    except OSError as exc:
+        log.warning("could not cache a rendered PDF: %s", exc)
+        temporary.unlink(missing_ok=True)
+
+
 @app.get("/api/cases/{case_id}/evidence.pdf")
-def evidence_pdf(case_id: str, lang: str = Query("hi")) -> Response:
+def evidence_pdf(case_id: str, request: Request, lang: str = Query("hi")) -> Response:
     if lang not in ("hi", "en", "te"):
         raise HTTPException(422, detail="lang must be one of hi, en, te")
     with session_scope() as s:
@@ -532,6 +797,7 @@ def evidence_pdf(case_id: str, lang: str = Query("hi")) -> Response:
                     "code": "exhibits_pending",
                     "message_hi": "बाकी सबूत अभी बन रहे हैं। पूरा होने पर PDF तैयार होगा।",
                     "message_en": "The exhibits are still computing. The PDF is ready once they settle.",
+                    "message_te": "మిగతా ఆధారాలు ఇంకా తయారవుతున్నాయి. అవి పూర్తయ్యాక PDF సిద్ధమవుతుంది.",
                     "pending": [n for n, e in (row.exhibits or {}).items()
                                 if e.get("status") == "pending"],
                 },
@@ -541,17 +807,23 @@ def evidence_pdf(case_id: str, lang: str = Query("hi")) -> Response:
         items = s.scalars(select(Action).where(Action.case_id == case_id)).all()
         actions = [_action_dict(a) for a in items]
         exhibits = row.exhibits or {}
+    base_url = limits.web_base(request)
+    cached = _pdf_cache_path(evidence, case_info, exhibits, lang, base_url)
+    # Named by the seal: a PDF gets shared, and a case id in its name would travel with it.
+    headers = {"Content-Disposition": f'inline; filename="fasalsaakshi-{evidence.evidence_hash[:12]}-{lang}.pdf"'}
+    if cached.is_file():
+        return FileResponse(cached, media_type="application/pdf", headers=headers)
+    limits.enforce(request, "pdf", get_settings().rate_pdf_renders_per_hour)
     try:
         from app.pdf.render import build_pdf
 
-        pdf = build_pdf(evidence, case_info, actions, lang, exhibits)
+        with _PDF_RENDERS:
+            pdf = build_pdf(evidence, case_info, actions, lang, exhibits, base_url=base_url)
     except OSError as exc:  # WeasyPrint needs pango and its friends from the system
-        raise HTTPException(503, detail=f"PDF renderer unavailable: {exc}") from exc
-    return Response(
-        pdf,
-        media_type="application/pdf",
-        headers={"Content-Disposition": f'inline; filename="fasalsaakshi-{case_id[:8]}-{lang}.pdf"'},
-    )
+        ref = errors.report(log, "the PDF renderer is unavailable", exc)
+        raise HTTPException(503, detail=f"The PDF could not be made right now (ref {ref}).") from exc
+    _write_atomic(cached, pdf)
+    return Response(pdf, media_type="application/pdf", headers=headers)
 
 
 @app.get("/api/cases/{case_id}/summary.mp3")
@@ -561,6 +833,8 @@ def summary_audio(
     """Gemini TTS returns WAV, and no MP3 encoder is shipped, so this declares audio/wav honestly."""
     if kind not in ("testimony", "summary"):
         raise HTTPException(422, detail="kind must be testimony or summary")
+    if lang not in ("hi", "en", "te"):  # it goes into a file name
+        raise HTTPException(422, detail="lang must be one of hi, en, te")
     from app.agent import explain
 
     with session_scope() as s:
@@ -579,8 +853,8 @@ def summary_audio(
 
 
 class SubmissionBody(BaseModel):
-    channel: str | None = None
-    reference_no: str | None = None
+    channel: _text(64) | None = None
+    reference_no: _text(100) | None = None
     submitted_at: datetime | None = None
 
 
@@ -599,6 +873,20 @@ def record_submission(case_id: str, body: SubmissionBody) -> dict:
     when = body.submitted_at or datetime.now(UTC)
     if when.tzinfo is None:
         when = when.replace(tzinfo=report_parse.IST)
+    if when > datetime.now(UTC) + timedelta(minutes=5):  # a few minutes of clock difference is fine
+        raise HTTPException(422, detail=_message(
+            "दर्ज करने का समय आने वाले समय में नहीं हो सकता। कृपया सही तारीख़ और समय चुनें।",
+            "The time you filed cannot be in the future. Please pick the right date and time.",
+            "నమోదు చేసిన సమయం భవిష్యత్తులో ఉండకూడదు. దయచేసి సరైన తేదీ, సమయం ఎంచుకోండి.",
+            "submitted_at_future",
+        ))
+    if when.date() < report_parse.EARLIEST_EVENT_DATE:
+        raise HTTPException(422, detail=_message(
+            "यह तारीख़ बहुत पुरानी है। कृपया सही तारीख़ और समय चुनें।",
+            "That date is too far back. Please pick the right date and time.",
+            "ఈ తేదీ చాలా పాతది. దయచేసి సరైన తేదీ, సమయం ఎంచుకోండి.",
+            "submitted_at_too_early",
+        ))
     with session_scope() as s:
         case = _get_case(s, case_id)
         s.add(
@@ -614,16 +902,17 @@ def record_submission(case_id: str, body: SubmissionBody) -> dict:
 
 
 class AskBody(BaseModel):
-    question: str
-    lang: str = "hi"
+    question: _text(500)
+    lang: _text(8) = "hi"
 
 
 @app.post("/api/cases/{case_id}/ask")
-def ask(case_id: str, body: AskBody) -> dict:
+def ask(case_id: str, body: AskBody, request: Request) -> dict:
     from app.tools import policy
 
     with session_scope() as s:
         _get_case(s, case_id)
+    limits.enforce(request, "asks", get_settings().rate_asks_per_hour)
     return policy.ask(body.question, body.lang)
 
 
@@ -633,22 +922,38 @@ def ask(case_id: str, body: AskBody) -> dict:
 @app.get("/api/verify/{evidence_hash}")
 async def verify_hash(
     evidence_hash: str,
-    after: int = Query(0, ge=0),
+    request: Request,
+    after: int = Query(0, ge=0, le=MAX_AFTER),
     rerun: bool = Query(False),
     last_event_id: str | None = Header(None),
 ) -> EventSourceResponse:
     from app import verify
 
-    if last_event_id and last_event_id.isdigit():
-        after = max(after, int(last_event_id))
-    return EventSourceResponse(verify.stream(evidence_hash, after, rerun), ping=15)
+    after = max(after, _last_event_id(last_event_id))
+    ip = limits.client_ip(request)
+
+    def may_start() -> None:
+        """Only a new download counts: a running job or a stored check costs nothing to read."""
+        if (wait := limits.retry_after("verify", ip, get_settings().rate_verify_per_hour)) is not None:
+            raise limits.too_many(wait)
+
+    prepared = await asyncio.to_thread(verify.prepare, evidence_hash, after, rerun, may_start)
+    return EventSourceResponse(verify.follow(prepared, after), ping=15)
+
+
+def _inside(root: Path, path: str) -> Path | None:
+    """The file under root, or None. A very long name or a NUL makes the OS itself object."""
+    try:
+        target = (root / path).resolve()
+        return target if target.is_relative_to(root) and target.is_file() else None
+    except (OSError, ValueError):
+        return None
 
 
 @app.get("/api/artifacts/{path:path}")
 def artifact(path: str) -> FileResponse:
-    root = get_settings().artifacts_dir.resolve()
-    target = (root / path).resolve()
-    if not target.is_relative_to(root) or not target.is_file():
+    target = _inside(get_settings().artifacts_dir.resolve(), path)
+    if target is None:
         raise HTTPException(404, detail="no such artifact")
     return FileResponse(target)
 
@@ -658,7 +963,8 @@ def jobs_tick(x_scheduler_token: str | None = Header(None)) -> dict:
     from app import jobs
 
     token = get_settings().scheduler_token
-    if token and x_scheduler_token != token:
+    if not token or not hmac.compare_digest((x_scheduler_token or "").encode(), token.encode()):
+        # Closed when no token is set: the in-process scheduler does not need this route.
         raise HTTPException(403, detail="bad scheduler token")
     return jobs.tick()
 
@@ -670,7 +976,13 @@ def radar() -> dict:
     try:
         return weather.radar()
     except weather.WeatherUnavailable as exc:
-        raise HTTPException(503, detail=f"weather source unavailable: {exc}") from exc
+        ref = errors.report(log, "radar: no weather source", exc)
+        raise HTTPException(503, detail=_message(
+            "मौसम का स्रोत अभी उपलब्ध नहीं है। थोड़ी देर बाद फिर कोशिश करें।",
+            f"The weather source is not available right now (ref {ref}). Please try again shortly.",
+            "వాతావరణ మూలం ఇప్పుడు అందుబాటులో లేదు. కాసేపటి తర్వాత ప్రయత్నించండి.",
+            "weather_unavailable",
+        )) from exc
 
 
 # The built web app, with SPA fallback
@@ -679,7 +991,9 @@ def radar() -> dict:
 @app.get("/{path:path}", include_in_schema=False)
 def spa(path: str) -> Response:
     if path == "api" or path.startswith("api/"):
-        raise HTTPException(404, detail=f"no such API route: /{path}")
+        raise HTTPException(404, detail="no such API route")
+    if "\x00" in path or len(path) > 1024:
+        raise HTTPException(404, detail="no such page")
     dist: Path = get_settings().web_dist.resolve()
     index = dist / "index.html"
     if not index.is_file():
@@ -687,7 +1001,5 @@ def spa(path: str) -> Response:
             status_code=404,
             content={"detail": "the web app is not built; API routes are under /api"},
         )
-    target = (dist / path).resolve()
-    if path and target.is_relative_to(dist) and target.is_file():
-        return FileResponse(target)
-    return FileResponse(index)
+    target = _inside(dist, path) if path else None
+    return FileResponse(target or index)

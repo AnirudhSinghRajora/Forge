@@ -14,7 +14,9 @@ Groups, in order, each with its own time budget, so a slow one cannot starve the
   village, scale_fade       the Ten-Field Draw and the coarse-cell view
 
 Events, each with a monotonic `seq`:
-  start           the sealed record: `numbers`, `scene_archives`, `source`, `groups`, `last_full_check`
+  start           the sealed record: `numbers`, `scene_archives`, `source`, `groups`, `last_full_check`,
+                  `verdict_check` (intact | not_sealed | unavailable, see below). Never the case id: the
+                  hash is public, and a case id gives access to the case.
   group_started   a group began
   progress        a heartbeat while a group downloads
   number          stored vs recomputed for one field, as soon as its group finishes
@@ -36,6 +38,10 @@ events state where the data came from and a test pins it. A repeat scan of a ful
 
 Hash = sha256 of the canonical JSON (sorted keys) of ReplayCore, recomputed from the stored core
 first: a tampered record is detected before any satellite data is fetched.
+
+What this does and does not check. Satellite numbers are recomputed. The verdict level and the weather
+and alerts behind it cannot be, so the core holds a digest of them: a later change to the stored verdict
+or weather is detected as tampering, and that is all that is said about them.
 """
 from __future__ import annotations
 
@@ -52,7 +58,9 @@ from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 
+from app import errors
 from app.agent.graph import evidence_hash
+from app.agent.rubric import verdict_digest
 from app.db import (
     EvidenceRow,
     VerifyEvent,
@@ -62,10 +70,11 @@ from app.db import (
     session_scope,
     utcnow,
 )
-from app.evidence.schema import ReplayCore
+from app.evidence.schema import Evidence, ReplayCore
 
 log = logging.getLogger(__name__)
 TOLERANCE = 1e-3
+MAX_HASH_CHARS = 128
 PROGRESS_EVERY_S = 5.0
 POLL_S = 0.25
 MAX_JOBS = 2  # the link is the limit, and a job already runs one group at a time
@@ -273,15 +282,35 @@ def _groups_for(core: ReplayCore) -> list[Group]:
     return default_groups(core)
 
 
-def load_core(hash_value: str) -> tuple[dict | None, str | None, bool]:
-    """Returns (stored core JSON, case id, superseded). A retried exhibit can reseal a record, and
-    the earlier hash may be on a printed QR code, so it stays verifiable."""
+def load_core(hash_value: str) -> tuple[dict | None, dict | None, bool]:
+    """Returns (stored core JSON, stored evidence JSON, superseded). The hash covers no case, so two
+    cases on the same field and date can share one, and the most recent is the one reported. A retried
+    exhibit can reseal a record, and the earlier hash may be on a printed QR code, so it stays verifiable.
+    Nothing here carries a case id out of this module."""
+    if len(hash_value) > MAX_HASH_CHARS or "\x00" in hash_value:
+        return None, None, False
     with session_scope() as s:
-        row = s.scalars(select(EvidenceRow).where(EvidenceRow.evidence_hash == hash_value)).first()
+        row = s.scalars(
+            select(EvidenceRow).where(EvidenceRow.evidence_hash == hash_value)
+            .order_by(EvidenceRow.created_at.desc())
+        ).first()
         if row is not None:
-            return row.replay_core, row.case_id, False
+            return row.replay_core, row.json, False
     old = cache_get(f"sealed:{hash_value}")
     return (old.payload, None, True) if old else (None, None, False)
+
+
+def verdict_state(core: ReplayCore, stored: dict | None) -> str:
+    """intact: the stored verdict and weather still match the seal. changed: they do not.
+    not_sealed: a record from before the digest. unavailable: nothing stored to compare."""
+    if core.verdict_digest is None:
+        return "not_sealed"
+    if not stored:
+        return "unavailable"
+    try:
+        return "intact" if verdict_digest(Evidence.model_validate(stored)) == core.verdict_digest else "changed"
+    except ValueError:
+        return "changed"
 
 
 def compare_number(stored: float | None, recomputed: float | None, tolerance: float = TOLERANCE
@@ -333,9 +362,9 @@ class _Job:
             with geo.fresh_session():
                 self._run()
         except Exception as exc:
-            log.exception("verify job %s failed", self.run_id)
+            ref = errors.report(log, f"verify job {self.run_id} failed", exc)
             self.finish("partial", ok=False, checked=0, total=len(self.core.numbers),
-                        unchecked=sorted(self.core.numbers), errors=[f"{type(exc).__name__}: {exc}"],
+                        unchecked=sorted(self.core.numbers), errors=[f"the check stopped (ref {ref})"],
                         message_en="The check stopped unexpectedly. This says nothing about the evidence.",
                         message_hi="जाँच बीच में रुक गई। इससे सबूत के बारे में कुछ तय नहीं होता।")
 
@@ -355,7 +384,7 @@ class _Job:
         groups = _groups_for(core)
         total = len(core.numbers)
         checked: dict[str, dict] = {}
-        errors: dict[str, str] = {}
+        failed_groups: dict[str, str] = {}
         assigned: set[str] = set()
         field_keys = {k for g in groups if g.name in FIELD_GROUPS for k in core.numbers if g.select(k)}
         started = time.monotonic()
@@ -378,7 +407,8 @@ class _Job:
                     break
                 except FutureTimeout:
                     if future.done():  # the work itself raised a timeout, as opposed to still running
-                        failure = f"{type(future.exception()).__name__}: {future.exception()}"
+                        ref = errors.report(log, f"verify group {group.name} failed", future.exception())
+                        failure = f"the archive read timed out (ref {ref})"
                         break
                     if time.monotonic() - began > budget:
                         failure = f"time budget of {budget} s reached"
@@ -387,11 +417,11 @@ class _Job:
                               message_en="Downloading the public satellite images again and recomputing.",
                               message_hi="सार्वजनिक सैटेलाइट तस्वीरें दोबारा डाउनलोड करके गणना हो रही है।")
                 except Exception as exc:  # noqa: BLE001  an outage is reported, never as a mismatch
-                    log.warning("verify group %s failed for %s: %s", group.name, self.hash, exc)
-                    failure = f"{type(exc).__name__}: {exc}"
+                    ref = errors.report(log, f"verify group {group.name} failed for {self.hash}", exc)
+                    failure = f"the archive could not be read (ref {ref})"
                     break
             if failure is not None:
-                errors[group.name] = failure
+                failed_groups[group.name] = failure
                 self.emit("group_failed", group=group.name, n_numbers=len(expected), reason=failure,
                           fields=sorted(expected), elapsed_s=round(time.monotonic() - began, 1))
             else:
@@ -411,13 +441,13 @@ class _Job:
         n_checked = len(checked)
         common = {
             "checked": n_checked, "matched": matched, "total": total, "mismatched": mismatched,
-            "unchecked": unchecked, "errors": errors, "source": SOURCE,
+            "unchecked": unchecked, "errors": failed_groups, "source": SOURCE,
             "elapsed_s": round(time.monotonic() - started),
             "field_verified": bool(field_keys) and all(
                 k in checked and checked[k]["match"] for k in field_keys),
         }
         if n_checked == 0:
-            self.finish("upstream_unavailable", ok=False, error=next(iter(errors.values()), None),
+            self.finish("upstream_unavailable", ok=False, error=next(iter(failed_groups.values()), None),
                         message_en=UPSTREAM_EN, message_hi=UPSTREAM_HI, **common)
             return
         if mismatched:
@@ -484,14 +514,14 @@ def _engine_changed_text(n_different: int, n_checked: int) -> dict:
     }
 
 
-def _start_job(hash_value: str, core: ReplayCore, case_id: str | None, superseded: bool,
-               last_full: dict | None) -> str:
+def _start_job(hash_value: str, core: ReplayCore, superseded: bool, last_full: dict | None,
+               verdict_check: str) -> str:
     run_id = new_id()
     with session_scope() as s:
         s.add(VerifyRun(id=run_id, evidence_hash=hash_value, status="running"))
     job = _Job(run_id, hash_value, core)
     job.emit(
-        "start", hash=hash_value, hash_verified=True, case_id=case_id, superseded=superseded,
+        "start", hash=hash_value, hash_verified=True, superseded=superseded, verdict_check=verdict_check,
         engine_version=core.engine_version, event_date=core.event_date.isoformat(),
         optical_pre_id=core.optical_pre_id, optical_post_id=core.optical_post_id,
         sar_pre_id=core.sar_pre_id, sar_post_id=core.sar_post_id,
@@ -545,14 +575,17 @@ def _final(status: str, **data) -> dict:
     return {"type": "result", "status": status, "ok": False, **data}
 
 
-def _prepare(hash_value: str, after: int, rerun: bool) -> tuple[str | None, bool, dict | None]:
-    """Returns (run to stream, whether it is a stored check, an immediate final event if any)."""
-    core_json, case_id, superseded = load_core(hash_value)
+def prepare(hash_value: str, after: int, rerun: bool, may_start: Callable[[], None] | None = None
+            ) -> tuple[str | None, bool, dict | None, str | None]:
+    """Returns (run to stream, whether it is a stored check, an immediate final event if any, the
+    state of the stored verdict). `may_start` is asked just before a new download and may raise:
+    following a running job or reading a stored check costs nothing and is never limited."""
+    core_json, stored, superseded = load_core(hash_value)
     if core_json is None:
         return None, False, _final(
             "unknown_hash", message_en="No evidence record has this hash.",
             message_hi="इस हैश का कोई सबूत रिकॉर्ड नहीं मिला।",
-        )
+        ), None
     core = ReplayCore.model_validate(core_json)
     recomputed_hash = evidence_hash(core)
     if recomputed_hash != hash_value:
@@ -560,7 +593,17 @@ def _prepare(hash_value: str, after: int, rerun: bool) -> tuple[str | None, bool
             "tampered", stored_hash=hash_value, recomputed_hash=recomputed_hash,
             message_en="The stored record does not match its hash, so it was changed after it was sealed.",
             message_hi="रखा हुआ रिकॉर्ड अपने हैश से मेल नहीं खाता, यानी मुहर लगने के बाद इसे बदला गया है।",
-        )
+        ), None
+    verdict_check = verdict_state(core, stored)
+    if verdict_check == "changed":
+        return None, False, _final(
+            "tampered", verdict_changed=True,
+            message_en="The stored verdict or weather no longer matches what was sealed, so it was changed "
+                       "after sealing.",
+            message_hi="रखा हुआ नतीजा या मौसम मुहर से मेल नहीं खाता, यानी मुहर लगने के बाद इसे बदला गया है।",
+            # NEEDS NATIVE REVIEW
+            message_te="నిల్వ చేసిన ఫలితం లేదా వాతావరణం ముద్రతో సరిపోలడం లేదు, అంటే ముద్ర తర్వాత మార్చారు.",
+        ), verdict_check
     from app.tools import geo
 
     # A number is only checked against the archive it was read from. The engine resolves each scene
@@ -576,18 +619,20 @@ def _prepare(hash_value: str, after: int, rerun: bool) -> tuple[str | None, bool
             message_en="A scene in this record would now be read from a different archive than the "
                        "one it was sealed from, so it was not recomputed.",
             message_hi="इस रिकॉर्ड की एक तस्वीर अब उस संग्रह से नहीं पढ़ी जाएगी जिससे मुहर लगी थी, इसलिए दोबारा गणना नहीं की गई।",
-        )
+        ), verdict_check
     with _start_lock:
         running = _latest(hash_value, "running")
         if running is not None:
-            return running.id, False, None
+            return running.id, False, None, verdict_check
         latest = _latest(hash_value)
         if after > 0 and latest is not None:
-            return latest.id, False, None  # a client coming back to a job that has since finished
+            return latest.id, False, None, verdict_check  # a client coming back to a job that has since finished
         full = _latest(hash_value, "verified", "mismatch", "engine_changed", "nothing_to_recompute")
         if full is not None and not rerun:
-            return full.id, True, None
-        return _start_job(hash_value, core, case_id, superseded, _summary(full)), False, None
+            return full.id, True, None, verdict_check
+        if may_start is not None:
+            may_start()
+        return _start_job(hash_value, core, superseded, _summary(full), verdict_check), False, None, verdict_check
 
 
 def _with_engine_status(payload: dict, run_id: str) -> dict:
@@ -603,6 +648,22 @@ def _with_engine_status(payload: dict, run_id: str) -> dict:
     return {**payload, "status": "engine_changed", **text}
 
 
+def _public(payload: dict, verdict_check: str | None) -> dict:
+    """A stored event as a reader may see it, whenever it was written. Older start events hold the
+    case id, and the state of the verdict is as of now, not as of that check."""
+    clean = {k: v for k, v in payload.items() if k != "case_id"}
+    if clean.get("type") == "start":
+        clean["verdict_check"] = verdict_check
+    for key in ("reason", "error"):
+        if isinstance(clean.get(key), str):
+            clean[key] = errors.public_text(clean[key], "the archive could not be read")
+    if isinstance(clean.get("errors"), dict):
+        clean["errors"] = {k: errors.public_text(v, "the archive could not be read") for k, v in clean["errors"].items()}
+    elif isinstance(clean.get("errors"), list):
+        clean["errors"] = [errors.public_text(v, "the check stopped") for v in clean["errors"]]
+    return clean
+
+
 def _as_stored(payload: dict, run: VerifyRun | None) -> dict:
     """A check from earlier, labelled as one on the events that frame it."""
     if payload["type"] not in ("start", "result"):
@@ -614,7 +675,13 @@ def _as_stored(payload: dict, run: VerifyRun | None) -> dict:
 
 
 async def stream(hash_value: str, after: int = 0, rerun: bool = False) -> AsyncIterator[dict]:
-    run_id, stored, final = await asyncio.to_thread(_prepare, hash_value, after, rerun)
+    prepared = await asyncio.to_thread(prepare, hash_value, after, rerun)
+    async for event in follow(prepared, after):
+        yield event
+
+
+async def follow(prepared: tuple[str | None, bool, dict | None, str | None], after: int = 0) -> AsyncIterator[dict]:
+    run_id, stored, final, verdict_check = prepared
     if final is not None:
         yield _sse(final)
         return
@@ -628,6 +695,7 @@ async def stream(hash_value: str, after: int = 0, rerun: bool = False) -> AsyncI
                 continue
             if payload["type"] == "result":
                 payload = await asyncio.to_thread(_with_engine_status, payload, run_id)
+            payload = _public(payload, verdict_check)
             yield _sse(_as_stored(payload, run) if stored else payload)
             if payload["type"] == "result":
                 return

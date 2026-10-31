@@ -38,6 +38,7 @@ def test_hash_is_sha256_of_sorted_canonical_json():
     import hashlib
 
     data = CORE.model_dump(mode="json")
+    data.pop("verdict_digest")  # a record sealed before the digest keeps its hash
     expected = hashlib.sha256(json.dumps(data, sort_keys=True, separators=(",", ":"),
                                          ensure_ascii=False).encode()).hexdigest()
     assert evidence_hash(CORE) == expected
