@@ -165,17 +165,21 @@ def test_all_groups_failing_is_upstream_not_mismatch(monkeypatch):
     assert collect(seed_row())[-1]["status"] == "upstream_unavailable"
 
 
-def test_a_group_past_the_time_limit_is_partial(monkeypatch):
+def test_a_group_past_its_budget_does_not_starve_the_next(monkeypatch):
     import time
 
-    monkeypatch.setattr(verify, "REPLAY_TIMEOUT_S", 0.05)
+    monkeypatch.setattr(verify, "GROUP_BUDGET_S", {"optical": 0.05})
+    monkeypatch.setattr(verify, "DEFAULT_BUDGET_S", 30)
     monkeypatch.setattr(verify, "PROGRESS_EVERY_S", 0.02)
     _with_groups(monkeypatch, [
-        ("optical", lambda: {"optical.plot_delta_ndvi": -0.25, "neighbours.placebo.p_value": 0.02}),
-        ("radar", lambda: time.sleep(1) or {"sar.vh_change_db": None}),
+        ("optical", lambda: time.sleep(1) or {"optical.plot_delta_ndvi": -0.25}),
+        ("radar", lambda: {"sar.vh_change_db": None}),
     ])
-    result = collect(seed_row())[-1]
-    assert result["status"] == "partial" and result["checked"] == 2
+    events = collect(seed_row())
+    failed = next(e for e in events if e["type"] == "group_failed")
+    assert failed["group"] == "optical" and "budget" in failed["reason"]
+    assert failed["fields"] == ["neighbours.placebo.p_value", "optical.plot_delta_ndvi"]
+    assert events[-1]["status"] == "partial" and events[-1]["checked"] == 1
 
 
 def test_real_recomputations_really_read_fresh():
@@ -190,7 +194,10 @@ def test_real_recomputations_really_read_fresh():
     for fn in (_optical_compare, _sar_compare, history_from_ids, _scale_fade, _village_witness):
         assert "fresh" in inspect.signature(fn).parameters, fn
     source = inspect.getsource(verify.default_groups)
-    assert source.count("fresh=True") >= 5
+    assert source.count("fresh=True") >= 6
+    from app.tools.geo import replay_field
+
+    assert inspect.getsource(replay_field).count("fresh=True") >= 2
 
 
 def test_a_superseded_hash_stays_verifiable(monkeypatch):
@@ -226,3 +233,216 @@ def test_engine_version_difference_is_said(monkeypatch):
     install_fake_geo(monkeypatch, ENGINE_VERSION="test-2")
     events = collect(seed_row())
     assert any(e["type"] == "note" and e["kind"] == "engine_version_differs" for e in events)
+
+
+def _staged(monkeypatch, *groups):
+    monkeypatch.setattr(verify, "_groups_for", lambda core: [
+        verify.Group(name, fn, select) for name, fn, select in groups
+    ])
+
+
+FIELD_CORE = ("field_post", lambda: {"optical.plot_delta_ndvi": -0.25}, verify._is_field_post)
+RING = ("ring", lambda: {"neighbours.placebo.p_value": 0.02}, verify._is_ring)
+RADAR = ("radar", lambda: {"sar.vh_change_db": None}, lambda key: key.startswith("sar."))
+
+
+def _down():
+    raise RuntimeError("archive slow")
+
+
+def test_field_stage_reports_first_with_the_honest_remainder(monkeypatch):
+    install_fake_geo(monkeypatch)
+    _staged(monkeypatch, FIELD_CORE, RING, RADAR)
+    events = collect(seed_row())
+    kinds = [e["type"] for e in events]
+    stage = next(e for e in events if e["type"] == "stage_result")
+    assert kinds.index("stage_result") < kinds.index("group_started", kinds.index("stage_result"))
+    assert stage["status"] == "field_verified"
+    assert "1 of 1 field numbers match; 2 neighbourhood numbers are still being checked" in stage["message_en"]
+    assert events[-1]["status"] == "verified" and events[-1]["ok"] is True
+
+
+def test_field_only_is_never_called_verified_overall(monkeypatch):
+    install_fake_geo(monkeypatch)
+    _staged(monkeypatch, FIELD_CORE, ("ring", _down, verify._is_ring), ("radar", _down, RADAR[2]))
+    result = collect(seed_row())[-1]
+    assert result["status"] == "field_verified" and result["ok"] is False and result["field_verified"]
+    assert result["unchecked"] == ["neighbours.placebo.p_value", "sar.vh_change_db"]
+    assert set(result["errors"]) == {"ring", "radar"}
+
+
+def test_field_mismatch_is_said_at_once_and_at_the_end(monkeypatch):
+    install_fake_geo(monkeypatch)
+    _staged(monkeypatch, ("field_post", lambda: {"optical.plot_delta_ndvi": -0.5}, verify._is_field_post), RING, RADAR)
+    events = collect(seed_row())
+    assert next(e for e in events if e["type"] == "stage_result")["status"] == "field_mismatch"
+    assert events[-1]["status"] == "mismatch" and events[-1]["mismatched"] == ["optical.plot_delta_ndvi"]
+
+
+def test_field_failure_does_not_stop_the_neighbourhood(monkeypatch):
+    install_fake_geo(monkeypatch)
+    _staged(monkeypatch, ("field_post", _down, verify._is_field_post), RING, RADAR)
+    events = collect(seed_row())
+    assert next(e for e in events if e["type"] == "stage_result")["status"] == "field_failed"
+    assert events[-1]["status"] == "partial" and events[-1]["checked"] == 2
+
+
+def test_no_number_is_counted_twice(monkeypatch):
+    install_fake_geo(monkeypatch)
+    everything = lambda key: True
+    _staged(monkeypatch, FIELD_CORE, ("a", lambda: dict(CORE.numbers), everything),
+            ("b", lambda: dict(CORE.numbers), everything))
+    events = collect(seed_row())
+    assert len([e for e in events if e["type"] == "number"]) == 3
+    assert events[-1]["checked"] == 3 and events[-1]["total"] == 3
+
+
+def test_leaving_and_returning_with_after(monkeypatch):
+    import threading
+
+    release = threading.Event()
+    install_fake_geo(monkeypatch)
+    _staged(monkeypatch, FIELD_CORE, ("ring", lambda: release.wait(20) and RING[1](), verify._is_ring), RADAR)
+    h = seed_row()
+
+    async def first_part():
+        out = []
+        async for e in verify.stream(h):
+            out.append(json.loads(e["data"]))
+            if out[-1]["type"] == "stage_result":
+                break
+        return out
+
+    seen = asyncio.run(first_part())
+    assert seen[0]["seq"] == 1 and seen[-1]["type"] == "stage_result"
+    release.set()  # the job carries on with no client attached
+
+    async def rest():
+        return [json.loads(e["data"]) async for e in verify.stream(h, after=seen[-1]["seq"])]
+
+    remainder = asyncio.run(rest())
+    assert remainder[0]["seq"] == seen[-1]["seq"] + 1
+    assert [e["seq"] for e in remainder] == list(range(remainder[0]["seq"], remainder[-1]["seq"] + 1))
+    assert remainder[-1]["status"] == "verified"
+    from app.db import VerifyRun
+
+    with session_scope() as s:
+        assert s.query(VerifyRun).count() == 1
+
+
+def test_repeat_scan_shows_the_stored_check_labelled_and_can_rerun(monkeypatch):
+    calls = []
+    install_fake_geo(monkeypatch)
+    _staged(monkeypatch, ("all", lambda: calls.append(1) or dict(CORE.numbers), lambda key: True))
+    h = seed_row()
+    assert collect(h)[-1]["status"] == "verified" and len(calls) == 1
+    again = collect(h)
+    assert len(calls) == 1, "a fully checked record is not downloaded again without asking"
+    assert again[0]["cached"] is True and again[-1]["cached"] is True
+    assert again[-1]["checked_at"] and again[-1]["rerun"] == "?rerun=1"
+    assert "last full check" in again[-1]["message_cached_en"]
+
+    async def rerun():
+        return [json.loads(e["data"]) async for e in verify.stream(h, rerun=True)]
+
+    fresh = asyncio.run(rerun())
+    assert len(calls) == 2 and fresh[0]["cached"] is False
+    assert fresh[0]["last_full_check"]["status"] == "verified"
+    assert fresh[-1].get("cached") is None
+
+
+def test_a_repeat_scan_after_a_partial_check_tries_again(monkeypatch):
+    calls = []
+
+    def flaky():
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("archive slow")
+        return dict(CORE.numbers)
+
+    install_fake_geo(monkeypatch)
+    _staged(monkeypatch, ("all", flaky, lambda key: True))
+    h = seed_row()
+    assert collect(h)[-1]["status"] == "upstream_unavailable"
+    assert collect(h)[-1]["status"] == "verified"
+
+
+def test_two_scans_share_one_job(monkeypatch):
+    import threading
+
+    release = threading.Event()
+    calls = []
+
+    def slow():
+        calls.append(1)
+        release.wait(20)
+        return dict(CORE.numbers)
+
+    install_fake_geo(monkeypatch)
+    _staged(monkeypatch, ("all", slow, lambda key: True))
+    h = seed_row()
+
+    async def both():
+        async def one():
+            return [json.loads(e["data"]) async for e in verify.stream(h)]
+
+        tasks = [asyncio.create_task(one()), asyncio.create_task(one())]
+        await asyncio.sleep(0.6)
+        release.set()
+        return await asyncio.gather(*tasks)
+
+    first, second = asyncio.run(both())
+    assert len(calls) == 1 and first[-1]["status"] == second[-1]["status"] == "verified"
+
+
+def test_restart_closes_a_running_check_honestly():
+    from app.db import VerifyEvent, VerifyRun
+
+    with session_scope() as s:
+        s.add(VerifyRun(id="v1", evidence_hash="h" * 64, status="running"))
+        s.add(VerifyEvent(run_id="v1", seq=1, payload={"type": "start", "seq": 1, "n_numbers": 5}))
+        s.add(VerifyEvent(run_id="v1", seq=2, payload={"type": "number", "seq": 2, "match": True}))
+    assert verify.recover_interrupted() == 1
+    with session_scope() as s:
+        assert s.get(VerifyRun, "v1").status == "partial"
+        last = s.query(VerifyEvent).filter_by(run_id="v1", seq=3).one().payload
+    assert last["type"] == "result" and last["checked"] == 1 and last["total"] == 5 and not last["ok"]
+    assert "restarted" in last["message_en"]
+
+
+def test_real_groups_cover_every_sealed_key_once():
+    """Every key the engine can seal belongs to exactly one real group, so none goes unchecked."""
+    from app.evidence.schema import (
+        NeighbourEvidence,
+        OpticalEvidence,
+        SarEvidence,
+    )
+    from app.tools.geo.replay import flatten_numbers
+    from tests.conftest import placebo, stats
+
+    keys = flatten_numbers(
+        OpticalEvidence(pre=stats("a", CORE.event_date, 0.5), post=stats("b", CORE.event_date, 0.4),
+                        plot_delta_ndvi=-0.1, drop_frac=0.1, iqr_delta=0.1, post_bare_fraction=0.1),
+        NeighbourEvidence(n_comparable_pixels=1, neighbour_median_delta=0.0, plot_minus_neighbour=0.0,
+                          placebo=placebo(), far_placebo=placebo(), pretrend_delta=0.0,
+                          pretrend_placebo=placebo()),
+        SarEvidence(usable=True, placebo=placebo()),
+    )
+    selectors = [verify._is_field_pre, verify._is_field_post, verify._is_field_extra, lambda k: k in verify._SAR_FIELD_KEYS,
+                 verify._is_ring, verify._is_far_twin, verify._is_radar]
+    for key in keys:
+        assert sum(1 for select in selectors if select(key)) == 1, key
+
+
+def test_a_job_empties_gdals_http_cache_and_says_so(monkeypatch):
+    install_fake_geo(monkeypatch)
+    calls = []
+    monkeypatch.setattr(verify, "clear_http_cache", lambda: calls.append(1) or True)
+    _staged(monkeypatch, RADAR)
+    events = collect(seed_row())
+    note = next(e for e in events if e["type"] == "note" and e["kind"] == "source")
+    assert calls == [1] and note["http_cache_cleared"] is True
+
+
+def test_gdals_http_cache_can_really_be_emptied():
+    assert verify.clear_http_cache() is True

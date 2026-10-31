@@ -4,7 +4,8 @@ The recomputation runs as a background job, independent of any client, one job p
 watches it over SSE from GET /api/verify/{hash}, and can leave and return with ?after=seq.
 
 Groups, in order, each with its own time budget, so a slow one cannot starve the rest:
-  field_core, field_extra   only the plot's own window: NDVI statistics, then bare soil and red edge
+  field_pre, field_post     only the plot's own window: NDVI statistics and the change
+  field_extra               the same window: bare soil and red edge
   sar_field                 radar plot medians
   history                   the plot's past years
   ring                      nearby look-alike fields, in a window kilometres wide
@@ -20,15 +21,16 @@ Events, each with a monotonic `seq`:
   group_done      that group finished
   group_failed    it could not finish, with `fields` naming exactly what stayed unchecked
   stage_result    field_verified | field_mismatch | field_failed, with the honest count so far
+  note            kind=source says whether GDAL's HTTP cache was emptied first; kind=engine_version_differs
   result          final: verified | mismatch | field_verified | partial | upstream_unavailable
 
 Nothing is called verified overall until every number is. Without a sealed core to work on, the only
 event is a `result` with status unknown_hash, tampered or archive_mismatch.
 
 Source of the numbers: every recomputation reads with fresh=True, which skips the memory and disk
-caches and goes over the network to the archive recorded for that scene in the sealed record.
-Reading our own cache would prove nothing, so events state where the data came from and a test pins
-it. A repeat scan of a fully checked record shows that stored check, labelled with its time and
+caches, and a job first empties GDAL's HTTP block cache, so the bytes come over the network from the
+archive recorded for that scene in the sealed record. Reading our own cache would prove nothing, so
+events state where the data came from and a test pins it. A repeat scan of a fully checked record shows that stored check, labelled with its time and
 `cached: true`; ?rerun=1 runs it again.
 
 Hash = sha256 of the canonical JSON (sorted keys) of ReplayCore, recomputed from the stored core
@@ -73,7 +75,7 @@ SOURCE = {
 }
 # Generous for this link, and only for this group: when one runs out, the next one still starts.
 GROUP_BUDGET_S = {
-    "field_core": 120, "field_extra": 120, "sar_field": 120, "history": 360, "ring": 420,
+    "field_pre": 180, "field_post": 180, "field_extra": 300, "sar_field": 180, "history": 360, "ring": 420,
     "far_twin": 600, "radar": 420, "village": 420, "scale_fade": 360, "optical": 600, "all": 600,
 }
 DEFAULT_BUDGET_S = 420
@@ -85,7 +87,7 @@ UPSTREAM_HI = (
     "सार्वजनिक सैटेलाइट संग्रह से समय पर संपर्क नहीं हो सका, इसलिए अभी दोबारा गणना नहीं हो सकी। इससे सबूत के बारे में कुछ "
     "तय नहीं होता।"
 )
-FIELD_GROUPS = ("field_core", "field_extra")
+FIELD_GROUPS = ("field_pre", "field_post", "field_extra")
 _FIELD_PLOT_STATS = ("valid_frac", "n_pixels", "ndvi_median", "ndvi_p25", "ndvi_p75")
 _SAR_FIELD_KEYS = {"sar.vv_pre_db", "sar.vv_post_db", "sar.vh_pre_db", "sar.vh_post_db", "sar.vh_change_db"}
 _RING_PREFIXES = ("neighbours.placebo.",)
@@ -114,14 +116,43 @@ class Group:
     select: Callable[[str], bool]
 
 
-def _is_field_core(key: str) -> bool:
+def clear_http_cache() -> bool:
+    """Empties GDAL's in-process HTTP block cache, which `fresh=True` does not reach.
+
+    Our own memory and disk caches are skipped by fresh=True, but GDAL keeps recently fetched blocks
+    per signed URL, and a scan right after an investigation could otherwise be answered from them.
+    Cleared when a verification starts, so what it reads was downloaded by this verification. Groups
+    within one verification do share blocks, which is why the ring is fast after the field stage.
+    Returns False if the call is not available, and that is reported in `source`.
+    """
+    try:
+        import ctypes
+        from pathlib import Path
+
+        import rasterio
+
+        libs = Path(rasterio.__file__).parent.parent / "rasterio.libs"
+        library = next(libs.glob("libgdal*"), None)
+        handle = ctypes.CDLL(str(library)) if library else ctypes.CDLL("libgdal.so")
+        handle.VSICurlClearCache()
+        return True
+    except (OSError, AttributeError) as exc:
+        log.warning("could not clear GDAL's HTTP cache: %s", exc)
+        return False
+
+
+def _is_field_pre(key: str) -> bool:
+    return any(key == f"optical.pre.{stat}" for stat in _FIELD_PLOT_STATS)
+
+
+def _is_field_post(key: str) -> bool:
     if key in {"optical.plot_delta_ndvi", "optical.drop_frac", "optical.iqr_delta"}:
         return True
-    return any(key == f"optical.{role}.{stat}" for role in ("pre", "post") for stat in _FIELD_PLOT_STATS)
+    return any(key == f"optical.post.{stat}" for stat in _FIELD_PLOT_STATS)
 
 
 def _is_field_extra(key: str) -> bool:
-    return key.startswith("optical.") and not _is_field_core(key)
+    return key.startswith("optical.") and not (_is_field_pre(key) or _is_field_post(key))
 
 
 def _is_ring(key: str) -> bool:
@@ -159,12 +190,13 @@ def default_groups(core: ReplayCore) -> list[Group]:
     if core.optical_pre_id and core.optical_post_id:
         field: list = []
 
-        def replay_object():  # it reads the core bands once, for both field groups
+        def replay_object():  # shared, so the field groups read each band once
             if not field:
                 field.append(geo.FieldReplay(core.polygon, core.optical_pre_id, core.optical_post_id))
             return field[0]
 
-        groups.append(Group("field_core", lambda: replay_object().core(), _is_field_core))
+        groups.append(Group("field_pre", lambda: replay_object().pre_stats(), _is_field_pre))
+        groups.append(Group("field_post", lambda: replay_object().post_stats(), _is_field_post))
         groups.append(Group("field_extra", lambda: replay_object().extra(), _is_field_extra))
     if core.sar_pre_id and core.sar_post_id:
         groups.append(Group(
@@ -305,6 +337,8 @@ class _Job:
         from app.tools import geo
 
         core = self.core
+        self.emit("note", kind="source", http_cache_cleared=clear_http_cache(), source=SOURCE,
+                  scene_archives=core.scene_archives)
         if geo.ENGINE_VERSION != core.engine_version:
             self.emit("note", kind="engine_version_differs", sealed=core.engine_version,
                       current=geo.ENGINE_VERSION,
@@ -336,6 +370,9 @@ class _Job:
                     recomputed = future.result(timeout=PROGRESS_EVERY_S)
                     break
                 except FutureTimeout:
+                    if future.done():  # the work itself raised a timeout, as opposed to still running
+                        failure = f"{type(future.exception()).__name__}: {future.exception()}"
+                        break
                     if time.monotonic() - began > budget:
                         failure = f"time budget of {budget} s reached"
                         break

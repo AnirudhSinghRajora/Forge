@@ -36,7 +36,7 @@ def _median(values: np.ndarray) -> float | None:
 
 
 class FieldReplay:
-    """Two steps, so that numbers can tick early: NDVI first, then the bands that only add detail."""
+    """Three steps, so that numbers tick early: before, after and the change, then the extra bands."""
 
     def __init__(self, polygon: dict, pre_id: str, post_id: str):
         self.plot = parse_plot(polygon)
@@ -67,44 +67,54 @@ class FieldReplay:
             raise SceneUnusable(f"{scene.id}: band {name} is missing or unreadable")
         return ix.to_reflectance(arr, self._offset(scene))
 
-    def core(self) -> dict[str, float | None]:
-        """NDVI statistics, valid share, and the change. Three bands per scene."""
-        self._read(CORE_BANDS)
-        out: dict[str, float | None] = {}
-        mask = self.mask
-        for prefix, scene, is_post in (("optical.pre", self.pre, False), ("optical.post", self.post, True)):
-            valid = ix.clear_mask(self.bands[scene.id]["SCL"], allow_water=is_post) if self.bands[scene.id].get(
-                "SCL") is not None else None
-            if valid is None:
-                raise SceneUnusable(f"{scene.id}: band SCL is missing or unreadable")
-            vi = ix.ndvi(self._refl(scene, "B08"), self._refl(scene, "B04"))
-            vi[~valid] = np.nan
-            valid = valid & np.isfinite(vi)
-            self.vi[scene.id], self.valid[scene.id] = vi, valid
-            pick = mask & valid
-            n = int(pick.sum())
-            if n == 0:
-                raise SceneUnusable(f"{scene.id}: no valid pixels inside the plot")
-            p25, p50, p75 = np.percentile(vi[pick], [25, 50, 75])
-            out[f"{prefix}.valid_frac"] = r4(n / mask.sum())
-            out[f"{prefix}.n_pixels"] = r4(n)
-            out[f"{prefix}.ndvi_median"] = r4(p50)
-            out[f"{prefix}.ndvi_p25"] = r4(p25)
-            out[f"{prefix}.ndvi_p75"] = r4(p75)
-        pair = mask & self.valid[self.pre.id] & self.valid[self.post.id]
+    def _scene_stats(self, prefix: str, scene, is_post: bool) -> dict[str, float | None]:
+        got = read_many([(scene.id, n) for n in CORE_BANDS], self.grid, fresh=True)[scene.id]
+        self.bands.setdefault(scene.id, {}).update(got)
+        if got.get("SCL") is None:
+            raise SceneUnusable(f"{scene.id}: band SCL is missing or unreadable")
+        valid = ix.clear_mask(got["SCL"], allow_water=is_post)
+        vi = ix.ndvi(self._refl(scene, "B08"), self._refl(scene, "B04"))
+        vi[~valid] = np.nan
+        valid = valid & np.isfinite(vi)
+        self.vi[scene.id], self.valid[scene.id] = vi, valid
+        pick = self.mask & valid
+        n = int(pick.sum())
+        if n == 0:
+            raise SceneUnusable(f"{scene.id}: no valid pixels inside the plot")
+        p25, p50, p75 = np.percentile(vi[pick], [25, 50, 75])
+        return {
+            f"{prefix}.valid_frac": r4(n / self.mask.sum()),
+            f"{prefix}.n_pixels": r4(n),
+            f"{prefix}.ndvi_median": r4(p50),
+            f"{prefix}.ndvi_p25": r4(p25),
+            f"{prefix}.ndvi_p75": r4(p75),
+        }
+
+    def pre_stats(self) -> dict[str, float | None]:
+        """NDVI statistics of the image before the event: three bands, so the first numbers come quickly."""
+        return self._scene_stats("optical.pre", self.pre, False)
+
+    def post_stats(self) -> dict[str, float | None]:
+        """The image after the event, and the change between the two."""
+        if self.pre.id not in self.vi:
+            self.pre_stats()
+        out = self._scene_stats("optical.post", self.post, True)
+        pair = self.mask & self.valid[self.pre.id] & self.valid[self.post.id]
         if not pair.any():
             raise SceneUnusable("the plot has no pixel that is valid in both scenes")
-        d = (self.vi[self.post.id] - self.vi[self.pre.id])[pair]
-        delta, drop_frac, iqr = ix.delta_summary(d)
+        delta, drop_frac, iqr = ix.delta_summary((self.vi[self.post.id] - self.vi[self.pre.id])[pair])
         out["optical.plot_delta_ndvi"] = r4(delta)
         out["optical.drop_frac"] = r4(drop_frac)
         out["optical.iqr_delta"] = r4(iqr)
         return out
 
+    def core(self) -> dict[str, float | None]:
+        return {**self.pre_stats(), **self.post_stats()}
+
     def extra(self) -> dict[str, float | None]:
         """Bare soil and, on larger plots, red edge. Needs core() to have run."""
-        if not self.vi:
-            self.core()
+        if self.post.id not in self.vi:
+            self.post_stats()
         red_edge = self.plot.area_ha >= RED_EDGE_MIN_HA
         self._read(EXTRA_BANDS + (RED_EDGE_BANDS if red_edge else []))
         out: dict[str, float | None] = {}

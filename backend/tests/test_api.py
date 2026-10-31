@@ -793,3 +793,13 @@ def test_slow_comparison_lands_behind_a_provisional_verdict(client, monkeypatch)
     final = client.get(f"/api/cases/{case_id}").json()
     assert final["sealed"] and final["exhibits"]["history"]["status"] == "done"
     assert final["exhibits"]["sar"]["status"] == "done" and final["evidence"]["sar"]
+
+
+def test_case_exposes_the_rubric_constants(client, monkeypatch):
+    from app.agent import rubric
+
+    case_id = new_case(client)
+    assert client.get(f"/api/cases/{case_id}").json()["rubric"] == {
+        "version": rubric.RUBRIC_VERSION, "p_field": rubric.P_FIELD,
+        "strong_delta": rubric.STRONG_DELTA, "moderate_delta": rubric.MODERATE_DELTA,
+    }
