@@ -1,5 +1,7 @@
 # Forge '26 — Idea Research & Selection
 
+> ✅ **Decision (31 Oct 2026): building #1, FasalSaakshi.** The build plan is in [`docs/plan`](../plan/README.md).
+
 Research date: **31 Oct 2026**. About 31 hours of the build window were left when this was written.
 
 This folder holds the research behind choosing what to build for the Forge Gen AI Buildathon (NxtWave): competition constraints, a longlist of 12 ideas scored against the judging rubric, deep dives on the top 3, and a recommendation.
