@@ -14,7 +14,13 @@ from app.db import Action, Case, EvidenceRow, Plot, Run, VerifyEvent, VerifyRun,
 from app.evidence.schema import Alert, NewsItem, ReplayCore
 from app.tools import policy
 from tests.conftest import (
-    EVENT, an_alert, evidence, install_fake_geo, placebo, qa, weather,
+    EVENT,
+    an_alert,
+    evidence,
+    install_fake_geo,
+    placebo,
+    qa,
+    weather,
 )
 from tests.test_api import SQUARE, client, new_case, stream, wait_done  # noqa: F401
 
@@ -82,6 +88,25 @@ def test_an_alert_for_another_hazard_is_shown_but_does_not_corroborate():
     ev = _strong_field(wx=_no_weather(), alerts=[other])
     assert ev.event.type == "hail" and rubric.corroboration(ev) == [] and rubric.decide_level(ev)[0] == "weak"
     assert rubric.decide_level(_strong_field(wx=_no_weather(), alerts=[an_alert()]))[0] == "strong"
+
+
+def test_an_archived_alert_keeps_its_hazard_name(monkeypatch):
+    from app.db import AlertArchive
+    from app.tools import alerts
+
+    with session_scope() as s:
+        s.add(AlertArchive(identifier="a1", sent=datetime(2026, 10, 25, tzinfo=UTC), event="Flood", area_desc="Sirsa",
+                           headline="Water rising", fetched_at=datetime(2026, 10, 25, tzinfo=UTC)))
+    found = alerts.match("Sirsa", EVENT, "hail")
+    assert [a.event for a in found] == ["Flood"]
+    ev = evidence(wx=_no_weather(), alerts=found, cross=[])
+    assert ev.event.type == "hail" and rubric.matching_alerts(ev) == []
+
+
+def test_the_pdf_says_which_alerts_do_not_corroborate():
+    other = Alert(source="NDMA SACHET", identifier="a1", event="Flood", headline="Flood warning")
+    assert "does not corroborate" in _pdf_html("en", alerts=[other])
+    assert "does not corroborate" not in _pdf_html("en", alerts=[an_alert()])
 
 
 def test_news_cannot_rebut_the_wrong_date_objection():

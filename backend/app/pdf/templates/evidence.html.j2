@@ -114,7 +114,7 @@ ul { margin: 2pt 0 6pt; padding-left: 13pt; } li { margin-bottom: 2pt; }
 <p class="small">{% if far_p is not none %}{{ far.n_at_least_as_extreme }} / {{ far.n_placebos }} · p = {{ '%.3f'|format(far_p) }} ({{ L.threshold }} 0.025){% if far_near %} · <b>{{ L.near }}</b>{% endif %}{% else %}{{ far.insufficient_reason or L.no_data }}{% endif %}</p>
 {% endif %}
 {% if placebo_img %}
-<h2>{{ L.placebo }} ({{ placebo_sensor }})</h2>
+<h2>{{ L.placebo }} ({{ placebo_sensor_name }})</h2>
 <figure><img src="{{ placebo_img }}" alt=""></figure>
 <p class="small">{% if placebo_p is not none %}{{ placebo.n_at_least_as_extreme }} / {{ placebo.n_placebos }} · p = {{ '%.3f'|format(placebo_p) }}{% if placebo_near %} · <b>{{ L.near }}</b>{% endif %}{% if placebo.n_non_overlapping is not none %} · {{ L.non_overlap }}: {{ placebo.n_non_overlapping }}{% endif %}{% else %}{{ placebo.insufficient_reason or L.no_data }}{% endif %}</p>
 {% endif %}
@@ -143,7 +143,7 @@ ul { margin: 2pt 0 6pt; padding-left: 13pt; } li { margin-bottom: 2pt; }
 <div class="caveat">{{ ev.weather.grid_note }}</div>
 {% else %}<p class="small">{{ L.no_data }}</p>{% endif %}
 <p><b>{{ L.alerts }}:</b> {% if not ev.alerts %}{{ L.none }}{% endif %}</p>
-{% if ev.alerts %}<ul class="small">{% for a in ev.alerts %}<li>{{ a.source }} · {{ ist(a.issued) }} · {{ a.area }}: {{ a.headline }}</li>{% endfor %}</ul>{% endif %}
+{% if ev.alerts %}<ul class="small">{% for a in ev.alerts %}<li>{{ a.source }} · {{ ist(a.issued) }} · {{ a.area }}: {{ a.headline }}{% if a.identifier not in matching_alert_ids %} ({{ L.alert_other }}){% endif %}</li>{% endfor %}</ul>{% endif %}
 <p><b>{{ L.related }}:</b> {% if not ev.news %}{{ L.none }}{% endif %}</p>
 {% if ev.news %}<ul class="small">{% for n in ev.news %}<li>{{ n.title }}: <span class="mono">{{ n.url }}</span></li>{% endfor %}</ul>{% endif %}
 

@@ -53,7 +53,7 @@ Events are written to the `run_events` table by `Tracer` (`agent/trace.py`). The
 |---|---|---|
 | `parse` | `n_parse` | Loads the case. If no date was given, proposes one from the weather and asks for confirmation |
 | `resolve_plot` | `n_resolve_plot` | `geo.plot_info`, creates `Evidence`, sets the seed with `make_seed` |
-| `gather_context` | `n_gather_context` | District, weather, alerts and news, in parallel |
+| `gather_context` | `n_gather_context` | District, weather, alerts and related reports, in parallel |
 | `planner` | `n_planner` | With Gemini, chooses among allowed options. `plan_veto` can overrule it. Without Gemini, a default path |
 | `search_optical` | `n_search_optical` | Finds scenes, runs QA, picks the pre and post scenes |
 | `optical_compare` | `n_optical_compare` | The core statistic and both placebo tests. Starts radar in the background |
@@ -368,7 +368,7 @@ Honestly, we haven't load-tested it. On one development machine with a link of a
 
 ### 12. "Weather shows no hail codes. Why say corroborated?"
 
-Corroborated means weather, or an official alert, or cited news. On the sealed Bhiwani case, it's weather alone: 18.4 mm in a day from a gridded model, with zero hail-code hours. So that's support that a storm system passed, not evidence of hail on this field. It's weak corroboration, and we say "model-indicated". The opposite direction also holds: no signal never counts against a farmer, since a 9-25 km grid can miss a hail cell.
+Corroborated means weather, or an official alert whose hazard matches the report. Cited news is shown as related reports and never moves a level. On the sealed Bhiwani case, it's weather alone: 18.4 mm in a day from a gridded model, with zero hail-code hours. So that's support that a storm system passed, not evidence of hail on this field. It's weak corroboration, and we say "model-indicated". The opposite direction also holds: no signal never counts against a farmer, since a 9-25 km grid can miss a hail cell.
 
 ### 13. "Isn't this just a pipeline with a chat front end?"
 

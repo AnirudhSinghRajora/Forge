@@ -26,7 +26,13 @@ from typing import TypeVar
 from pydantic import BaseModel
 
 from app import errors
-from app.agent.parse import MAX_TEXT_CHARS, ParsedReport, event_date_problem, today_ist, valid_clock_time
+from app.agent.parse import (
+    MAX_TEXT_CHARS,
+    ParsedReport,
+    event_date_problem,
+    today_ist,
+    valid_clock_time,
+)
 from app.config import get_settings
 
 log = logging.getLogger(__name__)

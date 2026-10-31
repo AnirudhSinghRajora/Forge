@@ -1,6 +1,6 @@
 # Geo engine: results on real data
 
-Last updated 31 Oct 2026, by the GEO owner. Engine version `geo-1.1.0`. Every number here came from running the engine on public Sentinel archives. Scripts are in `backend/tests/` (`geo_*.py`). Raw per-plot output and maps are in `backend/var/geo_validation/` and are not committed.
+Last updated 31 Oct 2026, by the GEO owner. Engine version `geo-1.2.0` (`geo-1.1.0` for the locked runs; its numbers are byte-identical on both demo plots). Every number here came from running the engine on public Sentinel archives. Scripts are in `backend/tests/` (`geo_*.py`). Raw per-plot output and maps are in `backend/var/geo_validation/` and are not committed.
 
 **There is no plot-level ground truth for any event here.** News and official reports give villages and district-level loss bins. This work can show consistency, not accuracy.
 
@@ -11,10 +11,12 @@ Last updated 31 Oct 2026, by the GEO owner. Engine version `geo-1.1.0`. Every nu
 | Sirsa 28 Oct 2026 corrupted pass | Rejected, despite about 0% metadata cloud |
 | False-positive rate, design window | p<=0.05 at 5.0%. p<=0.10 at 15.4%, above nominal, so that tier was removed from the rubric |
 | Bhiwani hail 2024 | A coherent band, consistent with a hail swath. It does not repeat in other years. Radar does not confirm it |
-| Cyclone Arnab | No signal established. One optical scene after landfall. Next radar about 4 Nov |
+| Cyclone Arnab | No signal established. One optical scene after landfall. Two candidate plots reach field conditions but are not separated from harvest. Next radar about 4 Nov |
+| Punjab floods 2025, pre-registered | **Partial.** New water 28.3% vs 0.0% passes. SAR placebo 1.7% vs 8.3% fails |
+| Seed sensitivity | Stable on clear cases. Near p 0.025 the level flips on up to a third of seeds |
 | Rubric v3 false positives, locked | 2.0% strong and 2.5% moderate field conditions, on both no-event windows |
 | Independent event (Sirsa hail 14 Mar 2025) | No signal. Consistent with "minor" damage, so not a positive test. Sensitivity is shown only on Bhiwani, the design event |
-| Cold read time | Well over target on this machine. See "Read time" |
+| Cold read time | Improved, but well over target on this machine. Not measured from Europe. See "Read time" |
 
 ## 1. Scene QA regression
 
@@ -177,7 +179,39 @@ Median NDVI change on clear green pixels by longitude:
 
 **No Arnab signal is established.** About -0.1 is the normal drop for these weeks, mildly stronger in the east every year. The excess is about 0.03-0.05 in the east. The 23 Oct scene has its own opposite gradient against 11 Oct (+0.089 east, -0.031 west), and in 2026 red and NIR both rose, which fits haze better than crop loss. The fall in SCL vegetation from 41% to 4% while land NDVI stays at 0.54 should not be quoted as crop loss.
 
-**This does not contradict reports of flattened paddy.** Lodged paddy can stay green, this is 3 days after landfall, and a harvest was due within days. 2025 was not used as a control because Cyclone Montha hit the same delta on 28 Oct 2025. A 10 m scan was started and stopped to free bandwidth for the locked runs; it has no results.
+**This does not contradict reports of flattened paddy.** Lodged paddy can stay green, this is 3 days after landfall, and a harvest was due within days. 2025 was not used as a control because Cyclone Montha hit the same delta on 28 Oct 2025. 
+### 10 m scan, 26 or 23 Oct to 31 Oct (Planetary Computer scenes)
+
+Random squares of 1-2 ha on WorldCover cropland. Script: `geo_event_scan.py`. Ring test only.
+
+| Region | Pair | Attempted | Usable | Median change | <= -0.15 | Ring p<=0.05 |
+|---|---|---|---|---|---|---|
+| East, around 16.93 N 81.96 E (Anaparthi, Biccavolu) | 26 to 31 Oct | 100 | 51 (49 clouded) | -0.125 | 27.5% | 3.9% |
+| West, around 16.52 N 81.72 E (Palakollu) | 26 to 31 Oct | 100 | 0 (26 Oct clouded everywhere) | | | |
+| West, pre scene by rule (23 Oct is the last accepted) | 23 to 31 Oct | 100 | 46 (54 clouded) | -0.152 | 54.3% | 2.2% |
+
+**Same plots over the same days in other years** (`geo_arnab_same_dates.py`, east, only plots clear in both years):
+- Against 26 to 31 Oct 2024, 16 plots: 2026 -0.108, 2024 -0.111. No excess.
+- Against 27 Oct to 1 Nov 2023, 20 plots: 2026 -0.119, 2023 -0.010. A clear excess, on one year only. 2026 pre scene was 26 Oct, 2023's 27 Oct.
+- The subsets are small and differ, and clear-sky selection may exclude the strongest plots. The two years disagree, so this does not settle it.
+
+**Two candidates, selected as the strongest of 51 usable plots.** Neither is clear on those dates in 2023 or 2024, so neither can be tested that way yet.
+
+| | A: 16.906738 N, 81.975164 E, 112.3 m, beside Anaparthi | B: 16.947878 N, 81.990871 E, 133.4 m |
+|---|---|---|
+| NDVI, 26 to 31 Oct (tile 44QND) | 0.7561 to 0.4005, -0.3595 | 0.6508 to 0.3017, -0.3472 |
+| Post valid fraction | 0.85 | 1.0 |
+| Bare soil after | 0.0 | 0.0 |
+| Ring p, neighbour median | 0.005, -0.207 | 0.005, -0.113 |
+| Far p, far median | 0.0049, -0.130 | 0.0123 (80 placebos), -0.154 |
+| Pre-trend | -0.0247 | -0.0369 |
+| Same plot in other years (longer windows) | -0.201 (2025, Montha year), -0.239 (2024) | -0.189 (2025), -0.384 (2024) |
+| Affected share within 3 km | 0.698 | 0.257 |
+| Draw, all cropland: median (p05, p95) | -0.181 (-0.214, -0.157) | -0.130 (-0.156, -0.109) |
+
+**Reading.** These are consistent with a sudden fall and, by the rubric's rule, reach field conditions. They are not established as storm damage. Paddy here was days from harvest, and big late-October falls are normal on these plots: B fell -0.384 over 26 Oct to 5 Nov 2024. Bare soil of zero says these were not yet harvested at 31 Oct, but says nothing about ripening. **No Arnab signal is established.** The next clear passes (S2A about 2 Nov, S1D about 4 Nov) are the natural re-check.
+
+**Limitation found here: tiles differ.** The same pass over plot A reads 0.756 in tile 44QND and 0.836 in 44QPD on 26 Oct, and 0.400 and 0.496 on 31 Oct, because Sen2Cor corrects each tile separately. Change within a tile agrees better (-0.36, -0.34). Scene search prefers coverage and then a stable order, so a pair normally stays on one tile, but a plot near a footprint edge could get a mixed pair and with it a false change. `optical_compare` now flags that in the post scene's QA reasons. Selecting by tile would be an engine change and has not been made.
 
 For an event wider than 12 km the far test loses power too, so history and the pre-event trend carry such a case.
 

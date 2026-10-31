@@ -116,12 +116,17 @@ npm run build            # FastAPI serves web/dist
 | Variable | Required | Purpose |
 |---|---|---|
 | `GEMINI_API_KEY` | No | Turns on the optional LLM features. Without it the verdict, cross-examination and templated text still run, with `llm_used: false`. |
+| `LLM_POLISH` | No | Default `false`. `true` lets the LLM rewrite the narrative, testimony and surveyor's challenges, through the validator. |
+| `LLM_PLANNER` | No | Default `false`. `true` lets the LLM choose the first search step. That can move which images are read, and so the level, which is why it is off. |
 | `GEMINI_MODEL_PRO`, `GEMINI_MODEL_FLASH`, `GEMINI_MODEL_TTS`, `GEMINI_MODEL_EMBED` | No | Model ids. Defaults are in the example file. |
-| `PUBLIC_WEB_URL` | For a deploy | Base URL printed in the PDF's QR code. Left at its default, the QR points to localhost. |
+| `PUBLIC_WEB_URL` | For a deploy | Base URL printed in the PDF's QR code and the draft's verify link. Unset, they use each request's own origin, and a warning is logged at startup. |
+| `TRUST_PROXY` | Behind a proxy | Default `false`. `true` takes the client IP from `X-Forwarded-For` and the origin from `X-Forwarded-Host` and `X-Forwarded-Proto`. Only set it when a proxy you control sets those headers. |
+| `RATE_INVESTIGATIONS_PER_HOUR`, `RATE_VERIFY_PER_HOUR`, `RATE_ASKS_PER_HOUR`, `RATE_CASES_PER_HOUR`, `RATE_PDF_RENDERS_PER_HOUR` | No | Per-IP limits, held in process. Defaults 12, 3, 60, 60, 60. Only a new verify download or PDF render counts. Run one process: no `--workers`. |
+| `MAX_QUEUED_RUNS` | No | Default 8. Past this, a new investigation gets a 429 with a message in each language. |
 | `DATABASE_URL` | No | Defaults to SQLite in `VAR_DIR`. Accepts Postgres. |
 | `OPEN_METEO_API_KEY` | No | Uses Open-Meteo's customer endpoints. |
 | `PC_SDK_SUBSCRIPTION_KEY` | No | Planetary Computer subscription key. |
-| `SCHEDULER_TOKEN` | No | Protects `POST /api/jobs/tick`. |
+| `SCHEDULER_TOKEN` | To use the route | `POST /api/jobs/tick` needs this in `X-Scheduler-Token`, and is refused for everyone while it is unset. Use a long random value, such as `openssl rand -hex 32`. The in-process scheduler does not need it. |
 
 Other settings are in `backend/app/config.py`, including `VAR_DIR` and `ENABLE_SCHEDULER`. Never commit secrets.
 
@@ -187,7 +192,7 @@ A ring test has low power inside a swath, because the ring shares the damage. Th
 
 **Cross-examination.** Nine objections, each answered by a test on real values: harvest, wrong plot, wrong date, cloud or shadow, corrupt scene, regional trend, pre-event trend, plot too small, different crop in past years. Each ends `rebutted`, `conceded` or `unresolved`. A concession that more data could settle sends the graph back to search, within budget. Code: `backend/app/agent/cross_exam.py`.
 
-**Verdict rubric v3** (`backend/app/agent/rubric.py`), evaluated top to bottom. Field signal = far p ≤ 0.025 or ring p ≤ 0.025 (Bonferroni across two tests), each on at least 30 placebos. Corroborated = model weather, an official alert, or cited news. Absence of a weather signal never counts against the farmer.
+**Verdict rubric v3** (`backend/app/agent/rubric.py`), evaluated top to bottom. Field signal = far p ≤ 0.025 or ring p ≤ 0.025 (Bonferroni across two tests), each on at least 30 placebos. Corroborated = model weather, or an official alert whose hazard matches the reported event. Cited news appears as related reports and never changes a level, because search hits carry no reliable date, place or peril check. Absence of a weather signal never counts against the farmer, but a report with neither stays `weak`, and the text says why.
 
 | Level | Conditions |
 |---|---|
@@ -200,7 +205,7 @@ A ring test has low power inside a swath, because the ring shares the damage. Th
 
 Radar alone can reach moderate at most.
 
-**Replayable verification.** The hash is SHA-256 over canonical JSON of `ReplayCore`: polygon, event date, scene ids, the archive of each scene, seed, engine version, and 100-odd flat numbers. `/verify/{hash}` checks the hash against the stored record, which detects tampering, and then re-downloads the scenes with caches bypassed. Each number is compared with the sealed value, with a tolerance of 0.001. The hash does not cover the verdict text, weather, alerts or news.
+**Replayable verification.** The hash is SHA-256 over canonical JSON of `ReplayCore`: polygon, event date, scene ids, the archive of each scene, seed, engine version, and 100-odd flat numbers. `/verify/{hash}` checks the hash against the stored record, which detects tampering, and then re-downloads the scenes with caches bypassed. Each number is compared with the sealed value, with a tolerance of 0.001. The core also holds `verdict_digest`, a SHA-256 of the verdict level and its corroboration inputs (weather values used, matched alert ids). **Satellite numbers are recomputed; the verdict and weather are checked for tampering only.** The explanation text, claim route and related reports are not sealed. When two cases share a hash, the most recent is used. Public verify output never carries a case id.
 
 **Other exhibits.**
 - *The Field Testifies:* the evidence told by the field itself, from a template over real values, with the verdict's caveats.
@@ -210,7 +215,7 @@ Radar alone can reach moderate at most.
 
 **Claim path** (`backend/app/agent/claim_path.py`). Routes by insured status, crop stage, peril and crop before any deadline appears. The 72-hour countdown shows only on the localized and post-harvest add-on routes, and only while the time is open. State notification is always treated as unknown: "confirm with your bank or 14447". Rule text and clause ids are in `backend/data/policy/`.
 
-**The LLM cannot change a number.** All LLM text passes `backend/app/agent/validate.py`. Every digit sequence must exist in the evidence, and banned claims are blocked. Otherwise the deterministic template is used.
+**The LLM cannot change a number or a level.** The verdict, explanation, testimony and cross-examination come from deterministic templates in Hindi, English and Telugu. `LLM_POLISH=true` turns on rewrites of those, and `LLM_PLANNER=true` the LLM planner; both are off by default, so the same evidence gives the same level with or without an LLM. All LLM text passes `backend/app/agent/validate.py`. Every digit sequence must exist in the evidence, and banned claims and spelled-out percentages are blocked. Otherwise the deterministic template is used.
 
 ## Data sources
 
@@ -224,7 +229,7 @@ Radar alone can reach moderate at most.
 | NDMA SACHET | Official alerts | The feed carries current alerts only, so the archive starts when archiving starts |
 | OpenStreetMap Nominatim | District lookup | |
 | PMFBY Operational Guidelines 2023, PIB, Lok Sabha replies | Claim path and policy answers | `backend/data/policy/`, sources in `docs/submission/facts.md` |
-| Gemini (optional) | Audio parsing, narrative polish, news through Search grounding, TTS, embeddings | Not verified. See Limitations |
+| Gemini (optional) | Audio parsing, policy answers under validation, related reports through Search grounding, TTS, embeddings; narrative polish only under `LLM_POLISH=true` | Not verified. See Limitations |
 
 ESA WorldCover 2021 was used to sample validation plots only. It is not in the running engine.
 
@@ -298,7 +303,7 @@ Measured on the development machine, whose link to the blob store measured about
 
 **Not verified**
 
-- **Gemini paths:** audio parsing, the planner, narrative and testimony polish, news search, TTS and policy embeddings. Tests use stubs, and the running app reports `gemini: false`. The model ids are from a docs page and have not been called. Hindi TTS support was not stated on that page. Without a key, news corroboration is skipped, audio needs the browser's own speech recognition or typed text, and spoken output uses browser speech.
+- **Gemini paths:** audio parsing, news search, TTS and policy embeddings, plus the planner and narrative and testimony polish where those are turned on. Tests use stubs, and the running app reports `gemini: false`. The model ids are from a docs page and have not been called. Hindi TTS support was not stated on that page. Without a key, the search for related reports is skipped (the level does not change), audio needs the browser's own speech recognition or typed text, and spoken output uses browser speech.
 - **Telugu text** has not been reviewed by a native speaker.
 - **Postgres** is accepted through `DATABASE_URL`, but this repo's tests run on SQLite.
 - **Hosted performance.** All timings above are from one development machine on a slow link. There is no load test. Runs use in-process threads, so this is one instance, not a cluster.

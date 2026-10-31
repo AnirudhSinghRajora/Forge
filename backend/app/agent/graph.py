@@ -535,7 +535,7 @@ def n_gather_context(state: State, ctx: Ctx) -> dict:
         _prov(ev, f"alerts.{a.identifier}", a.source, asset=a.identifier, url=a.url)
     ev.news = results["news"] or []
     for item in ev.news:
-        _prov(ev, "news", "Gemini Google Search grounding", url=item.url)
+        _prov(ev, "related_reports", "Gemini Google Search grounding", url=item.url)
     return {"evidence": ev, "weather_payload_date": ev.event.date}
 
 

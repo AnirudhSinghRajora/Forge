@@ -19,6 +19,8 @@ RUN uv sync --frozen --no-dev
 COPY backend/app ./app
 COPY backend/data/policy/clauses.jsonl backend/data/policy/key_rules.json ./data/policy/
 COPY --from=web /web/dist /srv/web/dist
+# One process, on purpose: rate limits, the run queue and the scheduler live in memory, so no --workers.
+# Set PUBLIC_WEB_URL, and TRUST_PROXY=true behind a proxy that sets X-Forwarded-*.
 # Mount a persistent volume at /data: the sealed evidence behind every QR verify link lives there.
 ENV PORT=8080 PYTHONUNBUFFERED=1 VAR_DIR=/data FASALSAAKSHI_VAR_DIR=/data
 RUN mkdir -p /data

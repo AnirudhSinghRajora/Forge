@@ -572,9 +572,10 @@ def get_case(case_id: str, request: Request, lang: str | None = Query(None)) -> 
         # finished without one.
         info = _case_dict(s, case)
         row = _latest_evidence(s, case_id)
-        evidence = None
+        evidence = parsed = None
         if row is not None:
             evidence = _public_evidence(_with_live_route(dict(row.json), case, lang or case.lang))
+            parsed = Evidence.model_validate(evidence)
         items = s.scalars(
             select(Action).where(Action.case_id == case_id).order_by(Action.created_at)
         ).all()
@@ -589,13 +590,13 @@ def get_case(case_id: str, request: Request, lang: str | None = Query(None)) -> 
             "sealed": bool(row is not None and row.evidence_hash),
             "verdict_ready": bool(row is not None and row.verdict_level),
             "exhibits": _public_exhibits(row.exhibits) if row is not None else {},
-            "corroboration": _corroboration(evidence),
-            "recheck_closed": _recheck_closed(evidence, out),
+            "corroboration": _corroboration(parsed),
+            "recheck_closed": _recheck_closed(parsed, out),
             "rubric": {
                 "version": rubric.RUBRIC_VERSION, "p_field": rubric.P_FIELD,
                 "strong_delta": rubric.STRONG_DELTA, "moderate_delta": rubric.MODERATE_DELTA,
                 "near_low": rubric.P_NEAR_LOW, "near_high": rubric.P_NEAR_HIGH,
-                "near_line_decides": _near_line_decides(evidence),
+                "near_line_decides": _near_line_decides(parsed),
             },
         }
 
@@ -614,30 +615,27 @@ def _public_exhibits(exhibits: dict | None) -> dict:
     }
 
 
-def _corroboration(evidence: dict | None) -> dict | None:
+def _corroboration(ev: Evidence | None) -> dict | None:
     """Which sources the level rested on. Related reports are never among them."""
-    if not evidence:
+    if ev is None:
         return None
-    ev = Evidence.model_validate(evidence)
     return {"sources": rubric.corroboration(ev), "matching_alert_ids": [a.identifier for a in rubric.matching_alerts(ev)]}
 
 
-def _recheck_closed(evidence: dict | None, actions: list[dict]) -> bool:
+def _recheck_closed(ev: Evidence | None, actions: list[dict]) -> bool:
     """This result would call for a later image, and the window for one has passed."""
-    if not evidence or not evidence.get("verdict"):
+    if ev is None or ev.verdict is None:
         return False
     if any(a["type"] == "recheck" and a["status"] == "open" for a in actions):
         return False
-    ev = Evidence.model_validate(evidence)
     return rubric.decide(ev).schedule_recheck and not rubric.recheck_possible(ev)
 
 
-def _near_line_decides(evidence: dict | None) -> bool:
+def _near_line_decides(ev: Evidence | None) -> bool:
     """Said beside the two answers. Worked out at read time, so a record sealed earlier says it too."""
-    verdict = (evidence or {}).get("verdict")
-    if not verdict:
+    if ev is None or ev.verdict is None:
         return False
-    return rubric.level_could_change(Evidence.model_validate(evidence), verdict["level"])
+    return rubric.level_could_change(ev, ev.verdict.level)
 
 
 def _refresh_draft(items: list[dict], info: dict, evidence: dict, base_url: str) -> None:

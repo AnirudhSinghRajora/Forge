@@ -398,6 +398,11 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
   return (
     <div className="page verdict">
       <SelectionNote note={selection} className="selected-note-top" />
+      {sealed && c.active_run_id && (
+        <p className="notice small" role="status">
+          {t("verdict.rerun_running")} <a {...linkProps(`/case/${encodeURIComponent(caseId)}/investigate?run=${encodeURIComponent(c.active_run_id)}`)}>{t("verdict.watch")}</a>
+        </p>
+      )}
       {!provisional && <Testimony ev={ev} caseId={caseId} verdictLine={headline} passes={env.exhibits?.timeline?.status} />}
       <header className="verdict-top">
         <div className="verdict-main">
@@ -414,8 +419,8 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
               <LevelScale level={v.level} />
               <p className="plain-level">{t(`level.${v.level}` as Key)}</p>
               {ev.optical.pre && ev.optical.post && <GreennessBars pre={ev.optical.pre} post={ev.optical.post} />}
-              {!sealed && (c.active_run_id || pendingCount > 0) && <p className="small">{t("verdict.may_change")}</p>}
-              {!sealed && !c.active_run_id && pendingCount === 0 && (
+              {!sealed && c.active_run_id && <p className="small">{t("verdict.may_change")}</p>}
+              {!sealed && !c.active_run_id && (
                 <>
                   <p className="small">{t("verdict.stopped_unsealed")}</p>
                   <RunAgain caseId={caseId} />
@@ -426,7 +431,7 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
             <>
               <h1 className="verdict-headline">{t("verdict.no_verdict")}</h1>
               <p className="lede">{t(c.latest_run?.status === "interrupted" ? "verdict.no_verdict_interrupted" : "verdict.no_verdict_body")}</p>
-              {!c.active_run_id && !sealed && <RunAgain caseId={caseId} />}
+              {!c.active_run_id && <RunAgain caseId={caseId} />}
             </>
           )}
           {explanation && !provisional && <p className="explanation">{explanation}</p>}

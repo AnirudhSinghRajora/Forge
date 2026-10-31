@@ -315,6 +315,7 @@ const S = {
   "exhibit.technical": ["तकनीकी कारण", "సాంకేతిక కారణం", "Technical reason"],
   "exhibit.retry_after_seal": ["बाकी हिस्से पूरे होने के बाद इसे दोबारा चला सकेंगे।", "మిగతా భాగాలు పూర్తయ్యాక దీన్ని మళ్ళీ నడపవచ్చు.", "You can retry this once the other parts finish."],
   "exhibit.still": ["अभी {n} हिस्से बन रहे हैं। वे आते ही नीचे जुड़ते जाएँगे।", "ఇంకా {n} భాగాలు తయారవుతున్నాయి. వచ్చినట్టే కింద చేరుతాయి.", "{n} parts are still computing. They appear below as they finish."],
+  "verdict.rerun_running": ["नई जाँच चल रही है। उसके पूरा होने तक यह पिछला मुहरबंद नतीजा है।", "కొత్త పరిశీలన నడుస్తోంది. అది పూర్తయ్యే వరకు ఇది గత ముద్ర వేసిన ఫలితం.", "A new check is running. Until it finishes, this is the last sealed result."],
   "verdict.stopped_unsealed": ["यह जाँच मुहर लगने से पहले रुक गई, इसलिए PDF और सार्वजनिक जाँच नहीं बनी। मुहरबंद नतीजे के लिए इसे फिर से चलाएँ।", "ఈ పరిశీలన ముద్రకు ముందే ఆగింది, కాబట్టి PDF, బహిరంగ తనిఖీ రాలేదు. ముద్ర వేసిన ఫలితం కోసం మళ్ళీ నడపండి.", "This check stopped before it was sealed, so there is no PDF or public re-check. Run it again for a sealed result."],
   "verdict.may_change": ["सारे सबूत पूरे होने तक यह निष्कर्ष बदल सकता है।", "ఆధారాలన్నీ పూర్తయ్యే వరకు ఈ ఫలితం మారవచ్చు.", "This finding may still change until all the evidence settles."],
   "verdict.not_sealed_pending": ["सबूत अभी बन रहे हैं। PDF और सार्वजनिक जाँच उनके पूरे होने पर मिलेगी।", "ఆధారాలు ఇంకా తయారవుతున్నాయి. PDF, బహిరంగ తనిఖీ అవి పూర్తయ్యాక వస్తాయి.", "The evidence is still computing. The PDF and public re-check come once it settles."],
