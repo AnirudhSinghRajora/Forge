@@ -125,6 +125,7 @@ def wait_for_seal(client: httpx.Client, case_id: str, started: float, timeout: f
     """Polls the case until it seals or its run ends, and notes when the verdict first appeared.
     A dropped request is not a failure, because the run carries on with no client attached."""
     out: dict = {"envelope": None, "verdict_s": None, "sealed_s": None, "timed_out": False}
+    ended_looks = 0
     while True:
         elapsed = time.monotonic() - started
         try:
@@ -141,8 +142,14 @@ def wait_for_seal(client: httpx.Client, case_id: str, started: float, timeout: f
                 return out
             run = envelope["case"].get("latest_run") or {}
             pending = any(e.get("status") == "pending" for e in (envelope.get("exhibits") or {}).values())
+            # One read can catch the evidence just before the seal and the run just after it finished,
+            # so the run has only ended unsealed if the next look says the same.
             if run.get("status") in TERMINAL and not envelope["case"].get("active_run_id") and not pending:
-                return out
+                ended_looks += 1
+                if ended_looks >= 2:
+                    return out
+            else:
+                ended_looks = 0
         if elapsed > timeout:
             out["timed_out"] = True
             return out

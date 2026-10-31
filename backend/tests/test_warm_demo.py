@@ -1,6 +1,8 @@
 """The warm script against a local test app and fake geo. No real archive is reached."""
 import json
+import time
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -172,3 +174,32 @@ def test_the_api_gives_the_near_band_and_whether_it_decides(client, monkeypatch)
 def test_the_api_says_near_does_not_decide_for_a_case_with_no_evidence(client):
     case_id = warm_demo.create_case(client, BY_NAME["godavari-arnab"], "en")
     assert client.get(f"/api/cases/{case_id}").json()["rubric"]["near_line_decides"] is False
+
+
+class _Looks:
+    """Answers GET /api/cases/{id} from a list of envelopes, repeating the last one."""
+
+    def __init__(self, *envelopes):
+        self.envelopes = list(envelopes)
+
+    def get(self, url):
+        body = self.envelopes.pop(0) if len(self.envelopes) > 1 else self.envelopes[0]
+        return httpx.Response(200, json=body)
+
+
+def _look(status, sealed):
+    return {"case": {"latest_run": {"status": status}, "active_run_id": None}, "sealed": sealed, "exhibits": {},
+            "verdict_ready": True, "evidence": {"evidence_hash": "h" if sealed else None}}
+
+
+def test_one_read_caught_just_before_the_seal_is_not_called_the_end():
+    client = _Looks(_look("done", False), _look("done", True))
+    out = warm_demo.wait_for_seal(client, "c", time.monotonic(), 5, 0.001)
+    assert out["sealed_s"] is not None and out["envelope"]["sealed"] is True
+
+
+def test_a_run_that_really_ended_unsealed_is_reported_without_waiting_out_the_timeout():
+    client = _Looks(_look("failed", False))
+    started = time.monotonic()
+    out = warm_demo.wait_for_seal(client, "c", started, 60, 0.001)
+    assert out["sealed_s"] is None and not out["timed_out"] and time.monotonic() - started < 5
