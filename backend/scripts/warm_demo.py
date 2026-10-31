@@ -7,6 +7,11 @@ Every plot is a real input through the normal path, with no fixture data, and no
 farmer could not enter. Each run creates new cases, so it is safe to repeat. Investigations and checks
 run one at a time, because each one downloads satellite imagery.
 
+The server limits investigations and checks per IP. A run of the default plots stays under those limits.
+Past them (repeat runs, or --with-ratia with --verify) this pauses for as long as the server says and
+carries on; --limit-wait sets how long it is willing to wait. For a larger warm-up, raise
+RATE_INVESTIGATIONS_PER_HOUR and RATE_VERIFY_PER_HOUR on the server for its duration.
+
 Sources are in docs/validation/events.md:
 - `insured` is never sent. Bhiwani is a signal case, not a claim case (C1), and insurance is the
   farmer's answer for Godavari (A5) and Ratia.
@@ -26,6 +31,7 @@ import httpx
 
 TERMINAL = ("done", "failed", "interrupted", "error")
 VERIFY_RETRY_S = 5.0
+DEFAULT_LIMIT_WAIT_S = 3700.0  # a limit's window is one hour
 
 
 def square(lon: float, lat: float, side_m: float) -> dict:
@@ -86,6 +92,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--timeout", type=float, default=900.0, help="seconds to wait for each case to seal")
     ap.add_argument("--verify-timeout", type=float, default=1800.0, help="seconds to wait for each full check")
     ap.add_argument("--poll", type=float, default=5.0, help="seconds between looks at a running case")
+    ap.add_argument("--limit-wait", type=float, default=DEFAULT_LIMIT_WAIT_S,
+                    help="seconds to pause when the server's rate limit says to wait; 0 fails at once")
     ap.add_argument("--dry-run", action="store_true", help="print what would be sent, and send nothing")
     args = ap.parse_args(argv)
     if not args.base_url.startswith(("http://", "https://")):
@@ -102,6 +110,23 @@ def _ok(response: httpx.Response, what: str) -> dict:
     return response.json()
 
 
+def _pause_for(response: httpx.Response, what: str, limit_wait: float) -> None:
+    """Sits out a 429 for as long as the server says, or raises if that is more than we may wait."""
+    wait = float(response.headers.get("retry-after") or VERIFY_RETRY_S)
+    if wait > limit_wait:
+        raise RuntimeError(f"{what}: rate limited for another {wait:.0f} s; see --limit-wait")
+    print(f"{what}: the server's rate limit says wait {wait:.0f} s; pausing", flush=True)
+    time.sleep(wait + 1)
+
+
+def _sent(send, what: str, limit_wait: float) -> httpx.Response:
+    while True:
+        response = send()
+        if response.status_code != 429:
+            return response
+        _pause_for(response, what, limit_wait)
+
+
 def case_payloads(plot: DemoPlot, lang: str) -> tuple[dict, dict, dict]:
     """(form for POST /api/cases, body for PUT .../plot, body for PATCH). `insured` is never in these."""
     form = {"lat": str(plot.lat), "lon": str(plot.lon), "lang": lang, "text": plot.text}
@@ -111,9 +136,10 @@ def case_payloads(plot: DemoPlot, lang: str) -> tuple[dict, dict, dict]:
     return form, {"polygon": plot.polygon}, patch
 
 
-def create_case(client: httpx.Client, plot: DemoPlot, lang: str) -> str:
+def create_case(client: httpx.Client, plot: DemoPlot, lang: str, limit_wait: float = DEFAULT_LIMIT_WAIT_S) -> str:
     form, body, patch = case_payloads(plot, lang)
-    case_id = _ok(client.post("/api/cases", data=form), "create case")["case_id"]
+    created = _sent(lambda: client.post("/api/cases", data=form), "create case", limit_wait)
+    case_id = _ok(created, "create case")["case_id"]
     _ok(client.put(f"/api/cases/{case_id}/plot", json=body), "set plot")
     stored = _ok(client.patch(f"/api/cases/{case_id}", json=patch), "set details")
     if stored["plot"]["geometry"] != body["polygon"]:
@@ -168,7 +194,7 @@ def sse_data(lines) -> list[dict]:
     return out
 
 
-def run_verify(client: httpx.Client, evidence_hash: str, timeout: float) -> dict:
+def run_verify(client: httpx.Client, evidence_hash: str, timeout: float, limit_wait: float = DEFAULT_LIMIT_WAIT_S) -> dict:
     """Follows the check to its result. The job runs on the server, so a dropped stream resumes
     from the last event seen and never starts a second download."""
     started = time.monotonic()
@@ -177,6 +203,9 @@ def run_verify(client: httpx.Client, evidence_hash: str, timeout: float) -> dict
         try:
             url = f"/api/verify/{evidence_hash}" + (f"?after={after}" if after else "")
             with client.stream("GET", url) as response:
+                if response.status_code == 429:
+                    _pause_for(response, "full check", min(limit_wait, timeout - (time.monotonic() - started)))
+                    continue
                 if response.status_code >= 400:
                     raise RuntimeError(f"verify: HTTP {response.status_code}")
                 for line in response.iter_lines():
@@ -192,15 +221,16 @@ def run_verify(client: httpx.Client, evidence_hash: str, timeout: float) -> dict
 
 
 def warm_one(client: httpx.Client, plot: DemoPlot, base_url: str, *, verify: bool, lang: str, timeout: float,
-             verify_timeout: float, poll: float) -> dict:
+             verify_timeout: float, poll: float, limit_wait: float = DEFAULT_LIMIT_WAIT_S) -> dict:
     row: dict = {"name": plot.name, "case_id": None, "level": None, "hash": None, "url": None, "error": None,
                  "verdict_s": None, "sealed_s": None, "verify_status": None, "verify_s": None}
     started = time.monotonic()
     try:
-        case_id = create_case(client, plot, lang)
+        case_id = create_case(client, plot, lang, limit_wait)
         row["case_id"], row["url"] = case_id, f"{base_url}/case/{case_id}"
         print(f"[{plot.name}] case {case_id}: investigating", flush=True)
-        _ok(client.post(f"/api/cases/{case_id}/investigate"), "start investigation")
+        started_run = _sent(lambda: client.post(f"/api/cases/{case_id}/investigate"), "start investigation", limit_wait)
+        _ok(started_run, "start investigation")
         waited = wait_for_seal(client, case_id, started, timeout, poll)
         row["verdict_s"], row["sealed_s"] = waited["verdict_s"], waited["sealed_s"]
         evidence = (waited["envelope"] or {}).get("evidence") or {}
@@ -210,7 +240,7 @@ def warm_one(client: httpx.Client, plot: DemoPlot, base_url: str, *, verify: boo
             row["error"] = "timed out before sealing" if waited["timed_out"] else "the run ended without a seal"
         elif verify:
             print(f"[{plot.name}] sealed; running the full check", flush=True)
-            result = run_verify(client, row["hash"], verify_timeout)
+            result = run_verify(client, row["hash"], verify_timeout, limit_wait)
             row["verify_status"], row["verify_s"] = result.get("status"), result.get("verify_s")
     except (RuntimeError, httpx.HTTPError, KeyError, ValueError) as exc:
         row["error"] = f"{type(exc).__name__}: {exc}"
@@ -235,7 +265,7 @@ def run(args: argparse.Namespace, client: httpx.Client) -> int:
     rows = []
     for plot in choose(args.with_ratia, args.only):
         row = warm_one(client, plot, args.base_url, verify=args.verify, lang=args.lang, timeout=args.timeout,
-                       verify_timeout=args.verify_timeout, poll=args.poll)
+                       verify_timeout=args.verify_timeout, poll=args.poll, limit_wait=args.limit_wait)
         report(row)
         rows.append(row)
     good = sum(succeeded(r, args.verify) for r in rows)

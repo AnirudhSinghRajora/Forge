@@ -48,7 +48,7 @@ export interface WeatherEvidence {
   proposed_event_date?: string | null; fallback_used?: boolean;
 }
 export interface Alert { source: string; identifier: string; issued?: string | null; area?: string | null; headline?: string | null; severity?: string | null; url?: string | null }
-export interface NewsItem { title: string; url: string; date?: string | null; snippet?: string | null }
+export interface NewsItem { title: string; url: string; date?: string | null }
 export interface TimelinePoint { date: string; sensor: "s2" | "s1"; ndvi?: number | null; vh_db?: number | null; vv_db?: number | null; qa?: QAStatus | null }
 export interface Objection {
   id: string; challenge_hi: string; challenge_en: string; test: string; measured: Record<string, unknown>; outcome: ObjectionOutcome;

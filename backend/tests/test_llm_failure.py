@@ -35,7 +35,7 @@ def test_explanation_falls_back_to_template_without_llm():
     report = explain.explain(ev)
     assert report["hi"] == "template" and report["te"] == "template" and not ev.llm_used
     assert "0.70" in ev.explanation_hi and "0.45" in ev.explanation_en
-    assert ev.explanation_te is None and ev.verdict.headline_te
+    assert ev.explanation_te and ev.verdict.headline_te
 
 
 def test_template_numbers_pass_the_validator():

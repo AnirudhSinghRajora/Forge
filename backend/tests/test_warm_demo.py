@@ -120,7 +120,7 @@ def test_a_rejected_case_is_reported_and_does_not_stop_the_rest(client, monkeypa
     fake_geo_on_real_plot(monkeypatch)
     real = warm_demo.create_case
 
-    def fail_first(c, plot, lang):
+    def fail_first(c, plot, lang, *rest):
         if plot.name == "bhiwani-strongest":
             raise RuntimeError("create case: HTTP 422")
         return real(c, plot, lang)

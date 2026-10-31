@@ -5,6 +5,9 @@ import { navigate } from "../router";
 import { Icon } from "../components/Icon";
 import { ErrorNote, Loading } from "../components/Bits";
 import { dayLabel, localInputValue, todayInput } from "../format";
+
+// Sentinel-2's launch. No image from before it can exist, so no such date can be checked.
+const EARLIEST_DATE = "2015-06-23";
 import type { CreateCaseResponse, EventType } from "../types";
 
 const EVENTS: { id: EventType; icon: string }[] = [
@@ -47,7 +50,6 @@ export default function Confirm({ caseId }: { caseId: string }) {
   const [needs, setNeeds] = useState<string[]>([]);
   const [questions, setQuestions] = useState<Record<string, Record<string, string>>>({});
   const [dateNote, setDateNote] = useState<string | null>(null);
-  const [dateFromPlace, setDateFromPlace] = useState(false);
   const [crop, setCrop] = useState("");
   const [eventType, setEventType] = useState<string>("");
   const [eventDate, setEventDate] = useState("");
@@ -70,11 +72,7 @@ export default function Confirm({ caseId }: { caseId: string }) {
       setNeeds(created.needs ?? []);
       setCrop(created.parsed?.crop ?? "");
       setEventType(created.parsed?.event_type && created.parsed.event_type !== "unknown" ? created.parsed.event_type : "");
-      const parsedDate = created.parsed?.event_date ?? "";
-      let shortcutDate = "";
-      try { shortcutDate = sessionStorage.getItem(`fs.placeDate.${caseId}`) ?? ""; } catch { /* a convenience only */ }
-      setEventDate(parsedDate || shortcutDate);
-      setDateFromPlace(!parsedDate && !!shortcutDate);
+      setEventDate(created.parsed?.event_date ?? "");
       setEventTime(created.parsed?.event_time ?? "");
       setQuestions(created.questions ?? {});
       setDateNote(created.parsed?.date_note ?? null);
@@ -108,13 +106,17 @@ export default function Confirm({ caseId }: { caseId: string }) {
   const ask = (f: string) => questions[f]?.[lang] ?? questions[f]?.en ?? t("confirm.please_tell");
   const missingDate = !eventDate;
   const futureDate = !!eventDate && eventDate > todayInput();
+  const earlyDate = !!eventDate && eventDate < EARLIEST_DATE;
+  // The server names a date it refused in a report. The reader gets a sentence, never that code.
+  const noteKind = dateNote?.split(":")[0];
+  const noteText = noteKind === "future_date_refused" ? t("confirm.date_future") : noteKind === "too_old_refused" ? t("confirm.note_old") : dateNote;
   // The plot is the next screen, and the three fields below ask for themselves.
   const known = new Set(["crop", "event_type", "event_date", "plot", "insured", "crop_stage"]);
   const otherNeeds = needs.filter((n) => !known.has(n));
 
   const save = async () => {
     setTouched(true);
-    if (missingDate || futureDate) return;
+    if (missingDate || futureDate || earlyDate) return;
     setSaving(true);
     setSaveErr(null);
     try {
@@ -187,11 +189,10 @@ export default function Confirm({ caseId }: { caseId: string }) {
       <fieldset className={`q ${needed("event_date") ? "q-need" : ""}`}>
         <legend>{t("confirm.q_date")}</legend>
         {needed("event_date") && <p className="q-ask">{ask("event_date")}</p>}
-        {dateNote && <p className="small">{dateNote}</p>}
-        {dateFromPlace && <p className="q-ask">{t("confirm.date_from_place")}</p>}
+        {noteText && <p className="small">{noteText}</p>}
         <div className="btn-row wrap">
           {([["confirm.today", 0], ["confirm.yesterday", 1], ["confirm.before_yesterday", 2]] as [Key, number][]).map(([k, n]) => (
-            <button key={k} className={`chip chip-big ${eventDate === daysAgo(n) ? "chip-on" : ""}`} onClick={() => { setEventDate(daysAgo(n)); setDateFromPlace(false); }}>
+            <button key={k} className={`chip chip-big ${eventDate === daysAgo(n) ? "chip-on" : ""}`} onClick={() => setEventDate(daysAgo(n))}>
               {t(k)}
             </button>
           ))}
@@ -199,7 +200,7 @@ export default function Confirm({ caseId }: { caseId: string }) {
         <div className="input-row">
           <label className="field">
             <span className="field-label">{t("confirm.date")}</span>
-            <input type="date" value={eventDate} max={todayInput()} onChange={(e) => { setEventDate(e.target.value); setDateFromPlace(false); }} />
+            <input type="date" value={eventDate} min={EARLIEST_DATE} max={todayInput()} onChange={(e) => setEventDate(e.target.value)} />
           </label>
           <label className="field">
             <span className="field-label">{t("confirm.time")}</span>
@@ -209,6 +210,7 @@ export default function Confirm({ caseId }: { caseId: string }) {
         {eventDate && <p className="small mono faint">{dayLabel(eventDate, lang)}</p>}
         {touched && missingDate && <p className="notice small" role="alert">{t("confirm.date_required")}</p>}
         {futureDate && <p className="notice small" role="alert">{t("confirm.date_future")}</p>}
+        {earlyDate && <p className="notice small" role="alert">{t("confirm.date_early")}</p>}
       </fieldset>
 
       <fieldset className={`q ${needed("crop") ? "q-need" : ""}`}>
@@ -223,7 +225,7 @@ export default function Confirm({ caseId }: { caseId: string }) {
         </div>
         <label className="field">
           <span className="field-label">{t("confirm.crop_other")}</span>
-          <input value={(CROPS as readonly string[]).includes(crop.trim().toLowerCase()) ? "" : crop} onChange={(e) => setCrop(e.target.value)} lang={lang} />
+          <input value={(CROPS as readonly string[]).includes(crop.trim().toLowerCase()) ? "" : crop} maxLength={64} onChange={(e) => setCrop(e.target.value)} lang={lang} />
         </label>
       </fieldset>
 

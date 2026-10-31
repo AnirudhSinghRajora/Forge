@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useI18n } from "../i18n";
+import { useI18n, type Key } from "../i18n";
 import { ApiError, getRadar } from "../api";
 import { canRunMap, maplibregl, satelliteStyle } from "../map/base";
 import { ErrorNote, Loading, Missing } from "../components/Bits";
-import { dateTimeLabel, num } from "../format";
+import { dateTimeLabel, dayLabel, num } from "../format";
 
 interface Cell {
   name?: string; state?: string; lat: number; lon: number; hours_left?: number | null;
   max_daily_mm?: number | null; precip_mm?: number | null; heavy_mm?: number | null; code?: number | null; weather_code?: number | null;
+  heavy_date?: string | null; signal?: "heavy_rain" | "hail_code" | "thunder_code" | null;
 }
 interface RadarData {
   source?: string; fetched_at?: string; stale?: boolean; points_checked?: number; heavy_rain_mm_threshold?: number;
@@ -82,11 +83,13 @@ export default function Radar() {
           {broken ? <p className="notice">{t("map.no_webgl")}</p> : <div className="radar-canvas"><div ref={host} className="map-host" /></div>}
           <div className="table-scroll">
             <table className="ledger">
-              <thead><tr><th>{t("radar.place")}</th><th>{t("radar.hours")}</th><th>{t("radar.rain")}</th></tr></thead>
+              <thead><tr><th>{t("radar.place")}</th><th>{t("radar.when")}</th><th>{t("radar.signal")}</th><th>{t("radar.hours")}</th><th>{t("radar.rain")}</th></tr></thead>
               <tbody>
                 {sorted.map((c, i) => (
                   <tr key={i}>
                     <td>{[c.name, c.state].filter(Boolean).join(", ") || `${c.lat.toFixed(2)}, ${c.lon.toFixed(2)}`}</td>
+                    <td className="mono small">{c.heavy_date ? dayLabel(c.heavy_date, lang) : "—"}</td>
+                    <td className="small">{c.signal ? t(`radar.sig_${c.signal}` as Key) : "—"}</td>
                     <td className="mono">{num(c.hours_left, 0)}</td>
                     <td className="mono">{num(c.max_daily_mm ?? c.heavy_mm ?? c.precip_mm, 1)} mm</td>
                   </tr>

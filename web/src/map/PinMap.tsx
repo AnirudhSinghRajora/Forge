@@ -1,21 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import { canRunMap, maplibregl, satelliteStyle } from "./base";
 import { useI18n } from "../i18n";
-import { PLACES } from "../places";
+import { PLACES, type Place } from "../places";
 import { Icon } from "../components/Icon";
+import { PlaceNote } from "../components/Bits";
 
-export default function PinMap({ start, onPick, onPlace }: {
+export default function PinMap({ start, onPick }: {
   start: { lat: number; lon: number; zoom?: number } | null;
   onPick: (lat: number, lon: number) => void;
-  /** A shortcut's date, offered later for the reader to confirm. Moving the map creates no data. */
-  onPlace?: (eventDate: string) => void;
 }) {
   const { t, lang } = useI18n();
   const host = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const [center, setCenter] = useState<{ lat: number; lon: number } | null>(null);
   const [broken] = useState(() => !canRunMap());
-  const [note, setNote] = useState<string | null>(null);
+  const [place, setPlace] = useState<Place | null>(null);
 
   useEffect(() => {
     if (broken || !host.current) return;
@@ -51,12 +50,12 @@ export default function PinMap({ start, onPick, onPlace }: {
     <div className="pinmap">
       <div className="places" role="group" aria-label={t("map.places")}>
         {PLACES.map((p) => (
-          <button key={p.id} className="chip" onClick={() => { mapRef.current?.jumpTo({ center: [p.lon, p.lat], zoom: p.zoom }); onPlace?.(p.eventDate); setNote(p.selected?.[lang] ?? null); }}>
+          <button key={p.id} className="chip" onClick={() => { mapRef.current?.jumpTo({ center: [p.lon, p.lat], zoom: p.zoom }); setPlace(p); }}>
             <Icon name="pin" size={16} /> {p.label[lang]}
           </button>
         ))}
       </div>
-      {note && <p className="selected-note">{note}</p>}
+      {place && <PlaceNote place={place} />}
       <div className="pinmap-canvas">
         <div ref={host} className="map-host" />
         <span className="crosshair" aria-hidden="true"><Icon name="pin" size={44} stroke={1.6} /></span>

@@ -155,12 +155,12 @@ function FiledBlock({ env, onFiled }: { env: CaseEnvelope; onFiled: () => void }
       </label>
       <label className={`field ${tried && !ref.trim() ? "field-err" : ""}`}>
         <span className="field-label">{t("file.ref")} *</span>
-        <input value={ref} onChange={(e) => setRef(e.target.value)} className="mono" autoComplete="off" aria-required="true" aria-invalid={tried && !ref.trim()} />
+        <input value={ref} maxLength={100} onChange={(e) => setRef(e.target.value)} className="mono" autoComplete="off" aria-required="true" aria-invalid={tried && !ref.trim()} />
       </label>
       {tried && !ref.trim() && <p className="notice small" role="alert">{t("file.ref_required")}</p>}
       <label className="field">
         <span className="field-label">{t("file.when")}</span>
-        <input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} />
+        <input type="datetime-local" value={when} max={localInputValue(new Date())} onChange={(e) => setWhen(e.target.value)} />
       </label>
       {err !== null && <ErrorNote error={err} />}
       <button className="btn btn-primary btn-big btn-wide" type="submit" disabled={busy}>
@@ -229,7 +229,7 @@ function AskBox({ caseId }: { caseId: string }) {
       <h2 id="ask-t" className="h-sec"><Icon name="question" /> {t("ask.title")}</h2>
       <p className="small">{t("ask.lead")}</p>
       <form className="ask" onSubmit={ask}>
-        <textarea rows={2} value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("ask.placeholder")} lang={lang} />
+        <textarea rows={2} value={q} maxLength={500} onChange={(e) => setQ(e.target.value)} placeholder={t("ask.placeholder")} lang={lang} />
         <button className="btn btn-primary" disabled={busy || !q.trim()} type="submit">{busy ? t("ask.busy") : t("ask.send")}</button>
       </form>
       {err !== null && <ErrorNote error={err} onRetry={() => ask()} />}

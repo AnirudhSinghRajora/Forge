@@ -144,7 +144,7 @@ function asObjection(ev: TraceEvent): Objection | null {
   return { ...d, challenge_hi: ev.title_hi, challenge_en: ev.title_en } as Objection;
 }
 
-const HIDDEN = new Set(["exhibit", "exhibits", "exhibits_pending", "exhibits_started", "provisional", "revised", "sealed", "signature", "pending", "n_clauses", "clause_ids", "unknowns", "intimation", "route", "reason", "objection", "reasons", "scene", "from", "to", "frm", "seq", "headline_hi", "headline_en", "headline_te", "rejected", "caveats", "budget", "country_code", "fallback_used", "tool", "args", "llm", "choice", "excluded", "start", "end", "duration_s", "action", "report", "open_followups", "round", "needed", "corroborated_by", "conceded", "evidence_hash", "due_at", "grid_note", "centroid", "crs", "warnings", "scenes"]);
+const HIDDEN = new Set(["exhibit", "exhibits", "exhibits_pending", "exhibits_started", "provisional", "revised", "sealed", "signature", "pending", "n_clauses", "clause_ids", "unknowns", "intimation", "route", "reason", "objection", "reasons", "scene", "from", "to", "frm", "seq", "headline_hi", "headline_en", "headline_te", "rejected", "caveats", "budget", "country_code", "fallback_used", "tool", "args", "llm", "choice", "excluded", "start", "end", "duration_s", "action", "report", "open_followups", "round", "needed", "corroborated_by", "conceded", "evidence_hash", "due_at", "grid_note", "centroid", "crs", "warnings", "scenes", "rationale", "error", "error_ref"]);
 
 function flatten(d: Record<string, unknown>, prefix = "", depth = 0): [string, string][] {
   const out: [string, string][] = [];
@@ -395,7 +395,7 @@ export default function Investigate({ caseId }: { caseId: string }) {
           {failed ? (
             <>
               <h2 className="h-sec">{t(finalStatus === "interrupted" ? "trace.interrupted" : "trace.failed")}</h2>
-              {lastError && <p lang="en" className="small">{String(lastError.detail.error ?? lastError.title_en)}</p>}
+              {lastError && <p className="small">{titleOf(lastError)}</p>}
               <p>{t("trace.failed_help")}</p>
               <div className="btn-row">
                 <button className="btn btn-primary btn-big" onClick={rerun} disabled={restarting}>

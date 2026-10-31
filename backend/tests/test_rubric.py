@@ -154,7 +154,7 @@ def test_suspect_post_without_confirmation_gets_no_optical_credit():
     assert level(good(post_status="suspect")) in ("insufficient", "weak")
 
 
-def test_alert_or_news_corroborates_without_weather():
+def test_a_matching_alert_corroborates_without_weather():
     ev = good(wx=weather(corroborated=False, max_mm=0.0), alerts=[an_alert()])
     assert rubric.corroboration(ev) == ["official_alert"] and level(ev) == "strong"
 
@@ -286,4 +286,4 @@ def test_the_near_line_reaches_testimony_and_explanation_in_every_language():
     for text, line in zip(testimony.templates(ev), (explain.NEAR_LINE[0], explain.NEAR_LINE[1], explain.NEAR_LINE[2]), strict=True):
         assert line in text
     hi, en, te = explain.template_explanation(ev, result.level)
-    assert explain.NEAR_LINE[0] in hi and explain.NEAR_LINE[1] in en
+    assert explain.NEAR_LINE[0] in hi and explain.NEAR_LINE[1] in en and explain.NEAR_LINE[2] in te

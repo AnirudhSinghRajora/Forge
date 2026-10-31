@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useI18n, keyLabel, type Key } from "../i18n";
+import { ApiError } from "../api";
 import { readSse } from "../sse";
 import { Icon } from "../components/Icon";
 import { Stamp } from "../components/Stamp";
@@ -18,13 +19,14 @@ interface Start extends Cachable {
   hash_verified?: boolean; engine_version?: string; event_date?: string; optical_pre_id?: string | null; optical_post_id?: string | null;
   sar_pre_id?: string | null; sar_post_id?: string | null; history_scene_ids?: string[]; seed?: number; n_numbers?: number; tolerance?: number;
   numbers?: Record<string, number | null>; superseded?: boolean; started_at?: string;
+  verdict_check?: "intact" | "not_sealed" | "unavailable" | null;
   last_full_check?: { status: string; checked: number | null; total: number | null; finished_at: string | null } | null;
 }
 interface Stage { status: "field_verified" | "field_mismatch" | "field_engine_changed" | "field_failed"; matched: number; total: number; remaining: number }
 interface GroupState { name: string; state: "running" | "done" | "failed"; n?: number; budget?: number; elapsed?: number; startedAt?: number; reason?: string; fields?: string[] }
 interface StreamEvent extends Record<string, unknown> { type: string; seq?: number; run_id?: string }
 
-type Conn = "connecting" | "open" | "retrying" | "done" | "gone";
+type Conn = "connecting" | "open" | "retrying" | "done" | "gone" | "limited";
 
 /** The order the server works through. Groups a record doesn't need are dropped once the check ends. */
 const GROUP_ORDER = ["field_pre", "field_post", "field_extra", "sar_field", "history", "ring", "far_twin", "radar", "village", "scale_fade"];
@@ -67,6 +69,7 @@ export default function Verify({ hash }: { hash: string }) {
   const [note, setNote] = useState<{ kind?: string; message_hi?: string; message_en?: string; message_te?: string } | null>(null);
   const [nonce, setNonce] = useState<{ n: number; rerun: boolean }>({ n: 0, rerun: false });
   const [firstSeen, setFirstSeen] = useState(() => Date.now());
+  const [limited, setLimited] = useState<ApiError | null>(null);
   const reduced = usePrefersReducedMotion();
   const valid = /^[a-fA-F0-9]{16,128}$/.test(hash);
 
@@ -106,6 +109,7 @@ export default function Verify({ hash }: { hash: string }) {
     setGroupList([]);
     setNote(null);
     setSourceSeen(false);
+    setLimited(null);
     setConn("connecting");
     setFirstSeen(Date.now());
 
@@ -197,6 +201,8 @@ export default function Verify({ hash }: { hash: string }) {
         } catch (e) {
           if (ctl.signal.aborted) return;
           if ((e as { status?: number }).status === 404) { setConn("gone"); return; }
+          // Asked to wait: trying again by itself would only use up the allowance further.
+          if (e instanceof ApiError && e.status === 429) { setLimited(e); setConn("limited"); return; }
         }
         tries += 1;
         setConn("retrying");
@@ -282,6 +288,7 @@ export default function Verify({ hash }: { hash: string }) {
       <p className="eyebrow">{t("verify.eyebrow")}</p>
       <h1 className="display verify-title">{t(cached ? "verify.title_stored" : running ? "verify.title" : "verify.title_done")}</h1>
       <p className="lede">{t(cached ? "verify.lede_stored" : "verify.lede")}</p>
+      <p className="verify-scope"><strong>{t("verify.scope")}</strong></p>
 
       <div className="hash-block">
         <span className="hash-cap">{t("verify.hash")}</span>
@@ -295,6 +302,13 @@ export default function Verify({ hash }: { hash: string }) {
           {start?.superseded && <p className="notice small">{t("verify.superseded")}</p>}
           {start?.hash_verified && (
             <p className="hash-ok"><Icon name="check" size={20} stroke={2.2} /> {t("verify.hash_ok")}</p>
+          )}
+          {start?.verdict_check === "intact" && <p className="small">{t("verify.verdict_intact")}</p>}
+          {start?.verdict_check === "not_sealed" && <p className="small">{t("verify.verdict_not_sealed")}</p>}
+          {limited && (
+            <div className="notice notice-block" role="alert">
+              <p>{limited.localized(lang)}</p>
+            </div>
           )}
 
           {cached && (

@@ -511,7 +511,10 @@ def test_hung_llm_during_explain_still_gives_the_deterministic_text(client, monk
     import time
 
     from app.agent import graph, llm
+    from app.config import get_settings
 
+    monkeypatch.setenv("LLM_POLISH", "true")
+    get_settings.cache_clear()
     monkeypatch.setattr(graph, "LLM_EXPLAIN_S", 0.2)
     monkeypatch.setattr(graph, "LLM_PLAN_S", 0.1)
     monkeypatch.setattr(graph, "LLM_REPHRASE_S", 0.1)

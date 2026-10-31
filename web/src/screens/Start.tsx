@@ -57,8 +57,6 @@ export function Start() {
   });
   const [pinOpen, setPinOpen] = useState(!!near);
 
-  const [placeDate, setPlaceDate] = useState<string | null>(null);
-
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<unknown>(null);
 
@@ -244,7 +242,6 @@ export function Start() {
         localStorage.setItem("fs.lastCase", res.case_id);
         sessionStorage.setItem(`fs.created.${res.case_id}`, JSON.stringify(res));
         sessionStorage.setItem(`fs.loc.${res.case_id}`, JSON.stringify({ lat: loc.lat, lon: loc.lon }));
-        if (placeDate && loc.source === "pin") sessionStorage.setItem(`fs.placeDate.${res.case_id}`, placeDate);
       } catch { /* storage is only a convenience */ }
       navigate(`/case/${encodeURIComponent(res.case_id)}/confirm`);
     } catch (e) {
@@ -303,6 +300,7 @@ export function Start() {
           <label className="field">
             <span className="field-label"><Icon name="edit" size={18} /> {t("start.or_type")}</span>
             <textarea
+              maxLength={5000}
               rows={3}
               value={interim ? `${text}${text ? " " : ""}${interim}` : text}
               onChange={(e) => { setText(e.target.value); setInterim(""); }}
@@ -334,7 +332,6 @@ export function Start() {
                 <Suspense fallback={<Loading what={t("loading.map")} />}>
                   <PinMap
                     start={loc ?? near}
-                    onPlace={setPlaceDate}
                     onPick={(lat, lon) => {
                       setLoc({ lat, lon, source: "pin" });
                       setPinOpen(false);
@@ -346,7 +343,7 @@ export function Start() {
             )}
           </section>
 
-          {err !== null && <ErrorNote error={err instanceof ApiError && err.status === 422 ? new Error(t("err.case_rejected") + " " + err.message) : err} onRetry={submit} />}
+          {err !== null && <ErrorNote error={err instanceof ApiError && err.status === 422 ? new Error(t("err.case_rejected") + " " + err.localized(lang)) : err} onRetry={submit} />}
 
           <div className="cta">
             <button className="btn btn-primary btn-big btn-wide" disabled={!ready || busy} onClick={submit}>

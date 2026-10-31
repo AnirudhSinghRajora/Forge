@@ -2,12 +2,32 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
 import { useI18n } from "../i18n";
 import { ApiError, type SelectionNoteText } from "../api";
+import type { Place } from "../places";
 
 /** How this plot was chosen, from the server. Said beside anything that could otherwise look typical. */
 export function SelectionNote({ note, className }: { note: SelectionNoteText | null; className?: string }) {
-  const { lang } = useI18n();
+  const { t, lang } = useI18n();
   if (!note) return null;
-  return <p className={`selected-note ${className ?? ""}`} lang={lang} data-kind={note.kind}>{note[lang]}</p>;
+  return (
+    <p className={`selected-note ${className ?? ""}`} lang={lang} data-kind={note.kind}>
+      {note[lang]}
+      {note.source && <> <a className="small" href={note.source} target="_blank" rel="noreferrer">{t("selected.source")}</a></>}
+    </p>
+  );
+}
+
+/** A map shortcut moves the map. This says what was reported there, and where, and fills in nothing. */
+export function PlaceNote({ place, over }: { place: Place; over?: boolean }) {
+  const { t, lang } = useI18n();
+  return (
+    <div className={over ? "map-note map-note-top place-note" : "place-note"} lang={lang}>
+      {place.selected && <p className="selected-note">{place.selected[lang]}</p>}
+      <p className="small">
+        {place.reported[lang]} · <a href={place.source.url} target="_blank" rel="noreferrer">{t("map.source")}: {place.source.name}</a>
+      </p>
+      <p className="small">{t("map.no_preset")}</p>
+    </div>
+  );
 }
 
 /** A section whose data is null says exactly what is missing and why. Never a blank chart. */

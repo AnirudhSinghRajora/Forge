@@ -52,6 +52,8 @@ def web_base(request: Request) -> str:
 
 def retry_after(bucket: str, ip: str, per_hour: int, now: float | None = None) -> int | None:
     """Records one use and returns None, or returns the seconds until a use frees up."""
+    if per_hour <= 0:
+        return int(WINDOW_S)
     now = time.monotonic() if now is None else now
     with _lock:
         if len(_hits) > MAX_TRACKED:

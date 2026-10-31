@@ -248,9 +248,159 @@ test.describe("languages and shared links", () => {
     });
     await page.goto("/?near=28.77,76.18");
     await expect(page.locator(".pinmap")).toBeVisible();
-    await page.getByRole("button", { name: /ओले, भिवानी 2024: आम खेत/ }).click();
+    await page.getByRole("button", { name: /भिवानी: आम खेत/ }).click();
     await expect(page.locator(".selected-note")).toBeVisible();
     expect(posts).toEqual([]);
+  });
+
+  test("a shortcut moves the map, says what was reported, and sets no date", async ({ page }) => {
+    const created = { case_id: "c1", needs: ["event_date"], questions: {}, parsed: { event_date: null, crop: null, event_type: "unknown", transcript: "x", confidence: 0.1 } };
+    let form = "";
+    await page.route("**/api/**", (r) => {
+      const u = new URL(r.request().url());
+      if (u.pathname === "/api/cases" && r.request().method() === "POST") {
+        form = r.request().postData() ?? "";
+        return r.fulfill({ json: created });
+      }
+      if (u.pathname === "/api/cases/c1") return r.fulfill({ json: { case: { id: "c1" }, evidence: null, actions: [] } });
+      return r.fulfill({ json: { status: "ok", gemini: true, version: "t" } });
+    });
+    await page.goto("/?near=28.77,76.18&lang=en");
+    await page.getByRole("button", { name: /Bhiwani: typical plot/ }).click();
+    const note = page.locator(".place-note");
+    await expect(note).toContainText("Hail reported: 2-3 March 2024");
+    await expect(note.getByRole("link")).toHaveAttribute("href", /tribuneindia\.com/);
+    await expect(note).toContainText("only moves the map");
+    expect(form).toBe("");
+  });
+
+  test("a date before Sentinel-2 is refused in the reader's language", async ({ page }) => {
+    await page.route("**/api/**", (r) => {
+      const u = new URL(r.request().url());
+      if (u.pathname === "/api/cases/c1") return r.fulfill({ json: { case: { id: "c1", event_date: "2014-01-01", needs: [], questions: {}, parsed: { date_note: "too_old_refused:2001-01-01" } }, evidence: null, actions: [] } });
+      return r.fulfill({ json: { status: "ok", gemini: true, version: "t" } });
+    });
+    await page.goto("/case/c1/confirm?lang=en");
+    await expect(page.getByRole("alert")).toContainText("before 23 June 2015");
+    await expect(page.locator("input[type=date]")).toHaveAttribute("min", "2015-06-23");
+    await expect(page.locator("body")).not.toContainText("too_old_refused");
+    await expect(page.locator("body")).toContainText("too far back");
+  });
+});
+
+test.describe("what the review changed", () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  const envelope = (overrides: Record<string, unknown>, ev: Record<string, unknown> = evidence() as unknown as Record<string, unknown>) => ({
+    rubric: { version: "v3", p_field: 0.025, strong_delta: -0.15, moderate_delta: -0.1 },
+    case: { id: "testcase0001", lat: 29.53, lon: 75.03, event_date: "2026-10-25", plot: null, latest_run: { id: "r1", status: "interrupted" }, active_run_id: null, status: "open" },
+    evidence: ev, actions: [], exhibits: {}, sealed: !!ev.evidence_hash, ...overrides,
+  });
+  const serve = async (page: Page, body: unknown, status = 200) => {
+    await page.route("**/api/**", (r) => {
+      const p = new URL(r.request().url()).pathname;
+      if (p === "/api/health") return r.fulfill({ json: { status: "ok", gemini: false, version: "t" } });
+      if (p.startsWith("/api/cases/")) return r.fulfill({ status, json: body });
+      if (p.startsWith("/api/artifacts/")) return r.fulfill({ contentType: "image/png", body: testPng(8, 170, 120, 90) });
+      return r.fulfill({ status: 404, json: { detail: "not mocked" } });
+    });
+  };
+
+  test("an unsealed record with no active run offers Run Again", async ({ page }) => {
+    await serve(page, envelope({}, { ...evidence(), evidence_hash: null }));
+    await page.goto("/case/testcase0001?lang=en");
+    await expect(page.getByRole("button", { name: /run the inquiry again/i }).first()).toBeVisible();
+    await expect(page.locator("body")).toContainText("stopped before it was sealed");
+    await expect(page.locator("body")).not.toContainText("may still change");
+  });
+
+  test("a next re-check shows only when a real action is behind it", async ({ page }) => {
+    const ev = { ...evidence(), deadlines: [{ type: "recheck", due_at: "2026-11-05T00:00:00Z", basis: "sentinel-2-revisit", status: "open" }] };
+    await serve(page, envelope({ actions: [] }, ev));
+    await page.goto("/case/testcase0001?lang=en");
+    await expect(page.locator(".verdict-side")).not.toContainText("Next re-check");
+    await page.unrouteAll();
+    await serve(page, envelope({ actions: [{ id: "a", type: "recheck", status: "open", due_at: "2026-11-05T00:00:00Z", payload: {} }] }, ev));
+    await page.reload();
+    await expect(page.locator(".verdict-side")).toContainText("Next re-check");
+  });
+
+  test("an old event says no re-check will run", async ({ page }) => {
+    await serve(page, envelope({ recheck_closed: true, actions: [] }));
+    await page.goto("/case/testcase0001?lang=en");
+    await expect(page.locator(".verdict-side")).toContainText("No re-check will run");
+  });
+
+  test("sealed numbers show labels, never the internal name; news is labelled related reports", async ({ page }) => {
+    const ev = { ...evidence(), news: [{ title: "A report", url: "https://news.example/a" }],
+                 replay: { ...(evidence() as unknown as { replay: object }).replay, numbers: { "village.lottery.average_median": -0.08 } } };
+    await serve(page, envelope({}, ev));
+    await page.goto("/case/testcase0001?lang=en");
+    await page.getByText(/Sealed numbers/).click();
+    const body = await page.locator("body").innerText();
+    expect(body).not.toContain("lottery");
+    expect(body).toContain("village.ten_field_draw.average_median");
+    expect(body).toContain("Related reports");
+    expect(body).toContain("do not change the result");
+  });
+
+  test("a rate limit shows the server's message in the reader's language", async ({ page }) => {
+    await page.route("**/api/**", (r) => {
+      const u = new URL(r.request().url());
+      if (u.pathname.endsWith("/investigate")) {
+        return r.fulfill({ status: 429, headers: { "retry-after": "60" }, json: { detail: { code: "rate_limited", message_hi: "हिंदी सीमा", message_en: "english limit", message_te: "తెలుగు పరిమితి" } } });
+      }
+      if (u.pathname === "/api/health") return r.fulfill({ json: { status: "ok", gemini: false, version: "t" } });
+      return r.fulfill({ json: envelope({}, { ...evidence(), evidence_hash: null }) });
+    });
+    await page.goto("/case/testcase0001?lang=te");
+    await page.locator("button", { hasText: /మళ్ళీ/ }).first().click();
+    await expect(page.locator("[role=alert]").first()).toContainText("తెలుగు పరిమితి");
+  });
+
+  test("the verify page says what was recomputed, and shows a 429 once", async ({ page }) => {
+    let calls = 0;
+    await page.route("**/api/**", (r) => {
+      const u = new URL(r.request().url());
+      if (u.pathname.startsWith("/api/verify/")) {
+        calls += 1;
+        return r.fulfill({ status: 429, json: { detail: { code: "rate_limited", message_en: "english limit", message_hi: "हिंदी सीमा", message_te: "తెలుగు" } } });
+      }
+      return r.fulfill({ json: { status: "ok", gemini: false, version: "t" } });
+    });
+    await page.goto(`/verify/${"ab".repeat(32)}?lang=en`);
+    await expect(page.locator(".verify-scope")).toContainText("Satellite numbers are recomputed; the verdict and weather are checked for tampering only.");
+    await expect(page.getByRole("alert")).toContainText("english limit");
+    await page.waitForTimeout(1500);
+    expect(calls).toBe(1);
+  });
+
+  test("radar says last 72 hours, not now, and labels a thunder-only cell", async ({ page }) => {
+    await page.route("**/api/**", (r) => {
+      const u = new URL(r.request().url());
+      if (u.pathname === "/api/radar") return r.fulfill({ json: { source: "s", cells: [{ name: "Sirsa", state: "Haryana", lat: 29.5, lon: 75, hours_left: 20, precip_mm: 1, heavy_date: "2026-10-30", signal: "thunder_code" }] } });
+      return r.fulfill({ json: { status: "ok", gemini: false, version: "t" } });
+    });
+    await page.goto("/radar?lang=en");
+    await expect(page.locator(".radar")).toContainText("last 72 hours");
+    await expect(page.locator(".radar table")).toContainText("Thunder code only");
+    await expect(page.locator(".radar h1")).not.toContainText("active");
+  });
+
+  test("a failed run shows no raw exception text", async ({ page }) => {
+    const events = [
+      { seq: 1, run_id: "r1", ts: "2026-11-01T00:00:00Z", type: "error", node: "runner", title_hi: "रुकी", title_en: "The investigation stopped unexpectedly. (ref abc)", detail: { error_ref: "abc" } },
+      { seq: 2, run_id: "r1", ts: "2026-11-01T00:00:01Z", type: "done", node: "runner", title_hi: "समाप्त", title_en: "Investigation ended", detail: { status: "failed" } },
+    ];
+    await page.route("**/api/**", (r) => {
+      const u = new URL(r.request().url());
+      if (u.pathname === "/api/runs/r1/stream") return r.fulfill({ contentType: "text/event-stream", body: events.map((e) => `id: ${e.seq}\ndata: ${JSON.stringify(e)}\n\n`).join("") });
+      return r.fulfill({ json: { status: "ok", gemini: false, version: "t" } });
+    });
+    await page.goto("/case/c1/investigate?run=r1&lang=en");
+    const end = page.locator(".trace-end");
+    await expect(end).toContainText("(ref abc)", { timeout: 15000 });
+    await expect(end).not.toContainText("Traceback");
   });
 });
 

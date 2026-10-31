@@ -1,6 +1,8 @@
 // A fetch-based SSE reader. EventSource cannot change its URL between reconnects, and these
 // streams must resume with ?after=<seq>, so reconnection is done here.
 
+import { ApiError } from "./api";
+
 export interface SseMessage { event: string | null; data: string; id: string | null }
 
 export async function readSse(
@@ -11,8 +13,7 @@ export async function readSse(
 ): Promise<void> {
   const res = await fetch(url, { headers: { accept: "text/event-stream" }, signal, cache: "no-store" });
   if (!res.ok) {
-    const err = new Error(`HTTP ${res.status}`) as Error & { status?: number };
-    err.status = res.status;
+    const err = new ApiError(res.status, `HTTP ${res.status}`, await res.json().catch(() => null));
     throw err;
   }
   if (!res.body) throw new Error("no stream body");

@@ -186,6 +186,11 @@ html[data-lang="en"] .h-sec { font-weight: 700; }
 .map-note { position: absolute; left: 8px; bottom: 34px; right: 8px; z-index: 2; background: rgba(30, 25, 19, 0.85); color: var(--paper); padding: 6px 10px; margin: 0; font-size: 0.82rem; }
 
 .map-note.map-note-top { bottom: auto; top: 60px; right: 56px; }
+.place-note p { margin: 0 0 4px; }
+.place-note .selected-note { margin-bottom: 6px; }
+.map-note a { color: inherit; text-decoration: underline; }
+.map-note .selected-note { border: 0; padding: 0; }
+.verify-scope { max-width: 46em; margin: 0 0 14px; }
 
 /* Confirm */
 .statement { margin: 16px 0; padding: 14px 16px; background: #fbf7ec; border-inline-start: 4px solid var(--soil); }

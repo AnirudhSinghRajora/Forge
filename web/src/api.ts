@@ -92,9 +92,13 @@ export interface CaseEnvelope {
   rubric?: { version?: string; p_field?: number; strong_delta?: number; moderate_delta?: number; near_low?: number; near_high?: number; near_line_decides?: boolean } | null;
   /** How this plot was chosen, when it came from a scan. Never part of the evidence or its hash. */
   selection_note?: SelectionNoteText | null;
+  /** What the level rested on. Related reports are never part of it. */
+  corroboration?: { sources: string[]; matching_alert_ids: string[] } | null;
+  /** The result would call for a later image, and the window for one has passed. */
+  recheck_closed?: boolean;
 }
 
-export interface SelectionNoteText { hi: string; te: string; en: string; kind: "strongest" | "typical" }
+export interface SelectionNoteText { hi: string; te: string; en: string; kind: "strongest" | "typical"; source?: string }
 
 /** The case row from _case_dict in backend/app/main.py. */
 export interface CaseRecord {

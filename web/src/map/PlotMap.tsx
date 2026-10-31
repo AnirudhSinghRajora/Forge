@@ -3,7 +3,8 @@ import { TerraDraw, TerraDrawPolygonMode, TerraDrawSelectMode } from "terra-draw
 import { TerraDrawMapLibreGLAdapter } from "terra-draw-maplibre-gl-adapter";
 import { canRunMap, maplibregl, satelliteStyle } from "./base";
 import { useI18n } from "../i18n";
-import { PLACES } from "../places";
+import { PLACES, type Place } from "../places";
+import { PlaceNote } from "../components/Bits";
 import { Icon } from "../components/Icon";
 import { bboxOfRing, closeRing } from "../geo";
 
@@ -41,7 +42,7 @@ const PlotMap = forwardRef<PlotMapHandle, Props>(function PlotMap({ center, init
   const [tileError, setTileError] = useState(false);
   const [broken] = useState(() => !canRunMap());
   const [initError, setInitError] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
+  const [place, setPlace] = useState<Place | null>(null);
 
   const emit = () => {
     const draw = drawRef.current;
@@ -222,12 +223,12 @@ const PlotMap = forwardRef<PlotMapHandle, Props>(function PlotMap({ center, init
       <div ref={host} className="map-host" />
       <div className="places places-over" role="group" aria-label={t("map.places")}>
         {PLACES.map((p) => (
-          <button key={p.id} className="chip" onClick={() => { mapRef.current?.jumpTo({ center: [p.lon, p.lat], zoom: p.zoom }); setNote(p.selected?.[lang] ?? null); }}>
+          <button key={p.id} className="chip" onClick={() => { mapRef.current?.jumpTo({ center: [p.lon, p.lat], zoom: p.zoom }); setPlace(p); }}>
             <Icon name="pin" size={16} /> {p.label[lang]}
           </button>
         ))}
       </div>
-      {note && <p className="map-note map-note-top">{note}</p>}
+      {place && <PlaceNote place={place} over />}
       {tileError && <p className="map-note" role="status">{t("map.tiles_failed")}</p>}
     </div>
   );

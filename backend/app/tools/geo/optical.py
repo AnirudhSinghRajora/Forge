@@ -286,6 +286,12 @@ def _optical_compare(
     post_qa = to_scene_qa(post, apply_q5(raw_qa(post, plot, fresh=fresh), post.date, pre_qa))
     _require_usable(pre_qa)
     _require_usable(post_qa)
+    if pre.tile != post.tile:
+        # The same pass can read about 0.1 NDVI apart in two overlapping tiles, measured at Anaparthi.
+        post_qa.reasons.append(
+            f"pre scene is from tile {pre.tile} and post from {post.tile}; overlapping tiles are corrected "
+            "separately, so part of the change could come from that"
+        )
 
     red_edge = plot.area_ha >= RED_EDGE_MIN_HA
     neighbours: NeighbourEvidence | None = None

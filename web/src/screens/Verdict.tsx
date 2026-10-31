@@ -116,7 +116,7 @@ function PastYears({ ev }: { ev: Evidence }) {
   );
 }
 
-function Corroboration({ ev }: { ev: Evidence }) {
+function Corroboration({ ev, matching }: { ev: Evidence; matching: string[] | null }) {
   const { t, lang } = useI18n();
   const w = ev.weather;
   return (
@@ -155,11 +155,13 @@ function Corroboration({ ev }: { ev: Evidence }) {
               {a.url ? <a href={a.url} target="_blank" rel="noreferrer">{a.headline ?? a.identifier}</a> : a.headline ?? a.identifier}
               <br /><span className="small faint" lang="en">{a.source}{a.area ? ` · ${a.area}` : ""}{a.severity ? ` · ${a.severity}` : ""}</span>
               {a.issued && <span className="mono small faint"> · {dateTimeLabel(a.issued, lang)}</span>}
+              {matching && !matching.includes(a.identifier) && <><br /><span className="small">{t("corro.alert_other")}</span></>}
             </li>
           ))}
         </ul>
       )}
       <h3 className="h-mini">{t("corro.news")}</h3>
+      <p className="small">{t("corro.news_note")}</p>
       {ev.news.length === 0 ? (
         <p className="small faint">{t("corro.no_news")}</p>
       ) : (
@@ -168,7 +170,6 @@ function Corroboration({ ev }: { ev: Evidence }) {
             <li key={n.url}>
               <a href={n.url} target="_blank" rel="noreferrer">{n.title}</a>
               {n.date && <span className="mono small faint"> · {n.date}</span>}
-              {n.snippet && <p className="small">{n.snippet}</p>}
             </li>
           ))}
         </ul>
@@ -239,7 +240,13 @@ function Sources({ ev }: { ev: Evidence }) {
             <table className="ledger">
               <tbody>
                 {numbers.map(([k, v]) => (
-                  <tr key={k}><th className="mono small break">{k}</th><td className="mono">{v ?? t("missing.short")}</td></tr>
+                  <tr key={k}>
+                    <th className="mono small break">
+                      {keyLabel(k, lang) !== k.replace(/_/g, " ") && <span className="vname">{keyLabel(k, lang)}</span>}
+                      {k.replace("village.lottery.", "village.ten_field_draw.")}
+                    </th>
+                    <td className="mono">{v ?? t("missing.short")}</td>
+                  </tr>
                 ))}
               </tbody>
             </table>
@@ -328,7 +335,9 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
   const [pollUntil, setPollUntil] = useState(0);
   const anyPending = Object.values(env?.exhibits ?? {}).some((x) => x.status === "pending");
   const running = !!env?.case.active_run_id;
-  const live = anyPending || running || Date.now() < pollUntil;
+  // A run can finish a moment before its seal is readable, so a finished run with no seal keeps asking.
+  const sealing = env?.case.latest_run?.status === "done" && !!env?.evidence && !env.evidence.evidence_hash;
+  const live = anyPending || running || sealing || Date.now() < pollUntil;
   useEffect(() => {
     if (!live) return;
     const id = window.setInterval(() => {
@@ -368,7 +377,8 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
   const intimation = ev.deadlines.find((d) => d.type === "intimation_72h");
   // A countdown is shown only for routes where the guidelines set one, and only while it is open.
   const countdown = ev.claim_path?.countdown_applies && intimation?.status === "open" ? intimation : null;
-  const recheck = ev.deadlines.find((d) => d.type === "recheck");
+  // Only a real job behind it makes this a promise: the Action row, not a line in the evidence.
+  const recheck = (env.actions ?? []).find((a) => a.type === "recheck" && a.status === "open" && a.due_at);
   const twinWhy = ev.neighbours?.placebo?.insufficient_reason ?? (ev.optical.post ? null : t("twin.no_post"));
   const sealed = !!ev.evidence_hash;
   // An early "insufficient" while work is still running means "still computing", never a finding.
@@ -404,13 +414,19 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
               <LevelScale level={v.level} />
               <p className="plain-level">{t(`level.${v.level}` as Key)}</p>
               {ev.optical.pre && ev.optical.post && <GreennessBars pre={ev.optical.pre} post={ev.optical.post} />}
-              {!sealed && <p className="small">{t("verdict.may_change")}</p>}
+              {!sealed && (c.active_run_id || pendingCount > 0) && <p className="small">{t("verdict.may_change")}</p>}
+              {!sealed && !c.active_run_id && pendingCount === 0 && (
+                <>
+                  <p className="small">{t("verdict.stopped_unsealed")}</p>
+                  <RunAgain caseId={caseId} />
+                </>
+              )}
             </>
           ) : (
             <>
               <h1 className="verdict-headline">{t("verdict.no_verdict")}</h1>
               <p className="lede">{t(c.latest_run?.status === "interrupted" ? "verdict.no_verdict_interrupted" : "verdict.no_verdict_body")}</p>
-              {!c.active_run_id && <RunAgain caseId={caseId} />}
+              {!c.active_run_id && !sealed && <RunAgain caseId={caseId} />}
             </>
           )}
           {explanation && !provisional && <p className="explanation">{explanation}</p>}
@@ -434,9 +450,10 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
             )}
             <span className="deadline-go">{t("path.card_go")} <Icon name="arrow" size={18} /></span>
           </a>
-          {recheck && (
+          {recheck?.due_at && (
             <p className="small">{t("deadline.recheck")} <span className="mono">{dateTimeLabel(recheck.due_at, lang)}</span></p>
           )}
+          {!recheck && env.recheck_closed && <p className="small">{t("deadline.recheck_closed")}</p>}
           <div className="file-facts">
             <p><span>{t("facts.event")}</span> <b>{t(`event.${ev.event.type}` as Key)}</b> · <span className="mono">{dayLabel(ev.event.date, lang)}</span>
               {ev.event.date_source !== "farmer" && <em className="small"> ({t(`date_source.${ev.event.date_source}` as Key)})</em>}</p>
@@ -585,7 +602,7 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
         </Exhibit>
 
         <Exhibit id="ex-g" mark={t("ex.g")} title={t("ex.corro_t")} lead={t("ex.corro_l")}>
-          <Corroboration ev={ev} />
+          <Corroboration ev={ev} matching={env.corroboration?.matching_alert_ids ?? null} />
         </Exhibit>
 
         <Exhibit id="ex-h" mark={t("ex.h")} title={t("ex.src_t")} lead={t("ex.src_l")}>

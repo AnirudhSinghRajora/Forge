@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app.agent import llm
+from app.config import get_settings
 from app.db import Action, Case, Plot, Run, session_scope
 from app.tools import weather
 from tests import conftest
@@ -28,8 +29,8 @@ def _runs(case_id, trigger="scheduler"):
 
 def _make_due(case_id):
     with session_scope() as s:
-        action = s.scalar(select(Action).where(Action.case_id == case_id, Action.type == "recheck"))
-        action.due_at = datetime.now(UTC) - timedelta(minutes=1)
+        for action in s.query(Action).filter_by(case_id=case_id, type="recheck").all():
+            action.due_at = datetime.now(UTC) - timedelta(minutes=1)
 
 
 def test_recheck_waits_for_a_new_accepted_scene(client, monkeypatch):  # noqa: F811
