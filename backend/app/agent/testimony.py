@@ -93,12 +93,15 @@ def templates(ev: Evidence) -> tuple[str, str, str]:
         en.append("No trustworthy image shows me after the event yet.")
         te.append("సంఘటన తర్వాత నన్ను చూపే నమ్మదగిన చిత్రం ఇంకా లేదు.")
 
-    placebo = ev.neighbours.placebo if ev.neighbours and o.post else (ev.sar.placebo if ev.sar else None)
-    if rubric.usable_p(placebo) is not None:
-        n, k = placebo.n_placebos, placebo.n_at_least_as_extreme
-        hi.append(f"मेरे जैसे {n} खेतों में से {k} में इतना या इससे ज़्यादा बदलाव हुआ।")
-        en.append(f"Of {n} fields like me nearby, {k} changed this much or more.")
-        te.append(f"నాలాంటి {n} పొలాల్లో {k} పొలాల్లో ఇంత లేదా ఇంతకంటే ఎక్కువ మార్పు వచ్చింది.")
+    tests = explain_mod.tests_line(ev)
+    if tests:
+        hi.append(tests[0])
+        en.append(tests[1])
+        te.append(tests[2])
+    if rubric.post_too_early(ev):
+        hi.append("यह तस्वीर घटना के कुछ ही दिन बाद की है। नुकसान दिखने में समय लग सकता है, इसलिए अगली तस्वीर पर फिर देखा जाएगा।")
+        en.append("This image is from only days after the event. Damage can take time to show, so the next image will be checked too.")
+        te.append("ఈ చిత్రం సంఘటన జరిగిన కొన్ని రోజులకే తీసినది. నష్టం కనిపించడానికి సమయం పట్టవచ్చు, కాబట్టి తదుపరి చిత్రాన్ని కూడా చూస్తాం.")
 
     if level in ("strong", "moderate"):
         word_hi, word_en, word_te = (

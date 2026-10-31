@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 import qrcode
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from app.agent import explain as explain_mod
 from app.agent import rubric
 from app.config import get_settings
 from app.evidence.schema import Evidence
@@ -33,7 +34,7 @@ L = {
         "title": "सैटेलाइट सबूत पत्र", "verdict": "नतीजा", "explanation": "सरल भाषा में", "testimony": "खेत की गवाही",
         "route": "आपके लिए रास्ता", "next": "आगे क्या करें", "use": "यह सबूत किस काम का है", "unknowns": "अभी जो पता नहीं",
         "deadline": "सूचना की समय-सीमा", "field": "खेत", "before_after": "पहले और बाद", "before": "पहले", "after": "बाद",
-        "map": "खेत का नक्शा", "delta": "बदलाव का नक्शा", "placebo": "आसपास के मिलते-जुलते खेतों से तुलना",
+        "map": "खेत का नक्शा", "delta": "बदलाव का नक्शा", "placebo": "आसपास के मिलते-जुलते खेतों से तुलना", "far": "तूफ़ान के इलाक़े से बाहर के खेतों से तुलना (5-12 किमी)", "not_computed": "जो हिस्से नहीं बन पाए",
         "twin": "खेत का जुड़वाँ: जो मिलते-जुलते खेतों ने किया", "draw": "दस खेतों का ड्रॉ: एक ड्रॉ का औसत कितना हिल सकता है",
         "vanish": "बड़े खानों में खो जाता नुकसान", "weather": "मौसम (मॉडल का अनुमान)", "alerts": "सरकारी चेतावनियाँ", "news": "ख़बरें",
         "cross": "जिरह: सर्वेयर की आपत्तियाँ", "challenge": "आपत्ति", "finding": "जाँच का नतीजा", "outcome": "परिणाम",
@@ -49,7 +50,7 @@ L = {
         "title": "Satellite evidence pack", "verdict": "Result", "explanation": "In plain language", "testimony": "The field's testimony",
         "route": "Your route", "next": "What to do next", "use": "What this evidence is useful for", "unknowns": "Still unknown",
         "deadline": "Intimation timing", "field": "Field", "before_after": "Before and after", "before": "Before", "after": "After",
-        "map": "Field map", "delta": "Change map", "placebo": "Compared with look-alike fields nearby",
+        "map": "Field map", "delta": "Change map", "placebo": "Compared with look-alike fields nearby", "far": "Compared with fields outside the storm area (5-12 km)", "not_computed": "Exhibits that could not be computed",
         "twin": "Field twin: what comparable fields did", "draw": "The Ten-Field Draw: how far one draw's average can move",
         "vanish": "The same change at coarser cells", "weather": "Weather (model-indicated)", "alerts": "Official alerts", "news": "News",
         "cross": "Cross-examination: the surveyor's objections", "challenge": "Objection", "finding": "What the test found", "outcome": "Outcome",
@@ -66,7 +67,7 @@ L = {
         "title": "ఉపగ్రహ ఆధారాల పత్రం", "verdict": "ఫలితం", "explanation": "సరళ భాషలో", "testimony": "పొలం సాక్ష్యం",
         "route": "మీ మార్గం", "next": "తర్వాత ఏమి చేయాలి", "use": "ఈ ఆధారం దేనికి పనికొస్తుంది", "unknowns": "ఇంకా తెలియనివి",
         "deadline": "సమాచార గడువు", "field": "పొలం", "before_after": "ముందు మరియు తర్వాత", "before": "ముందు", "after": "తర్వాత",
-        "map": "పొలం మ్యాప్", "delta": "మార్పు మ్యాప్", "placebo": "సమీపంలోని ఒకేలాంటి పొలాలతో పోలిక",
+        "map": "పొలం మ్యాప్", "delta": "మార్పు మ్యాప్", "placebo": "సమీపంలోని ఒకేలాంటి పొలాలతో పోలిక", "far": "తుఫాను ప్రాంతం వెలుపలి పొలాలతో పోలిక (5-12 కి.మీ)", "not_computed": "తయారు కాని భాగాలు",
         "twin": "పొలం జంట: పోలికైన పొలాలు ఏమి చేశాయి", "draw": "పది పొలాల డ్రా: ఒక డ్రా సగటు ఎంత మారవచ్చు",
         "vanish": "పెద్ద గడుల్లో అదే మార్పు", "weather": "వాతావరణం (నమూనా అంచనా)", "alerts": "అధికారిక హెచ్చరికలు", "news": "వార్తలు",
         "cross": "క్రాస్ ఎగ్జామినేషన్: సర్వేయర్ అభ్యంతరాలు", "challenge": "అభ్యంతరం", "finding": "పరీక్ష ఫలితం", "outcome": "తీర్పు",
@@ -137,7 +138,13 @@ def _headline(ev: Evidence, lang: str) -> str:
     return getattr(ev.verdict, f"headline_{lang}", None) or ev.verdict.headline_en
 
 
-def build_context(ev: Evidence, case: dict, actions: list[dict], lang: str, chart_dir: Path) -> dict:
+def _tests_text(ev: Evidence, lang: str) -> str | None:
+    line = explain_mod.tests_line(ev)
+    return line[{"hi": 0, "en": 1, "te": 2}[lang]] if line else None
+
+
+def build_context(ev: Evidence, case: dict, actions: list[dict], lang: str, chart_dir: Path,
+                  failed: dict | None = None) -> dict:
     labels = L[lang]
     pre, _, pre_chip = _chip_uri(ev, "true_colour_pre")
     post, post_bounds, post_chip = _chip_uri(ev, "true_colour_post")
@@ -171,6 +178,13 @@ def build_context(ev: Evidence, case: dict, actions: list[dict], lang: str, char
         "placebo": placebo,
         "placebo_sensor": placebo_sensor,
         "placebo_p": rubric.usable_p(placebo),
+        "far_img": _as_uri(charts.placebo_histogram(
+            ev.neighbours.far_placebo if ev.neighbours else None, chart_dir / "far.png",
+            label="comparable fields 5-12 km away")),
+        "far": ev.neighbours.far_placebo if ev.neighbours else None,
+        "far_p": rubric.far_p(ev),
+        "tests_plain": _tests_text(ev, lang),
+        "failed_exhibits": failed or {},
         "twin_img": _as_uri(charts.twin_chart(ev, chart_dir / "twin.png")),
         "weather_img": _as_uri(charts.weather_strip(ev, chart_dir / "weather.png")),
         "draw_img": _as_uri(charts.draw_histogram(draw, chart_dir / "draw.png")),
@@ -197,15 +211,18 @@ def _as_uri(path: str | None) -> str | None:
     return Path(path).resolve().as_uri() if path else None
 
 
-def build_html(ev: Evidence, case: dict, actions: list[dict], lang: str, chart_dir: Path) -> str:
+def build_html(ev: Evidence, case: dict, actions: list[dict], lang: str, chart_dir: Path,
+               failed: dict | None = None) -> str:
     template = _ENV.get_template("evidence.html.j2")
-    return template.render(**build_context(ev, case, actions, lang, chart_dir))
+    return template.render(**build_context(ev, case, actions, lang, chart_dir, failed))
 
 
-def build_pdf(ev: Evidence, case: dict, actions: list[dict], lang: str = "hi") -> bytes:
+def build_pdf(ev: Evidence, case: dict, actions: list[dict], lang: str = "hi",
+              exhibits: dict | None = None) -> bytes:
     from weasyprint import HTML
 
     tag = (ev.evidence_hash or ev.run_id)[:16]
     chart_dir = get_settings().artifacts_dir / ev.case_id / f"pdf_{tag}"
-    html = build_html(ev, case, actions, lang, chart_dir)
+    failed = {k: v.get("reason") for k, v in (exhibits or {}).items() if v.get("status") == "failed"}
+    html = build_html(ev, case, actions, lang, chart_dir, failed)
     return HTML(string=html, base_url=str(chart_dir)).write_pdf()

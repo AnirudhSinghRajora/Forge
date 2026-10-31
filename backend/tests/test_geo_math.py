@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from app.evidence.schema import SceneQA
-from app.tools.geo import flatten_numbers, plot_info, utm_epsg
+from app.tools.geo import flatten_numbers, plot_info, scene_archive, utm_epsg
 from app.tools.geo import indices as ix
 from app.tools.geo.base import PlotError, r4
 from app.tools.geo.grid import parse_plot
@@ -35,6 +35,16 @@ class TestOffset:
     def test_unknown_baseline_is_an_error_not_a_guess(self, bad):
         with pytest.raises(ValueError):
             ix.boa_offset(bad)
+
+    def test_earth_search_style_item_needs_no_second_subtraction(self):
+        # The same pass, as measured: PC serves 1676 DN where Earth Search serves 676.
+        pc = ix.to_reflectance(np.array([1676], dtype=np.uint16), ix.scene_offset("05.13", False))
+        es = ix.to_reflectance(np.array([676], dtype=np.uint16), ix.scene_offset("05.13", True))
+        assert pc[0] == pytest.approx(es[0]) and es[0] == pytest.approx(0.0676)
+
+    def test_item_that_does_not_declare_its_offset_is_an_error(self):
+        with pytest.raises(ValueError):
+            ix.scene_offset("05.13", None)
 
     def test_reflectance_applies_offset_and_masks_nodata(self):
         out = ix.to_reflectance(np.array([0, 1000, 3000], dtype=np.uint16), 1000)
@@ -374,6 +384,13 @@ class TestBlockAverage:
         assert values[1] == pytest.approx(-0.5)
         assert values[2] == pytest.approx(-0.02)
         assert values[3] < 0 and abs(values[3]) < abs(values[2])
+
+
+class TestArchives:
+    def test_id_format_names_the_archive(self):
+        assert scene_archive("S2C_44QND_20261031_0_L2A") == "earth_search"
+        assert scene_archive("S2B_MSIL2A_20261026T045909_R119_T44QND_20261026T103133") == "planetary_computer"
+        assert scene_archive("S1D_IW_GRDH_1SDV_20261023T002205_20261023T002231_005135_009BBB_rtc") == "planetary_computer"
 
 
 class TestPolygonRules:

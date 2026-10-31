@@ -174,7 +174,7 @@ Full detail: `docs/submission/facts.md` and `docs/validation/events.md`.
 - Keep the two systems separate. YES-TECH sets area yield under basic cover, and that is the Vanishing's context. A localized claim goes to a joint survey, or the 10-parcel sample above 25%. The 70/30 satellite weighting (21.5.9.4) is run by the State committee in a dispute; a farmer's PDF does not trigger it and the result binds the farmer too. Do not use 70/30 as a selling point.
 - Rajasthan pending claims in old docs are wrong (official table: ₹1,525.2 cr). Use `facts.md` for every number. Haryana's ₹450 cr and ₹350 cr are farmers' claims in one report and must be attributed as such.
 
-## Addendum 3, 31 Oct 2026, 10:40 PM: cold-run speed is the top priority
+## Addendum 3, 31 Oct 2026, 10:35 PM: cold-run speed is the top priority
 A first run on a new pin took about 240 s and still lost the signature tools to timeouts; a repeat took 8.7 s. Judges will drop their own pins, so warming demo cases does not solve this.
 
 **Hosting region:** Sentinel data on Planetary Computer is served from Amsterdam. Host the container in the Netherlands or West Europe (e.g. Cloud Run `europe-west4`, Fly `ams`), not Mumbai. This replaces the `asia-south1` decision.
@@ -185,7 +185,7 @@ A first run on a new pin took about 240 s and still lost the signature tools to 
 3. Exhibits that do not affect the verdict (village, scale fade, chips, history where optional) finish after the verdict and fill in live. The hash is sealed only when they settle, with a clear "still computing" state. An exhibit that fails later says so and offers a retry; it never takes the verdict down.
 4. No tool may report success with fewer real numbers than it claims.
 
-## Addendum 4, 31 Oct 2026, 11:05 PM: the evidence method, corrected
+## Addendum 4, 31 Oct 2026, 10:40 PM: the evidence method, corrected
 GEO's validation found two faults. (1) Field-vs-ring placebo has low power inside a swath, because the ring shares the damage: plots with NDVI 0.75 → 0.39 reached only p≈0.035, and most damaged plots missed p≤0.05. (2) p≤0.10 is not trustworthy: measured false-positive rate 15.4% against a nominal 10%, while p≤0.05 measured 5.0% (one scene pair; holdout pending).
 
 **The witness answers two different questions, and both answers are useful:**

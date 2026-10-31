@@ -117,9 +117,9 @@ def test_full_run_on_the_no_key_path(client, monkeypatch):
     assert [e["seq"] for e in events] == list(range(1, len(events) + 1))
     kinds = {e["type"] for e in events}
     assert {"tool_called", "tool_result", "objection", "verdict", "done"} <= kinds
-    assert [e["detail"]["id"] for e in events if e["type"] == "objection"][:8] == [
+    assert [e["detail"]["id"] for e in events if e["type"] == "objection"][:9] == [
         "harvest", "wrong_plot", "wrong_date", "cloud_shadow", "corrupt_scene", "regional_trend",
-        "too_small", "stale_crop"]
+        "pre_trend", "too_small", "stale_crop"]
     assert all(e["title_hi"] and e["title_en"] for e in events)
     assert events[-1]["detail"]["status"] == "done"
 
@@ -526,3 +526,168 @@ def test_hung_llm_during_explain_still_gives_the_deterministic_text(client, monk
     ev = client.get(f"/api/cases/{case_id}").json()["evidence"]
     assert ev["llm_used"] is False and ev["explanation_hi"] and ev["testimony_en"]
     assert any(e["node"] == "explain" and e["type"] == "warning" for e in events)
+
+
+def test_verdict_comes_before_the_slow_exhibits_and_they_fill_in_live(client, monkeypatch):
+    release = threading.Event()
+
+    def slow_village(*a, **k):
+        release.wait(20)
+        return _village()
+
+    install_fake_geo(monkeypatch, village_witness=slow_village, scale_fade=lambda *a, **k: _fade())
+    case_id = new_case(client, insured="yes", crop_stage="standing")
+    run_id = client.post(f"/api/cases/{case_id}/investigate").json()["run_id"]
+    body = None
+    for _ in range(100):
+        body = client.get(f"/api/cases/{case_id}").json()
+        if body["verdict_ready"] and body["exhibits"].get("scale_fade", {}).get("status") == "done":
+            break
+        time.sleep(0.1)
+    assert body["verdict_ready"] and not body["sealed"]
+    assert body["evidence"]["verdict"]["level"] and body["evidence"]["evidence_hash"] is None
+    assert body["exhibits"]["village"]["status"] == "pending"
+    assert body["evidence"]["scale_fade"] is not None and body["evidence"]["village"] is None
+    assert client.get(f"/api/cases/{case_id}/evidence.pdf").json()["detail"]["code"] == "exhibits_pending"
+    release.set()
+    events = wait_done(client, run_id)
+    kinds = [e["type"] for e in events]
+    assert kinds.index("verdict") < next(
+        i for i, e in enumerate(events) if e["detail"].get("exhibit") == "village")
+    body = client.get(f"/api/cases/{case_id}").json()
+    assert body["sealed"] and body["exhibits"]["village"]["status"] == "done"
+    assert body["evidence"]["evidence_hash"]
+
+
+def test_failed_exhibit_keeps_the_verdict_and_can_be_retried(client, monkeypatch):
+    def down(*a, **k):
+        raise RuntimeError("slow archive")
+
+    install_fake_geo(monkeypatch, village_witness=down, scale_fade=lambda *a, **k: _fade())
+    case_id = new_case(client)
+    wait_done(client, client.post(f"/api/cases/{case_id}/investigate").json()["run_id"])
+    body = client.get(f"/api/cases/{case_id}").json()
+    assert body["sealed"] and body["evidence"]["verdict"]
+    assert body["exhibits"]["village"]["status"] == "failed"
+    assert "slow archive" in body["exhibits"]["village"]["reason"]
+    first_hash = body["evidence"]["evidence_hash"]
+    assert client.get(f"/api/cases/{case_id}/evidence.pdf").status_code == 200
+
+    assert client.post(f"/api/cases/{case_id}/exhibits/nope/retry").status_code == 422
+    assert client.post(f"/api/cases/{case_id}/exhibits/scale_fade/retry").status_code == 409
+
+    install_fake_geo(monkeypatch, village_witness=lambda *a, **k: _village(),
+                     scale_fade=lambda *a, **k: _fade(),
+                     flatten_numbers=lambda *a, **k: {"optical.plot_delta_ndvi": -0.25, "village.x": 1.0})
+    retry = client.post(f"/api/cases/{case_id}/exhibits/village/retry")
+    assert retry.status_code == 200
+    events = wait_done(client, retry.json()["run_id"])
+    assert events[-1]["detail"]["exhibit_status"] == "done"
+    body = client.get(f"/api/cases/{case_id}").json()
+    assert body["exhibits"]["village"]["status"] == "done" and body["evidence"]["village"]
+    assert body["evidence"]["evidence_hash"] != first_hash
+    from app import verify
+
+    assert verify.load_core(first_hash)[2] is True  # the old seal stays verifiable
+
+
+def test_late_history_can_revise_the_verdict_before_sealing(client, monkeypatch):
+    from app.agent import graph
+    from tests import conftest
+
+    monkeypatch.setattr(graph, "VERDICT_TARGET_S", 0.05)
+    release = threading.Event()
+
+    def slow_history(*a, **k):
+        release.wait(20)
+        return conftest.history_ok(excess=-0.02, typical=-0.3)
+
+    harvest = conftest.evidence(bare=0.8, pattern="uniform", neighbour_bare=0.05, cross=[])
+    install_fake_geo(monkeypatch, history=slow_history,
+                     optical_compare=lambda *a, **k: (harvest.optical, harvest.neighbours),
+                     village_witness=lambda *a, **k: (release.set(), _village())[1])
+    case_id = new_case(client)
+    events = wait_done(client, client.post(f"/api/cases/{case_id}/investigate").json()["run_id"])
+    verdicts = [e for e in events if e["type"] == "verdict"]
+    assert verdicts[0]["detail"]["revised"] is False and verdicts[0]["detail"]["level"] != "not_damage_likely_harvest"
+    assert verdicts[-1]["detail"]["revised"] is True
+    assert verdicts[-1]["detail"]["level"] == "not_damage_likely_harvest"
+    ev = client.get(f"/api/cases/{case_id}").json()["evidence"]
+    assert ev["verdict"]["level"] == "not_damage_likely_harvest" and ev["history"]
+    assert "कटाई" in ev["explanation_hi"]
+
+
+def test_post_scene_prefers_five_days_after_the_event(client, monkeypatch):
+    from tests import conftest
+
+    compared = []
+
+    def compare(polygon, pre, post, seed):
+        compared.append(post)
+        base = conftest.evidence(cross=[])
+        when = {"EARLY": EVENT + timedelta(days=2), "SETTLED": EVENT + timedelta(days=6)}.get(post)
+        if when:
+            base.optical.post = conftest.stats(post, when, 0.45)
+        return base.optical, base.neighbours
+
+    install_fake_geo(monkeypatch, optical_compare=compare, search_optical=lambda *a, **k: [
+        scene(PRE_ID, EVENT - timedelta(days=7)), scene("EARLY", EVENT + timedelta(days=2)),
+        scene("SETTLED", EVENT + timedelta(days=6))])
+    case_id = new_case(client)
+    wait_done(client, client.post(f"/api/cases/{case_id}/investigate").json()["run_id"])
+    assert compared == ["SETTLED"]
+    assert not any("too early" in c for c in client.get(f"/api/cases/{case_id}").json()["evidence"]["verdict"]["caveats"])
+
+
+def test_only_an_early_post_scene_gets_the_caveat_and_a_recheck(client, monkeypatch):
+    from tests import conftest
+
+    def compare(polygon, pre, post, seed):
+        base = conftest.evidence(cross=[])
+        base.optical.post = conftest.stats(post, EVENT + timedelta(days=2), 0.45)
+        return base.optical, base.neighbours
+
+    install_fake_geo(monkeypatch, optical_compare=compare, search_optical=lambda *a, **k: [
+        scene(PRE_ID, EVENT - timedelta(days=7)), scene("EARLY", EVENT + timedelta(days=2))])
+    case_id = new_case(client)
+    wait_done(client, client.post(f"/api/cases/{case_id}/investigate").json()["run_id"])
+    ev = client.get(f"/api/cases/{case_id}").json()["evidence"]
+    assert any("may be too early" in c for c in ev["verdict"]["caveats"])
+    assert any(d["type"] == "recheck" for d in ev["deadlines"])
+    assert "दिन बाद की है" in ev["testimony_hi"]
+
+
+def test_earth_search_scene_ids_are_not_parsed(client, monkeypatch):
+    """Scene ids from a second archive have another shape; the graph must treat them as opaque."""
+    from tests import conftest
+
+    pre_id, post_id = "S2C_44QND_20261020_0_L2A", "S2C_44QND_20261031_0_L2A"
+
+    def compare(polygon, pre, post, seed):
+        base = conftest.evidence(cross=[])
+        base.optical.pre = conftest.stats(pre, EVENT - timedelta(days=7), 0.7)
+        base.optical.post = conftest.stats(post, EVENT + timedelta(days=6), 0.45)
+        return base.optical, base.neighbours
+
+    install_fake_geo(monkeypatch, optical_compare=compare, search_optical=lambda *a, **k: [
+        scene(pre_id, EVENT - timedelta(days=7)), scene(post_id, EVENT + timedelta(days=6))])
+    case_id = new_case(client, insured="yes", crop_stage="standing")
+    wait_done(client, client.post(f"/api/cases/{case_id}/investigate").json()["run_id"])
+    ev = client.get(f"/api/cases/{case_id}").json()["evidence"]
+    assert ev["optical"]["post"]["scene_id"] == post_id and ev["replay"]["optical_post_id"] == post_id
+    assert client.get(f"/api/cases/{case_id}/evidence.pdf").status_code == 200
+
+
+def test_claim_path_text_is_keyed_by_language_and_every_clause_has_text(client, monkeypatch):
+    install_fake_geo(monkeypatch)
+    case_id = new_case(client, insured="yes", crop_stage="standing")
+    wait_done(client, client.post(f"/api/cases/{case_id}/investigate").json()["run_id"])
+    ev = client.get(f"/api/cases/{case_id}").json()["evidence"]
+    text = ev["claim_path_text"]
+    assert set(text) == {"hi", "en", "te"}
+    assert all(text[lang]["reasons"] and text[lang]["next_steps"] and text[lang]["evidence_use"] for lang in text)
+    have = {c["clause_id"] for c in ev["policy"]}
+    assert set(ev["claim_path"]["clause_ids"]) <= have
+    client.patch(f"/api/cases/{case_id}", json={"crop_stage": "cut_and_spread"})
+    ev = client.get(f"/api/cases/{case_id}").json()["evidence"]
+    assert set(ev["claim_path"]["clause_ids"]) <= {c["clause_id"] for c in ev["policy"]}

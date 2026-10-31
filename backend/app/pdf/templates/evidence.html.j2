@@ -99,6 +99,12 @@ ul { margin: 2pt 0 6pt; padding-left: 13pt; } li { margin-bottom: 2pt; }
   {% if sar_chip %}<figure><img src="{{ sar_chip }}" alt=""><figcaption>Sentinel-1 VH</figcaption></figure>{% endif %}
 </div>
 
+{% if tests_plain %}<p><b>{{ tests_plain }}</b></p>{% endif %}
+{% if far_img %}
+<h2>{{ L.far }}</h2>
+<figure><img src="{{ far_img }}" alt=""></figure>
+<p class="small">{% if far_p is not none %}{{ far.n_at_least_as_extreme }} / {{ far.n_placebos }} · p = {{ '%.3f'|format(far_p) }} (threshold 0.025){% else %}{{ far.insufficient_reason or L.no_data }}{% endif %}</p>
+{% endif %}
 {% if placebo_img %}
 <h2>{{ L.placebo }} ({{ placebo_sensor }})</h2>
 <figure><img src="{{ placebo_img }}" alt=""></figure>
@@ -166,6 +172,11 @@ ul { margin: 2pt 0 6pt; padding-left: 13pt; } li { margin-bottom: 2pt; }
   <thead><tr><th>Field</th><th>Value</th><th>Field</th><th>Value</th></tr></thead>
   <tbody>{% for batch in numbers|batch(2) %}<tr>{% for k, v in batch %}<td class="mono">{{ k }}</td><td>{{ v if v is not none else '-' }}</td>{% endfor %}</tr>{% endfor %}</tbody>
 </table>
+{% endif %}
+
+{% if failed_exhibits %}
+<h2>{{ L.not_computed }}</h2>
+<ul class="small">{% for k, v in failed_exhibits.items() %}<li>{{ k }}: {{ v }}</li>{% endfor %}</ul>
 {% endif %}
 
 <h2>{{ L.hash }}</h2>

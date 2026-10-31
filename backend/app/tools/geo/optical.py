@@ -62,7 +62,7 @@ class SceneArrays:
 
 def _offset(scene: SceneRef) -> int:
     try:
-        return ix.boa_offset(scene.processing_baseline)
+        return ix.scene_offset(scene.processing_baseline, scene.boa_offset_applied)
     except ValueError as exc:
         raise SceneUnusable(f"{scene.id}: {exc}") from exc
 

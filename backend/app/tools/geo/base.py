@@ -10,11 +10,14 @@ from typing import Literal
 from pydantic import BaseModel
 
 # Bump whenever a change could alter any computed number. It is part of the evidence hash.
-ENGINE_VERSION = "geo-1.0.0"
+ENGINE_VERSION = "geo-1.1.0"
 
 S2_COLLECTION = "sentinel-2-l2a"
 S1_COLLECTION = "sentinel-1-rtc"
 STAC_URL = "https://planetarycomputer.microsoft.com/api/stac/v1"
+EARTH_SEARCH_URL = "https://earth-search.aws.element84.com/v1"
+ARCHIVE_PC = "planetary_computer"
+ARCHIVE_ES = "earth_search"
 
 CONTEXT_M = 1500  # context = plot bbox + this
 RING_M = (300, 1500)  # placebo and neighbour ring, metres from the plot edge
@@ -50,6 +53,9 @@ class SceneRef(BaseModel):
     platform: str | None = None
     epsg: int | None = None
     coverage_frac: float | None = None  # share of the context window inside the item footprint
+    archive: Literal["planetary_computer", "earth_search"] = "planetary_computer"
+    # True: this archive already removed the +1000 DN offset. None: the item does not say.
+    boa_offset_applied: bool | None = False
 
 
 def r4(x: float | int | None) -> float | None:

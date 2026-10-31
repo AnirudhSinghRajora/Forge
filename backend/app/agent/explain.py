@@ -101,16 +101,46 @@ def _sat_line(ev: Evidence) -> tuple[str, str]:
     )
 
 
-def _placebo_line(ev: Evidence) -> tuple[str, str] | None:
-    placebo = ev.neighbours.placebo if ev.neighbours and ev.optical.post else None
-    if placebo is None and ev.sar is not None:
-        placebo = ev.sar.placebo
-    if rubric.usable_p(placebo) is None:
+def tests_line(ev: Evidence) -> tuple[str, str, str] | None:
+    """Both answers in plain words. "Far yes, ring no" is the whole area, and never a weakness.
+    Telugu NEEDS NATIVE REVIEW."""
+    if ev.neighbours is None or ev.optical.post is None:
+        placebo = ev.sar.placebo if ev.sar else None
+        if rubric.usable_p(placebo) is None:
+            return None
+        n, k = placebo.n_placebos, placebo.n_at_least_as_extreme
+        return (
+            f"रडार में आसपास के {n} मिलते-जुलते खेतों में से {k} में इतना या इससे ज़्यादा बदलाव दिखा।",
+            f"On radar, of {n} look-alike fields nearby, {k} changed this much or more.",
+            f"రాడార్‌లో సమీపంలోని {n} పొలాల్లో {k} పొలాల్లో ఇంత లేదా ఎక్కువ మార్పు కనిపించింది.",
+        )
+    ring, far = rubric.ring_significant(ev), rubric.far_significant(ev)
+    if rubric.optical_p(ev) is None and rubric.far_p(ev) is None:
         return None
-    n, k = placebo.n_placebos, placebo.n_at_least_as_extreme
+    if far and ring:
+        return (
+            "आपका खेत दूर के खेतों से भी ज़्यादा बदला और पास के खेतों से भी।",
+            "Your field changed more than distant fields and more than the fields around it.",
+            "మీ పొలం దూరంలోని పొలాల కంటే, చుట్టుపక్కల పొలాల కంటే కూడా ఎక్కువగా మారింది.",
+        )
+    if far:
+        return (
+            ("आपका खेत तूफ़ान के इलाक़े से बाहर के खेतों से ज़्यादा बदला, पर आसपास के खेतों जितना ही: आपका पूरा इलाक़ा प्रभावित हुआ, "
+            "सिर्फ़ आपका खेत नहीं।"),
+            ("Your field changed more than fields outside the storm area, and about as much as the "
+            "fields around it: your whole area was hit, not only your field."),
+            "మీ పొలం తుఫాను ప్రాంతం వెలుపలి పొలాల కంటే ఎక్కువగా, చుట్టుపక్కల పొలాలంత మారింది: మీ పొలం మాత్రమే కాదు, మీ ప్రాంతమంతా దెబ్బతింది.",
+        )
+    if ring:
+        return (
+            "आपका खेत आसपास के खेतों से ज़्यादा बदला: यह आपके खेत का स्थानीय बदलाव दिखता है।",
+            "Your field changed more than the fields around it: this looks local to your field.",
+            "మీ పొలం చుట్టుపక్కల పొలాల కంటే ఎక్కువగా మారింది: ఇది మీ పొలానికే పరిమితమైన మార్పులా ఉంది.",
+        )
     return (
-        f"आसपास के {n} मिलते-जुलते खेतों में से {k} में इतना या इससे ज़्यादा बदलाव दिखा।",
-        f"Of {n} look-alike fields nearby, {k} changed this much or more.",
+        "आपका खेत न पास के खेतों से ज़्यादा बदला, न दूर के खेतों से।",
+        "Your field did not change more than nearby fields, or more than distant ones.",
+        "మీ పొలం సమీప పొలాల కంటే గానీ, దూరంలోని పొలాల కంటే గానీ ఎక్కువగా మారలేదు.",
     )
 
 
@@ -153,8 +183,8 @@ _LEVEL_CLOSE = {
         "Do not wait for the evidence. This check will run again when a new satellite image arrives.",
     ),
     "not_damage_likely_harvest": (
-        "क्या आपने घटना के बाद फ़सल काटी थी? अगर नहीं, तो हमें बताएँ और खेत की तस्वीरें रखें।",
-        "Did you harvest after the event? If not, tell us and keep photographs of the field.",
+        "अगर आपने फ़सल नहीं काटी थी, तो हमें बताएँ और खेत की तस्वीरें रखें।",
+        "If you did not harvest, tell us and keep photographs of the field.",
     ),
 }
 
@@ -163,9 +193,9 @@ def template_explanation(ev: Evidence, level: str) -> tuple[str, str]:
     head = headlines(level, ev.event.type)
     parts = [(head[0] + "।", head[1] + "."), _sat_line(ev)]
     conceded = [o for o in ev.cross_examination if o.outcome == "conceded"]
-    placebo = _placebo_line(ev)
-    if placebo and not any(o.id == "regional_trend" for o in conceded):
-        parts.append(placebo)  # a conceded regional_trend finding already says the same thing
+    tests = tests_line(ev)
+    if tests and not any(o.id == "regional_trend" for o in conceded):
+        parts.append(tests[:2])  # a conceded regional_trend finding already says the same thing
     parts.append(_weather_line(ev))
     if conceded:
         parts.append((conceded[0].finding_hi, conceded[0].finding_en))

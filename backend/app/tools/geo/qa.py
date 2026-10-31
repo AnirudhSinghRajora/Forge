@@ -230,7 +230,7 @@ def raw_qa(scene: SceneRef, plot: Plot, *, fresh: bool = False, lite: bool = Fal
         required = LITE_BANDS if lite else QA_BANDS
         scl = read_assets(scene.id, ["SCL"], grid, fresh=fresh)["SCL"]
         try:
-            offset: int | None = ix.boa_offset(scene.processing_baseline)
+            offset: int | None = ix.scene_offset(scene.processing_baseline, scene.boa_offset_applied)
         except ValueError:
             offset = None
         if scl is not None and plot_clear_share(scl, mask) < PLOT_VALID_MIN:

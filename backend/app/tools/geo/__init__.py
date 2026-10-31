@@ -17,6 +17,7 @@ from .optical import (
 from .replay import flatten_numbers, replay
 from .sar import sar_compare, search_sar
 from .scale import scale_fade
+from .stac import scene_archive
 from .village import village_witness
 
 __all__ = [
@@ -35,6 +36,7 @@ __all__ = [
     "replay",
     "sar_compare",
     "scale_fade",
+    "scene_archive",
     "search_and_qa",
     "search_optical",
     "search_sar",

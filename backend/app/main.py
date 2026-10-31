@@ -155,11 +155,14 @@ def _action_dict(action: Action) -> dict:
 
 
 def _latest_evidence(s, case_id: str) -> EvidenceRow | None:
-    """The newest sealed evidence, else the newest partial one. A re-run never blanks a result."""
+    """The newest run with a verdict, else the newest sealed, else whatever exists. A re-run that
+    has no verdict yet never blanks the earlier result."""
     rows = s.scalars(
         select(EvidenceRow).where(EvidenceRow.case_id == case_id)
         .order_by(EvidenceRow.created_at.desc())
     ).all()
+    if rows and (rows[0].verdict_level or rows[0].evidence_hash):
+        return rows[0]  # the verdict of the newest run shows at once, while its exhibits fill in
     return next((r for r in rows if r.evidence_hash), rows[0] if rows else None)
 
 
@@ -368,9 +371,15 @@ def _with_live_route(evidence: dict, case: Case, lang: str) -> dict:
     """Deadline status moves with the clock, and the route with the farmer's answers. Neither is
     part of the sealed hash, so each read recomputes them from the case as it stands now."""
     from app.agent import claim_path
+    from app.evidence.schema import PolicyClause
+    from app.tools import policy
 
     path, deadlines = claim_path.for_case(case, lang)
+    clauses = [PolicyClause.model_validate(c) for c in evidence.get("policy") or []]
+    policy.ensure_cited(path, clauses, deadlines)
+    evidence["policy"] = [c.model_dump(mode="json") for c in clauses]
     evidence["claim_path"] = path.model_dump(mode="json")
+    evidence["claim_path_text"] = claim_path.text_by_language(case)
     others = [d for d in (evidence.get("deadlines") or []) if d.get("type") != "intimation_72h"]
     evidence["deadlines"] = [d.model_dump(mode="json") for d in deadlines] + others
     draw = (evidence.get("village") or {}).get("lottery")
@@ -394,7 +403,12 @@ def get_case(case_id: str, lang: str | None = Query(None)) -> dict:
         out = [_action_dict(a) for a in items]
         if evidence is not None:
             _refresh_draft(out, info, evidence)
-        return {"case": info, "evidence": evidence, "actions": out}
+        return {
+            "case": info, "evidence": evidence, "actions": out,
+            "sealed": bool(row is not None and row.evidence_hash),
+            "verdict_ready": bool(row is not None and row.verdict_level),
+            "exhibits": (row.exhibits or {}) if row is not None else {},
+        }
 
 
 def _refresh_draft(items: list[dict], info: dict, evidence: dict) -> None:
@@ -411,6 +425,27 @@ def _refresh_draft(items: list[dict], info: dict, evidence: dict) -> None:
     submission = next((a["payload"] for a in items if a["type"] == "submission"), None)
     payload["filed"] = bool(submission and submission.get("reference_no"))
     draft["payload"] = payload
+
+
+RETRYABLE_EXHIBITS = {"sar", "history", "village", "scale_fade", "chips", "timeline"}
+
+
+@app.post("/api/cases/{case_id}/exhibits/{name}/retry")
+def retry_exhibit(case_id: str, name: str) -> dict:
+    if name not in RETRYABLE_EXHIBITS:
+        raise HTTPException(422, detail=f"exhibit must be one of {sorted(RETRYABLE_EXHIBITS)}")
+    with session_scope() as s:
+        _get_case(s, case_id)
+        row = _latest_evidence(s, case_id)
+        if row is None or not row.evidence_hash:
+            raise HTTPException(409, detail="the evidence is not sealed yet")
+        status = (row.exhibits or {}).get(name, {}).get("status")
+        if status not in ("failed", "not_applicable"):
+            raise HTTPException(409, detail=f"exhibit {name} is {status}, so there is nothing to retry")
+    run_id = runner.start_retry(case_id, name)
+    if run_id is None:
+        raise HTTPException(409, detail="another run is active on this case")
+    return {"run_id": run_id, "exhibit": name, "status": "pending"}
 
 
 # The live trace
@@ -470,15 +505,25 @@ def evidence_pdf(case_id: str, lang: str = Query("hi")) -> Response:
         if row is None:
             raise HTTPException(404, detail="no evidence yet; run the investigation first")
         if not row.evidence_hash:
-            raise HTTPException(409, detail="the investigation has not finished sealing the evidence")
+            raise HTTPException(
+                409,
+                detail={
+                    "code": "exhibits_pending",
+                    "message_hi": "बाकी सबूत अभी बन रहे हैं। पूरा होने पर PDF तैयार होगा।",
+                    "message_en": "The exhibits are still computing. The PDF is ready once they settle.",
+                    "pending": [n for n, e in (row.exhibits or {}).items()
+                                if e.get("status") == "pending"],
+                },
+            )
         evidence = Evidence.model_validate(_with_live_route(dict(row.json), case, lang))
         case_info = _case_dict(s, case)
         items = s.scalars(select(Action).where(Action.case_id == case_id)).all()
         actions = [_action_dict(a) for a in items]
+        exhibits = row.exhibits or {}
     try:
         from app.pdf.render import build_pdf
 
-        pdf = build_pdf(evidence, case_info, actions, lang)
+        pdf = build_pdf(evidence, case_info, actions, lang, exhibits)
     except OSError as exc:  # WeasyPrint needs pango and its friends from the system
         raise HTTPException(503, detail=f"PDF renderer unavailable: {exc}") from exc
     return Response(

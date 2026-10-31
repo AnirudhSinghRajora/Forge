@@ -4,7 +4,14 @@ parse -> resolve_plot -> gather_context -> planner -> search_optical
   search_optical: good pre and post -> optical_compare (radar corroborates in parallel)
                   post missing, cloudy or corrupt -> sensor_switch -> sar_compare
 -> history -> cross_examine: objection needs more data and budget remains -> search_optical
-                             done -> verdict -> policy -> village -> act -> explain -> seal
+                             done -> verdict -> policy -> act -> explain -> exhibits -> seal
+
+Verdict first. Everything that decides the verdict runs ahead of it, on a target of 90 s from a cold
+start. Radar corroboration and history start in the background after the optical comparison and are
+waited for only up to the target. The village step, scale fade, chips and timeline do not affect the
+verdict, so they run after it and fill in live; if radar or history lands late the cross-examination
+and rubric run again and any change is announced. The hash is sealed once everything has settled. An
+exhibit that fails says so and can be retried, and it never takes the verdict down.
 
 Every node runs behind a guard, so a failure leaves partial evidence and an honest verdict rather
 than a crash. Deterministic code always yields a valid path; the optional LLM planner only chooses
@@ -19,7 +26,7 @@ import re
 import threading
 import time
 from collections.abc import Callable
-from concurrent.futures import ThreadPoolExecutor, wait
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
@@ -33,7 +40,7 @@ from app.agent.cross_exam import date_en, date_hi, signed
 from app.agent.parse import today_ist
 from app.agent.trace import Tracer
 from app.config import get_settings
-from app.db import Action, Case, EvidenceRow, Plot, session_scope, utcnow
+from app.db import Action, Case, EvidenceRow, Plot, cache_put, session_scope, utcnow
 from app.evidence.schema import (
     Deadline,
     EventInfo,
@@ -63,17 +70,18 @@ LLM_PLAN_S = 15
 LLM_REPHRASE_S = 10
 LLM_EXPLAIN_S = 50
 
+VERDICT_TARGET_S = 75  # stop waiting for background evidence here, to land the verdict within 90 s
+EXHIBIT_TIMEOUT_S = 330  # a slow exhibit is still worth having; the verdict is already out
+EXHIBITS = ("sar", "history", "village", "scale_fade", "chips", "timeline")
 _TIMEOUTS_S = {
     "weather": 25, "alerts": 12, "news": 30, "search_optical": 25, "qa_scene": 45,
-    "optical_compare": 70, "search_sar": 25, "sar_compare": 70, "history": 75, "timeline": 150,
-    "render_chips": 80, "village_witness": 80, "scale_fade": 80,
+    "optical_compare": 70, "search_sar": 25, "sar_compare": 70, "history": EXHIBIT_TIMEOUT_S,
+    "timeline": EXHIBIT_TIMEOUT_S,
+    "render_chips": EXHIBIT_TIMEOUT_S, "village_witness": EXHIBIT_TIMEOUT_S,
+    "scale_fade": EXHIBIT_TIMEOUT_S,
 }
 _CORE_TOOLS = {"optical_compare", "sar_compare"}
-_DOCUMENTATION_TOOLS = {"village_witness", "scale_fade", "render_chips", "timeline"}
 MAX_CORE_TIMEOUT_S = 130
-# The verdict always lands inside the soft budget. Documentation after it (the village step and the
-# chips) may run past it, up to this, because a sealed record is worth a slower finish.
-DOCUMENTATION_GRACE_S = 75
 _TOOLS = ThreadPoolExecutor(max_workers=32, thread_name_prefix="tool")
 _QA_POOL = ThreadPoolExecutor(max_workers=4, thread_name_prefix="qa")
 
@@ -84,6 +92,12 @@ _TOOL_HI = {
     "search_sar": "रडार की खोज", "sar_compare": "रडार की तुलना", "history": "पिछले वर्षों से तुलना",
     "timeline": "सैटेलाइट दर्शनों की सूची", "render_chips": "तस्वीरें बनाना", "village_witness": "दस खेतों का ड्रॉ",
     "scale_fade": "बड़े खानों वाला चित्र",
+}
+
+
+_EXHIBIT_HI = {
+    "sar": "रडार की तुलना", "history": "पिछले वर्षों से तुलना", "village": "दस खेतों का ड्रॉ",
+    "scale_fade": "बड़े खानों वाला चित्र", "chips": "पहले और बाद की तस्वीरें", "timeline": "सैटेलाइट दर्शनों की सूची",
 }
 
 
@@ -148,9 +162,19 @@ class Ctx:
     started: float = field(default_factory=time.monotonic)
     calls: int = 0
     lock: threading.Lock = field(default_factory=threading.Lock)
-    timeline_future: Any = None
     sar_future: Any = None
-    chips_future: Any = None
+    history_future: Any = None
+    evidence_run_id: str | None = None  # a retry updates the evidence row of the original run
+    exhibits: dict = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        for name in EXHIBITS:
+            self.exhibits.setdefault(name, {"status": "pending", "reason": None, "updated_at": None})
+
+    def set_exhibit(self, name: str, status: str, reason: str | None = None) -> None:
+        self.exhibits[name] = {
+            "status": status, "reason": reason, "updated_at": datetime.now(UTC).isoformat(),
+        }
     archive_failed: bool = False  # a satellite search itself failed, as opposed to finding nothing
 
     def elapsed(self) -> float:
@@ -169,7 +193,8 @@ class Ctx:
 
     def call(
         self, node: str, tool: str, fn: Callable[[], Any], hi: str, en: str,
-        summarize: Callable[[Any], dict] | None = None, counted: bool = True, **args,
+        summarize: Callable[[Any], dict] | None = None, counted: bool = True,
+        timeout_s: float | None = None, **args,
     ) -> Any:
         """One tool call: budget check, tool_called, timeout, tool_result carrying real numbers."""
         with self.lock:
@@ -188,8 +213,8 @@ class Ctx:
         if tool in _CORE_TOOLS:
             # A slow answer to the core question beats no answer, so these can use what is left.
             timeout = max(timeout, min(self.seconds_left() - 5, MAX_CORE_TIMEOUT_S))
-        elif tool in _DOCUMENTATION_TOOLS:
-            timeout = max(5.0, min(timeout, self.seconds_left() + DOCUMENTATION_GRACE_S))
+        if timeout_s is not None:
+            timeout = timeout_s
         begin = time.monotonic()
         future = _TOOLS.submit(fn)
         try:
@@ -252,10 +277,12 @@ def persist(ctx: Ctx, ev: Evidence | None) -> None:
     if ev is None:
         return
     with session_scope() as s:
-        row = s.scalar(select(EvidenceRow).where(EvidenceRow.run_id == ctx.run_id))
+        run_id = ctx.evidence_run_id or ctx.run_id
+        row = s.scalar(select(EvidenceRow).where(EvidenceRow.run_id == run_id))
         if row is None:
-            row = EvidenceRow(run_id=ctx.run_id, case_id=ctx.case_id, json={})
+            row = EvidenceRow(run_id=run_id, case_id=ctx.case_id, json={})
             s.add(row)
+        row.exhibits = ctx.exhibits
         row.json = ev.model_dump(mode="json")
         row.verdict_level = ev.verdict.level if ev.verdict else None
         row.evidence_hash = ev.evidence_hash
@@ -376,23 +403,6 @@ def n_resolve_plot(state: State, ctx: Ctx) -> dict:
         "post_days": POST_WINDOW_DAYS, "pre_days": PRE_WINDOW_DAYS,
         "excluded": [], "qa_seen": {}, "loops": 0, "attempted": [],
     }
-
-
-def start_timeline(ctx: Ctx, polygon: dict, event_date: date) -> None:
-    """Independent of every later decision and slow, so it runs in the background and is collected
-    at the seal. It waits until the comparison is done, and reuses QA results from the geo cache."""
-    if ctx.timeline_future is not None:
-        return
-    start = event_date - timedelta(days=PRE_WINDOW_DAYS)
-    end = min(event_date + timedelta(days=POST_WINDOW_DAYS), today_ist())
-    ctx.timeline_future = _TOOLS.submit(
-        ctx.call, "seal", "timeline", lambda: _geo().timeline(polygon, start, end),
-        "इस खेत के सभी सैटेलाइट दर्शन", "Every satellite pass over this field",
-        summarize=lambda r: {"n_points": len(r), "points": [
-            {"date": p.date, "sensor": p.sensor, "ndvi": p.ndvi, "vh_db": p.vh_db, "qa": p.qa}
-            for p in r][:40]},
-        start=start, end=end,
-    )
 
 
 def route_after_plot(state: State) -> str:
@@ -695,7 +705,8 @@ def n_search_optical(state: State, ctx: Ctx) -> dict:
     seen = state.get("qa_seen") or {}
     considered: dict[str, SceneQA] = {s.id: s for s in ev.optical.scenes_considered}
     qa_budget = MAX_QA_PER_SEARCH
-    _prefetch_qa(polygon, [*pre_list[:QA_PREFETCH], *post_list[:QA_PREFETCH]], seen)
+    settled = [x for x in post_list if x.date >= event_date + timedelta(days=rubric.MIN_DAYS_AFTER_EVENT)]
+    _prefetch_qa(polygon, [*pre_list[:QA_PREFETCH], *(settled or post_list)[:QA_PREFETCH]], seen)
 
     walk_started = time.monotonic()
     pre_scene = pre_qa = pre_suspect = pre_suspect_qa = None
@@ -717,8 +728,14 @@ def n_search_optical(state: State, ctx: Ctx) -> dict:
         # and the wrong_plot objection speak. It can never count toward a strong verdict.
         pre_scene, pre_qa = pre_suspect, pre_suspect_qa
 
+    # First accepted scene at least 5 days after the event, since damage takes time to show. Failing
+    # that, the earliest accepted scene, with a caveat in the verdict and a re-check scheduled.
+    settled_from = event_date + timedelta(days=rubric.MIN_DAYS_AFTER_EVENT)
+    ordered_post = [x for x in post_list if x.date >= settled_from] + [
+        x for x in post_list if x.date < settled_from
+    ]
     post_scene = suspect = None
-    for scene in post_list:
+    for scene in ordered_post:
         if qa_budget <= 0 or ctx.seconds_left() < 20 or time.monotonic() - walk_started > QA_WALK_S:
             break
         qa_budget -= 1
@@ -776,8 +793,8 @@ def _pick_sar_pairs(scenes: list, event_date: date) -> list[tuple]:
     return sorted(pairs, key=lambda p: (p[1].date - p[0].date).days)
 
 
-def run_sar(state: State, ctx: Ctx, node: str) -> Any:
-    """Radar search and same-orbit pair comparison, as one tool call. Returns SarEvidence or None."""
+def run_sar(state: State, ctx: Ctx, node: str, background: bool = False) -> Any:
+    """Radar search and same-orbit pair comparison. Returns SarEvidence or None."""
     geo = _geo()
     polygon, seed = state["polygon"], state["seed"]
     event_date = state["evidence"].event.date
@@ -815,7 +832,7 @@ def run_sar(state: State, ctx: Ctx, node: str) -> Any:
                     "placebo_p": r.placebo.p_value if r.placebo else None,
                     "n_placebos": r.placebo.n_placebos if r.placebo else None,
                 },
-                pre=pre.id, post=post.id,
+                timeout_s=EXHIBIT_TIMEOUT_S if background else None, pre=pre.id, post=post.id,
             )
         except ToolTimedOut:
             break  # a slow archive will not be faster for the next pair, and the budget is finite
@@ -824,6 +841,17 @@ def run_sar(state: State, ctx: Ctx, node: str) -> Any:
         if result.usable:
             return result
     return result
+
+
+def _mark_sar(ctx: Ctx, ev: Evidence, sar) -> None:
+    if sar is not None and sar.usable:
+        ctx.set_exhibit("sar", "done")
+    elif sar is not None:
+        ctx.set_exhibit("sar", "done", sar.reason)
+    elif ctx.archive_failed:
+        ctx.set_exhibit("sar", "failed", "the radar archive could not be read")
+    else:
+        ctx.set_exhibit("sar", "not_applicable", "no same-orbit radar pair around the event")
 
 
 def _apply_sar(ev: Evidence, sar) -> None:
@@ -861,6 +889,7 @@ def n_sar_compare(state: State, ctx: Ctx) -> dict:
         return {}
     sar = run_sar(state, ctx, "sar_compare")
     _apply_sar(ev, sar)
+    _mark_sar(ctx, ev, sar)
     return {"evidence": ev, "sar_tried": True}
 
 
@@ -888,6 +917,9 @@ def n_optical_compare(state: State, ctx: Ctx) -> dict:
                 "placebo_p": r[1].placebo.p_value if r[1].placebo else None,
                 "n_placebos": r[1].placebo.n_placebos if r[1].placebo else None,
                 "n_at_least_as_extreme": r[1].placebo.n_at_least_as_extreme if r[1].placebo else None,
+                "far_p": r[1].far_placebo.p_value if r[1].far_placebo else None,
+                "far_n_placebos": r[1].far_placebo.n_placebos if r[1].far_placebo else None,
+                "pretrend_delta": r[1].pretrend_delta,
                 "gap_at_post": r[1].counterfactual.gap_at_post if r[1].counterfactual else None,
             },
             pre=pre.id, post=post.id, seed=seed,
@@ -907,20 +939,28 @@ def n_optical_compare(state: State, ctx: Ctx) -> dict:
         for name, scene in (("optical.pre", pre), ("optical.post", post)):
             _prov(ev, name, f"{PC} (sentinel-2-l2a)", asset=scene.id)
         placebo = neighbours.placebo
-        if placebo is not None and ev.optical.plot_delta_ndvi is not None:
+        tests = explain.tests_line(ev)
+        if tests is not None and ev.optical.plot_delta_ndvi is not None:
+            change = signed(ev.optical.plot_delta_ndvi)
+            far = neighbours.far_placebo
             ctx.emit(
                 "decision", "optical_compare",
-                f"आपके खेत में हरियाली का बदलाव {signed(ev.optical.plot_delta_ndvi)}। आसपास के "
-                f"{placebo.n_placebos} मिलते-जुलते खेतों में से {placebo.n_at_least_as_extreme} में इतना या ज़्यादा।",
-                f"Your field's greenness changed {signed(ev.optical.plot_delta_ndvi)}. "
-                f"{placebo.n_at_least_as_extreme} of {placebo.n_placebos} look-alike fields changed as much.",
-                plot_delta_ndvi=ev.optical.plot_delta_ndvi, p_value=placebo.p_value,
-                insufficient_reason=placebo.insufficient_reason,
+                f"आपके खेत की हरियाली का बदलाव {change}। {tests[0]}",
+                f"Your field's greenness changed {change}. {tests[1]}",
+                plot_delta_ndvi=ev.optical.plot_delta_ndvi,
+                ring_p=placebo.p_value if placebo else None,
+                far_p=far.p_value if far else None,
+                ring_significant=rubric.ring_significant(ev),
+                far_significant=rubric.far_significant(ev),
+                pretrend_delta=neighbours.pretrend_delta,
+                post_days_after_event=(ev.optical.post.date - ev.event.date).days
+                if ev.optical.post else None,
             )
-        # Radar corroborates in parallel with history and the timeline. It does not run alongside
-        # the optical comparison, which is the main evidence and is slowed badly by competing reads.
-        if not state.get("sar_tried") and ctx.calls_left() >= 4 and ctx.seconds_left() > 30:
-            ctx.sar_future = _TOOLS.submit(run_sar, state, ctx, "optical_compare")
+        # Radar and history start now, in the background, and do not hold up the verdict for long.
+        # They never run alongside the optical comparison: it is the main evidence and competing
+        # reads slow it badly on a thin link.
+        if not state.get("sar_tried") and ctx.calls_left() >= 3:
+            ctx.sar_future = _TOOLS.submit(run_sar, state, ctx, "optical_compare", True)
             update["sar_tried"] = True
     return update
 
@@ -934,52 +974,59 @@ def route_after_compare(state: State) -> str:
 # history
 
 
+def _apply_history(ev: Evidence, history) -> None:
+    """This year's side is recomputed here, since the scene pair may have changed since it began."""
+    pre = ev.optical.pre
+    current = ev.optical.plot_delta_ndvi
+    if pre is not None and current is not None:
+        if history.typical_delta is not None:
+            history.excess_vs_history = round(current - history.typical_delta, 4)
+        history.downweighted = any(
+            y.pre_ndvi is not None and abs(y.pre_ndvi - pre.ndvi_median) > cross_exam.HISTORY_PRE_DIFF
+            for y in history.years
+        )
+    ev.history = history
+    for scene_id in _geo().history_scene_ids(history):
+        _prov(ev, "history", f"{PC} (sentinel-2-l2a)", asset=scene_id)
+
+
+def run_history(ctx: Ctx, polygon: dict, event_date: date, current: float, pre_ndvi: float):
+    geo = _geo()
+    return ctx.call(
+        "history", "history",
+        lambda: geo.history(polygon, event_date, current_delta=current, current_pre_ndvi=pre_ndvi),
+        "इसी खेत के पिछले वर्षों से तुलना", "Comparing with this field's past years",
+        summarize=lambda h: {
+            "years": [{"year": y.year, "pre_ndvi": y.pre_ndvi, "delta_ndvi": y.delta_ndvi,
+                       "note": y.note} for y in h.years],
+            "typical_delta": h.typical_delta, "excess_vs_history": h.excess_vs_history,
+            "downweighted": h.downweighted, "note": h.note,
+        },
+    )
+
+
 def n_history(state: State, ctx: Ctx) -> dict:
     ev: Evidence = state["evidence"]
-    start_timeline(ctx, state["polygon"], ev.event.date)  # after the comparison, which it would slow
     if ev.optical.pre is None or ev.optical.plot_delta_ndvi is None:
         ctx.emit("decision", "history",
                  "इस साल की ऑप्टिकल तुलना नहीं है, इसलिए पिछले वर्षों से तुलना नहीं की गई",
                  "No optical comparison this year, so history was not compared",
                  reason="no_current_delta")
+        ctx.set_exhibit("history", "not_applicable", "there is no optical comparison this year")
         return {}
-    current, pre_ndvi = ev.optical.plot_delta_ndvi, ev.optical.pre.ndvi_median
-    same_date = state.get("history_date") == ev.event.date and ev.history is not None
-    if same_date:
-        # The scene pair changed but not the calendar window, so only this year's side changes.
-        history = ev.history
-        if history.typical_delta is not None:
-            history.excess_vs_history = round(current - history.typical_delta, 4)
-        history.downweighted = any(
-            y.pre_ndvi is not None and abs(y.pre_ndvi - pre_ndvi) > cross_exam.HISTORY_PRE_DIFF
-            for y in history.years
-        )
+    if state.get("history_date") == ev.event.date:
+        if ev.history is not None:
+            _apply_history(ev, ev.history)  # same calendar window, a new pair: only this year changes
         return {"evidence": ev}
-    if ctx.seconds_left() < 25 or ctx.calls_left() < 2:
-        ctx.emit("warning", "history", "समय या बजट कम है, इसलिए पिछले वर्षों से तुलना छोड़ी गई",
-                 "Short on time or budget, so the history comparison was skipped",
-                 calls_left=ctx.calls_left(), seconds_left=round(ctx.seconds_left()))
+    if ctx.calls_left() < 1:
+        ctx.emit("warning", "history", "बजट पूरा होने से पिछले वर्षों से तुलना छोड़ी गई",
+                 "The tool budget is used up, so the history comparison was skipped")
+        ctx.set_exhibit("history", "failed", "tool budget used up")
         return {}
-    geo = _geo()
-    polygon = state["polygon"]
-    try:
-        history = ctx.call(
-            "history", "history",
-            lambda: geo.history(polygon, ev.event.date, current_delta=current,
-                                current_pre_ndvi=pre_ndvi),
-            "इसी खेत के पिछले वर्षों से तुलना", "Comparing with this field's past years",
-            summarize=lambda h: {
-                "years": [{"year": y.year, "pre_ndvi": y.pre_ndvi, "delta_ndvi": y.delta_ndvi,
-                           "note": y.note} for y in h.years],
-                "typical_delta": h.typical_delta, "excess_vs_history": h.excess_vs_history,
-                "downweighted": h.downweighted, "note": h.note,
-            },
-        )
-    except ToolFailed:
-        return {}
-    ev.history = history
-    for scene_id in geo.history_scene_ids(history):
-        _prov(ev, "history", f"{PC} (sentinel-2-l2a)", asset=scene_id)
+    ctx.history_future = _TOOLS.submit(
+        run_history, ctx, state["polygon"], ev.event.date, ev.optical.plot_delta_ndvi,
+        ev.optical.pre.ndvi_median,
+    )
     return {"evidence": ev, "history_date": ev.event.date}
 
 
@@ -1001,11 +1048,10 @@ def _pick_followup(state: State, ctx: Ctx, followups: list[cross_exam.FollowUp],
     """The first follow-up that could change something and that the budget can pay for."""
     if state.get("loops", 0) >= MAX_LOOPS:
         return None, "loop limit reached"
-    if ctx.seconds_left() < 30:
-        return None, "time budget nearly used"
-    reserve = 1  # chips are part of the record, so one call stays reserved for them
+    if ctx.elapsed() > VERDICT_TARGET_S:
+        return None, "the verdict target has been reached"
     cost = 2  # another search and another comparison
-    if ctx.calls_left() < cost + reserve:
+    if ctx.calls_left() < cost:
         return None, "tool budget nearly used"
     attempted = set(state.get("attempted") or [])
     today = today_ist()
@@ -1029,22 +1075,43 @@ def _pick_followup(state: State, ctx: Ctx, followups: list[cross_exam.FollowUp],
     return None, "nothing more to try"
 
 
-def _collect_sar(ctx: Ctx, ev: Evidence) -> None:
-    if ctx.sar_future is None:
-        return
-    future, ctx.sar_future = ctx.sar_future, None
-    try:
-        _apply_sar(ev, future.result(timeout=max(3.0, min(60.0, ctx.seconds_left()))))
-    except FutureTimeout:
-        ctx.emit("warning", "cross_examine", "रडार की तुलना समय पर नहीं आई; उसके बिना आगे बढ़ रहे हैं",
-                 "The radar comparison did not arrive in time; continuing without it")
-    except ToolFailed:
-        pass
+def land_background(ctx: Ctx, ev: Evidence, wait_s: float) -> bool:
+    """Applies radar and history if they have finished, waiting up to wait_s for them in total.
+    Returns whether anything new landed. Whatever is still running stays pending."""
+    landed = False
+    deadline = time.monotonic() + max(0.0, wait_s)
+    if ctx.sar_future is not None:
+        try:
+            sar = ctx.sar_future.result(timeout=max(0.0, deadline - time.monotonic()))
+        except FutureTimeout:
+            pass
+        except ToolFailed as exc:
+            ctx.sar_future = None
+            ctx.set_exhibit("sar", "failed", str(exc))
+        else:
+            ctx.sar_future = None
+            _apply_sar(ev, sar)
+            _mark_sar(ctx, ev, sar)
+            landed = True
+    if ctx.history_future is not None:
+        try:
+            history = ctx.history_future.result(timeout=max(0.0, deadline - time.monotonic()))
+        except FutureTimeout:
+            pass
+        except ToolFailed as exc:
+            ctx.history_future = None
+            ctx.set_exhibit("history", "failed", str(exc))
+        else:
+            ctx.history_future = None
+            _apply_history(ev, history)
+            ctx.set_exhibit("history", "done")
+            landed = True
+    return landed
 
 
 def n_cross_examine(state: State, ctx: Ctx) -> dict:
     ev: Evidence = state["evidence"]
-    _collect_sar(ctx, ev)
+    land_background(ctx, ev, VERDICT_TARGET_S - ctx.elapsed())
     ctx.emit("step_started", "cross_examine", "अब एक सख़्त सर्वेयर इस सबूत पर सवाल उठाएगा",
              "A hostile surveyor now attacks this evidence", round=state.get("loops", 0) + 1)
     objections, followups = cross_exam.run(ev, state.get("farmer_date"))
@@ -1101,6 +1168,9 @@ def n_cross_examine(state: State, ctx: Ctx) -> dict:
             "history_date": state.get("history_date"),
         }
         _redate(ev, proposed, ctx)
+        ctx.sar_future = ctx.history_future = None  # those were for the old date
+        ctx.set_exhibit("sar", "pending")
+        ctx.set_exhibit("history", "pending")
         update["seed"] = make_seed(state["polygon"], proposed)
         update["qa_seen"] = {}
         update["history_date"] = None
@@ -1140,22 +1210,25 @@ def route_after_cross_examine(state: State) -> str:
 # verdict
 
 
-def n_verdict(state: State, ctx: Ctx) -> dict:
-    ev: Evidence = state["evidence"]
+def decide(ctx: Ctx, ev: Evidence, *, revised: bool = False) -> None:
+    """Rubric to Verdict, and the re-check it may schedule. Run again if late evidence lands."""
+    from app.evidence.schema import Verdict
+
     result = rubric.decide(ev)
     if ctx.archive_failed and result.level == "insufficient":
         result = replace(result, reasons=[rubric.ARCHIVE_UNREACHABLE])
     head_hi, head_en, head_te = explain.headlines(result.level, ev.event.type)
-    from app.evidence.schema import Verdict
-
     ev.verdict = Verdict(
         level=result.level, headline_hi=head_hi, headline_en=head_en, headline_te=head_te,
         reasons=result.reasons, caveats=result.caveats,
         falsifiers_checked=result.falsifiers_checked, rubric_version=result.version,
     )
+    pending = [n for n, e in ctx.exhibits.items() if e["status"] == "pending"]
     ctx.emit("verdict", "verdict", head_hi, head_en, level=result.level, reasons=result.reasons,
              caveats=result.caveats, rubric_version=result.version,
-             corroborated_by=rubric.corroboration(ev), conceded=rubric.conceded(ev))
+             corroborated_by=rubric.corroboration(ev), conceded=rubric.conceded(ev),
+             revised=revised, sealed=False, exhibits_pending=pending)
+    ev.deadlines = [d for d in ev.deadlines if d.type != "recheck"]
     if result.schedule_recheck:
         latest = max((q.date for q in ev.optical.scenes_considered), default=today_ist())
         due = datetime.combine(
@@ -1165,68 +1238,44 @@ def n_verdict(state: State, ctx: Ctx) -> dict:
         basis = "sentinel-2-revisit"
         if rubric.comparison_incomplete(ev) or ctx.archive_failed:
             due, basis = datetime.now(UTC) + timedelta(minutes=30), "archive-retry"
-        ev.deadlines = [d for d in ev.deadlines if d.type != "recheck"]
         ev.deadlines.append(Deadline(type="recheck", due_at=due, basis=basis, status="open"))
+
+
+def n_verdict(state: State, ctx: Ctx) -> dict:
+    ev: Evidence = state["evidence"]
+    decide(ctx, ev)
     return {"evidence": ev}
 
 
 # village
 
 
-def start_chips(ctx: Ctx, state: State, ev: Evidence) -> None:
-    """After the verdict the scene pair is final, so the images can render beside the village step."""
-    if ctx.chips_future is not None:
-        return
-    pre, post = ev.optical.pre, ev.optical.post
-    polygon = state["polygon"]
-    sar = ev.sar if ev.sar and ev.sar.usable else None
-
-    def render():
-        if not (pre and post):
-            return None
-        out_dir = get_settings().artifacts_dir / ctx.case_id / ctx.run_id
-        return ctx.call(
-            "seal", "render_chips",
-            lambda: _geo().render_chips(polygon, pre.scene_id, post.scene_id, out_dir,
-                                        sar.pre_scene_id if sar else None,
-                                        sar.post_scene_id if sar else None),
-            "पहले और बाद की तस्वीरें बन रही हैं", "Rendering before and after images",
-            summarize=lambda r: {"chips": [c.kind for c in r]},
-        )
-
-    ctx.chips_future = _TOOLS.submit(render)
-
-
-def n_village(state: State, ctx: Ctx) -> dict:
-    """Signatures 1 and 2. They need GEO's exports; without them the fields stay an honest null."""
-    ev: Evidence = state["evidence"]
+def _exhibit_runners(ctx: Ctx, ev: Evidence, polygon: dict, seed: int) -> dict[str, Callable[[], Any]]:
+    """What can run for this evidence. An exhibit with no input is marked not applicable."""
     geo = _geo()
-    start_chips(ctx, state, ev)
-    village_fn = getattr(geo, "village_witness", None)
-    fade_fn = getattr(geo, "scale_fade", None)
     pre, post = ev.optical.pre, ev.optical.post
     sar_pair = ev.sar is not None and ev.sar.usable and ev.sar.pre_scene_id and ev.sar.post_scene_id
-    if village_fn is None and fade_fn is None:
-        ctx.emit("warning", "village", "गाँव स्तर का हिसाब अभी उपलब्ध नहीं", "The village-level computation is not available",
-                 reason="geo_not_exported")
-        return {}
-    if not ((pre and post) or sar_pair):
+    out_dir = get_settings().artifacts_dir / ctx.case_id / (ctx.evidence_run_id or ctx.run_id)
+    runners: dict[str, Callable[[], Any]] = {}
+    has_pair = (pre and post) or sar_pair
+    pair_ids = (pre.scene_id, post.scene_id) if pre and post else (
+        (ev.sar.pre_scene_id, ev.sar.post_scene_id) if sar_pair else (None, None))
+    sensor = "s2" if pre and post else "s1"
+
+    def missing(name: str, reason: str) -> None:
+        ctx.set_exhibit(name, "not_applicable", reason)
+
+    village_fn = getattr(geo, "village_witness", None)
+    if village_fn is None:
+        ctx.emit("warning", "village", "गाँव स्तर का हिसाब अभी उपलब्ध नहीं",
+                 "The village-level computation is not available", reason="geo_not_exported")
+        missing("village", "the geo engine does not provide it")
+    elif not has_pair:
         ctx.emit("decision", "village", "बिना भरोसेमंद जोड़ी के गाँव स्तर का हिसाब नहीं हो सकता",
                  "No trustworthy image pair, so no village-level computation", reason="no_pair")
-        return {}
-    if ctx.calls_left() < 2 or ctx.seconds_left() < -DOCUMENTATION_GRACE_S + 20:
-        ctx.emit("warning", "village", "बजट कम होने से गाँव स्तर का हिसाब छोड़ा गया",
-                 "Skipped the village-level computation because the budget is low",
-                 calls_left=ctx.calls_left(), seconds_left=round(ctx.seconds_left()))
-        return {}
-    polygon, seed = state["polygon"], state["seed"]
-    pair_ids = (pre.scene_id, post.scene_id) if pre and post else (ev.sar.pre_scene_id, ev.sar.post_scene_id)
-    sensor = "s2" if pre and post else "s1"
-    out_dir = get_settings().artifacts_dir / ctx.case_id / ctx.run_id
-    update: dict = {"evidence": ev}
-
-    def run_village():
-        return ctx.call(
+        missing("village", "no trustworthy image pair")
+    else:
+        runners["village"] = lambda: ctx.call(
             "village", "village_witness",
             lambda: _with_applicability(
                 village_fn(polygon, pair_ids[0], pair_ids[1], seed, sensor), ev.claim_path
@@ -1239,43 +1288,149 @@ def n_village(state: State, ctx: Ctx) -> dict:
                 "ten_field_draw": v.lottery.model_dump(mode="json", exclude={"sample_draws"})
                 if v.lottery else None,
             },
+            counted=False,
         )
 
-    def run_fade():
-        return ctx.call(
+    fade_fn = getattr(geo, "scale_fade", None)
+    if fade_fn is None:
+        missing("scale_fade", "the geo engine does not provide it")
+    elif not has_pair:
+        missing("scale_fade", "no trustworthy image pair")
+    else:
+        runners["scale_fade"] = lambda: ctx.call(
             "village", "scale_fade",
             lambda: fade_fn(polygon, pair_ids[0], pair_ids[1], out_dir, sensor),
             "वही बदलाव बड़े और बड़े खानों में", "The same change at coarser and coarser cells",
             summarize=lambda f: {"sensor": f.sensor, "statistic": f.statistic, "levels": [
                 {"block_m": x.block_m, "plot_cell_value": x.plot_cell_value} for x in f.levels]},
+            counted=False,
         )
 
-    village_future = _TOOLS.submit(run_village) if village_fn is not None else None
-    fade_future = _TOOLS.submit(run_fade) if fade_fn is not None else None
-    if village_future is not None:
-        try:
-            village = village_future.result()
-            village.nearby_real_cases = _nearby_real_cases(ev, village.radius_m, ctx.case_id)
-            ev.village = village
-            _prov(ev, "village", f"{PC} (computed by the geo engine)", asset=f"{pair_ids[0]},{pair_ids[1]}")
-            draw = village.lottery
-            if draw is not None and not draw.insufficient_reason and (
-                draw.average_p05 is not None and draw.average_p95 is not None
-            ):
-                _draw_line(ctx, draw)
-        except ToolFailed:
-            pass
-    if fade_future is not None:
-        try:
-            fade = fade_future.result()
-            root = get_settings().artifacts_dir.resolve()
-            for level in fade.levels:
-                level.chip_path = _relative_artifact(level.chip_path, root)
-            ev.scale_fade = fade
-            _fade_line(ctx, fade)
-        except ToolFailed:
-            pass
-    return update
+    if pre and post:
+        usable_sar = ev.sar if ev.sar and ev.sar.usable else None
+        runners["chips"] = lambda: ctx.call(
+            "seal", "render_chips",
+            lambda: geo.render_chips(polygon, pre.scene_id, post.scene_id, out_dir,
+                                     usable_sar.pre_scene_id if usable_sar else None,
+                                     usable_sar.post_scene_id if usable_sar else None),
+            "पहले और बाद की तस्वीरें बन रही हैं", "Rendering before and after images",
+            summarize=lambda r: {"chips": [c.kind for c in r]}, counted=False,
+        )
+    else:
+        missing("chips", "no image pair to render")
+
+    start = ev.event.date - timedelta(days=PRE_WINDOW_DAYS)
+    end = min(ev.event.date + timedelta(days=POST_WINDOW_DAYS), today_ist())
+    runners["timeline"] = lambda: ctx.call(
+        "seal", "timeline", lambda: geo.timeline(polygon, start, end),
+        "इस खेत के सभी सैटेलाइट दर्शन", "Every satellite pass over this field",
+        summarize=lambda r: {"n_points": len(r), "points": [
+            {"date": p.date, "sensor": p.sensor, "ndvi": p.ndvi, "vh_db": p.vh_db, "qa": p.qa}
+            for p in r][:40]},
+        counted=False, start=start, end=end,
+    )
+    return runners
+
+
+def _apply_exhibit(ctx: Ctx, ev: Evidence, name: str, value: Any) -> None:
+    root = get_settings().artifacts_dir.resolve()
+    if name == "village":
+        value.nearby_real_cases = _nearby_real_cases(ev, value.radius_m, ctx.case_id)
+        ev.village = value
+        draw = value.lottery
+        if draw is not None and not draw.insufficient_reason and (
+            draw.average_p05 is not None and draw.average_p95 is not None
+        ):
+            _draw_line(ctx, draw)
+    elif name == "scale_fade":
+        for level in value.levels:
+            level.chip_path = _relative_artifact(level.chip_path, root)
+        ev.scale_fade = value
+        _fade_line(ctx, value)
+    elif name == "chips":
+        for chip in value or []:
+            chip.path = _relative_artifact(chip.path, root)
+        ev.chips = value or []
+    elif name == "timeline":
+        ev.timeline = value or []
+
+
+def _reexamine(ctx: Ctx, ev: Evidence, state: State) -> None:
+    """Late radar or history can change the cross-examination, and through it the verdict."""
+    before = {o.id: o.outcome for o in ev.cross_examination}
+    level_before = ev.verdict.level if ev.verdict else None
+    objections, _ = cross_exam.run(ev, state.get("farmer_date"))
+    ev.cross_examination = objections
+    for objection in objections:
+        if before.get(objection.id) != objection.outcome:
+            ctx.emit(
+                "objection", "cross_examine", objection.challenge_hi, objection.challenge_en,
+                id=objection.id, test=objection.test, measured=objection.measured,
+                outcome=objection.outcome, finding_hi=objection.finding_hi,
+                finding_en=objection.finding_en, round="late_evidence",
+            )
+    if rubric.decide_level(ev)[0] != level_before:
+        decide(ctx, ev, revised=True)
+        n_explain(state, ctx)
+    elif ev.verdict is not None:
+        result = rubric.decide(ev)
+        ev.verdict.reasons, ev.verdict.caveats = result.reasons, result.caveats
+        ev.verdict.falsifiers_checked = result.falsifiers_checked
+
+
+def n_exhibits(state: State, ctx: Ctx) -> dict:
+    """Fills in everything that does not decide the verdict, in parallel, as each one lands."""
+    ev: Evidence = state["evidence"]
+    polygon, seed = state["polygon"], state["seed"]
+    ctx.emit("action", "exhibits", "नतीजा आ गया। बाकी सबूत अभी बन रहे हैं और आते ही जुड़ते जाएँगे।",
+             "The result is in. The other exhibits are still computing and will appear as they finish.",
+             action="exhibits_started", pending=[n for n, e in ctx.exhibits.items()
+                                                 if e["status"] == "pending"])
+    futures = {_TOOLS.submit(fn): name for name, fn in _exhibit_runners(ctx, ev, polygon, seed).items()}
+    persist(ctx, ev)
+    limit = get_settings().run_hard_limit_s
+    pending = set(futures)
+    while pending or ctx.sar_future is not None or ctx.history_future is not None:
+        left = limit - ctx.elapsed()
+        if left <= 0:
+            break
+        done, pending = wait(pending, timeout=min(1.0, left), return_when=FIRST_COMPLETED) if pending else (
+            set(), set())
+        for future in done:
+            name = futures[future]
+            try:
+                _apply_exhibit(ctx, ev, name, future.result())
+                ctx.set_exhibit(name, "done")
+            except ToolFailed as exc:
+                ctx.set_exhibit(name, "failed", str(exc))
+            except Exception as exc:
+                log.exception("exhibit %s failed", name)
+                ctx.set_exhibit(name, "failed", f"{type(exc).__name__}: {exc}")
+            _emit_exhibit(ctx, name)
+            persist(ctx, ev)
+        had_background = ctx.sar_future is not None or ctx.history_future is not None
+        if land_background(ctx, ev, 0.0 if pending else 1.0) or (
+            had_background and ctx.sar_future is None and ctx.history_future is None
+        ):
+            _reexamine(ctx, ev, state)
+            for name in ("sar", "history"):
+                _emit_exhibit(ctx, name)
+            persist(ctx, ev)
+    for name, entry in ctx.exhibits.items():
+        if entry["status"] == "pending":
+            ctx.set_exhibit(name, "failed", f"not finished within {limit:.0f} s; it can be retried")
+            _emit_exhibit(ctx, name)
+    ctx.sar_future = ctx.history_future = None
+    return {"evidence": ev}
+
+
+def _emit_exhibit(ctx: Ctx, name: str) -> None:
+    entry = ctx.exhibits[name]
+    done = entry["status"] == "done"
+    ctx.emit("action", "exhibits",
+             f"{_EXHIBIT_HI[name]}: {'तैयार' if done else 'नहीं बन पाया' if entry['status'] == 'failed' else 'लागू नहीं'}",
+             f"{name}: {entry['status']}", action="exhibit", exhibit=name, status=entry["status"],
+             reason=entry["reason"])
 
 
 def _with_applicability(village, path):
@@ -1383,6 +1538,7 @@ def n_policy(state: State, ctx: Ctx) -> dict:
         ctx.emit("warning", "policy", "नीति के दस्तावेज़ उपलब्ध नहीं", "Policy corpus unavailable", reason=policy.UNAVAILABLE)
     else:
         ev.policy = policy.clauses_for_rules(_rule_names_for(path))
+        policy.ensure_cited(path, ev.policy, deadlines)
     hi_reason = claim_path.route_claim(path.insured, path.crop_stage, ev.event.type, ev.event.crop, "hi")
     en_reason = claim_path.route_claim(path.insured, path.crop_stage, ev.event.type, ev.event.crop, "en")
     ctx.emit(
@@ -1504,35 +1660,12 @@ def _refresh_draft(ctx: Ctx, state: State, ev: Evidence) -> None:
             row.payload = draft
 
 
-def n_seal(state: State, ctx: Ctx) -> dict:
-    ev: Evidence = state["evidence"]
-    polygon, seed = state["polygon"], state["seed"]
+def seal_core(ev: Evidence, polygon: dict, seed: int) -> ReplayCore:
     geo = _geo()
-    ctx.emit("step_started", "seal", "सबूत पर मुहर लगाई जा रही है", "Sealing the evidence")
-    start_chips(ctx, state, ev)
-    try:
-        chips = ctx.chips_future.result(timeout=max(3.0, ctx.seconds_left() + DOCUMENTATION_GRACE_S))
-        if chips:
-            root = get_settings().artifacts_dir.resolve()
-            for chip in chips:
-                chip.path = _relative_artifact(chip.path, root)
-            ev.chips = chips
-    except (ToolFailed, FutureTimeout):
-        pass
-    if ctx.timeline_future is not None:
-        try:
-            wait_s = 3.0 if ctx.archive_failed else max(3.0, min(40.0, ctx.seconds_left()))
-            ev.timeline = ctx.timeline_future.result(timeout=wait_s) or []
-        except FutureTimeout:
-            ctx.emit("warning", "seal", "सैटेलाइट दर्शनों की सूची समय पर नहीं बनी", "The list of satellite passes was not ready in time")
-        except ToolFailed:
-            pass
-
     pre_id = ev.optical.pre.scene_id if ev.optical.pre else None
     post_id = ev.optical.post.scene_id if ev.optical.post else None
-    sar = ev.sar
-    hist = ev.history
-    core = ReplayCore(
+    sar, hist = ev.sar, ev.history
+    return ReplayCore(
         engine_version=geo.ENGINE_VERSION,
         polygon=polygon,
         event_date=ev.event.date,
@@ -1543,9 +1676,17 @@ def n_seal(state: State, ctx: Ctx) -> dict:
         history_scene_ids=geo.history_scene_ids(hist) if hist else [],
         seed=seed,
         numbers=geo.flatten_numbers(
-            ev.optical if pre_id and post_id else None, ev.neighbours, sar, hist
+            ev.optical if pre_id and post_id else None, ev.neighbours, sar, hist, ev.village,
+            ev.scale_fade,
         ),
     )
+
+
+def n_seal(state: State, ctx: Ctx) -> dict:
+    ev: Evidence = state["evidence"]
+    polygon, seed = state["polygon"], state["seed"]
+    ctx.emit("step_started", "seal", "सबूत पर मुहर लगाई जा रही है", "Sealing the evidence")
+    core = seal_core(ev, polygon, seed)
     ev.replay = core
     ev.evidence_hash = evidence_hash(core)
     _refresh_draft(ctx, state, ev)
@@ -1563,8 +1704,8 @@ def build_graph(ctx: Ctx):
         "planner": n_planner, "search_optical": n_search_optical,
         "optical_compare": n_optical_compare, "sensor_switch": n_sensor_switch,
         "sar_compare": n_sar_compare, "history": n_history, "cross_examine": n_cross_examine,
-        "verdict": n_verdict, "village": n_village, "policy": n_policy, "act": n_act,
-        "explain": n_explain, "seal": n_seal,
+        "verdict": n_verdict, "policy": n_policy, "act": n_act, "explain": n_explain,
+        "exhibits": n_exhibits, "seal": n_seal,
     }
     for name, fn in nodes.items():
         graph.add_node(name, guard(name, ctx, fn))
@@ -1593,10 +1734,10 @@ def build_graph(ctx: Ctx):
         {"search_optical": "search_optical", "verdict": "verdict"},
     )
     graph.add_edge("verdict", "policy")
-    graph.add_edge("policy", "village")
-    graph.add_edge("village", "act")
+    graph.add_edge("policy", "act")
     graph.add_edge("act", "explain")
-    graph.add_edge("explain", "seal")
+    graph.add_edge("explain", "exhibits")
+    graph.add_edge("exhibits", "seal")
     graph.add_edge("seal", END)
     return graph.compile()
 
@@ -1618,9 +1759,72 @@ def run_investigation(run_id: str, case_id: str, tracer: Tracer) -> str:
         "Investigation complete" if ok else "Investigation complete, but the evidence could not be sealed",
         status="done" if ok else "failed", level=ev.verdict.level if ev.verdict else None,
         evidence_hash=ev.evidence_hash, calls_used=ctx.calls, elapsed_s=round(ctx.elapsed(), 1),
-        llm_used=ev.llm_used, finished_at=utcnow(),
+        llm_used=ev.llm_used, finished_at=utcnow(), exhibits=ctx.exhibits,
     )
     return "done" if ok else "failed"
 
 
-__all__ = ["canonical_json", "evidence_hash", "make_seed", "run_investigation"]
+def retry_exhibit(run_id: str, case_id: str, name: str, tracer: Tracer) -> str:
+    """Runs one exhibit again for the sealed evidence. Earlier attempts have usually filled the read
+    cache, so this tends to be quick. New numbers mean a new seal, and the old record stays verifiable."""
+    settings = get_settings()
+    with session_scope() as s:
+        row = s.scalars(
+            select(EvidenceRow).where(EvidenceRow.case_id == case_id,
+                                      EvidenceRow.evidence_hash.is_not(None))
+            .order_by(EvidenceRow.created_at.desc())
+        ).first()
+        plot = s.scalar(select(Plot).where(Plot.case_id == case_id))
+        case = s.get(Case, case_id)
+        ev = Evidence.model_validate(row.json)
+        evidence_run, polygon, exhibits = row.run_id, plot.geometry, dict(row.exhibits or {})
+        old_hash, old_core = row.evidence_hash, row.replay_core
+        farmer_date = case.event_date
+    ctx = Ctx(run_id=run_id, case_id=case_id, tracer=tracer,
+              budget_calls=settings.run_budget_tool_calls, budget_s=settings.run_budget_seconds,
+              evidence_run_id=evidence_run, exhibits=exhibits)
+    ctx.set_exhibit(name, "pending")
+    persist(ctx, ev)
+    seed = ev.replay.seed if ev.replay else make_seed(polygon, ev.event.date)
+    state: State = {"polygon": polygon, "seed": seed, "evidence": ev, "farmer_date": farmer_date,
+                    "case": {"lang": case.lang}}
+    ctx.emit("step_started", "exhibits", f"{_EXHIBIT_HI[name]} दोबारा", f"Retrying {name}", exhibit=name)
+    if name in ("sar", "history"):
+        try:
+            if name == "sar":
+                sar = run_sar(state, ctx, "exhibits", True)
+                _apply_sar(ev, sar)
+                _mark_sar(ctx, ev, sar)
+            else:
+                pre, delta = ev.optical.pre, ev.optical.plot_delta_ndvi
+                _apply_history(ev, run_history(ctx, polygon, ev.event.date, delta, pre.ndvi_median))
+                ctx.set_exhibit("history", "done")
+        except ToolFailed as exc:
+            ctx.set_exhibit(name, "failed", str(exc))
+        else:
+            _reexamine(ctx, ev, state)
+    else:
+        runners = _exhibit_runners(ctx, ev, polygon, seed)
+        if name not in runners:
+            ctx.set_exhibit(name, "not_applicable", ctx.exhibits[name]["reason"])
+        else:
+            try:
+                _apply_exhibit(ctx, ev, name, runners[name]())
+                ctx.set_exhibit(name, "done")
+            except ToolFailed as exc:
+                ctx.set_exhibit(name, "failed", str(exc))
+    new_core = seal_core(ev, polygon, seed)
+    new_hash = evidence_hash(new_core)
+    if new_hash != old_hash:
+        # The earlier record may already be on a printed QR code, so it stays verifiable.
+        cache_put(f"sealed:{old_hash}", "superseded-seal", None, old_core)
+        ev.replay, ev.evidence_hash = new_core, new_hash
+    _emit_exhibit(ctx, name)
+    persist(ctx, ev)
+    ctx.emit("done", "exhibits", f"{_EXHIBIT_HI[name]}: पूरा", f"Retry of {name} finished",
+             status="done", exhibit=name, exhibit_status=ctx.exhibits[name]["status"],
+             evidence_hash=ev.evidence_hash, exhibits=ctx.exhibits)
+    return "done"
+
+
+__all__ = ["canonical_json", "evidence_hash", "make_seed", "retry_exhibit", "run_investigation"]

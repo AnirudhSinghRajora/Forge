@@ -94,11 +94,55 @@ def test_corrupt_scene_accepted_is_rebutted():
     assert get(evidence(), "corrupt_scene").outcome == "rebutted"
 
 
-def test_regional_trend_outcomes():
-    assert get(evidence(p=placebo(p=0.02)), "regional_trend").outcome == "rebutted"
-    assert get(evidence(p=placebo(p=0.08)), "regional_trend").outcome == "unresolved"
-    assert get(evidence(p=placebo(p=0.4)), "regional_trend").outcome == "conceded"
-    assert get(evidence(p=placebo(p=0.01, n=10)), "regional_trend").outcome == "unresolved"
+def test_regional_trend_both_significant():
+    ev = evidence(p=placebo(p=0.02), far=placebo(p=0.01))
+    assert get(ev, "regional_trend").outcome == "rebutted"
+
+
+def test_regional_trend_far_yes_ring_no_is_the_whole_area_and_not_a_weakness():
+    o = get(evidence(p=placebo(p=0.4), far=placebo(p=0.01)), "regional_trend")
+    assert o.outcome == "rebutted"
+    assert "whole area was hit, not only your field" in o.finding_en
+    assert "पूरा इलाक़ा प्रभावित हुआ" in o.finding_hi
+
+
+def test_regional_trend_ring_yes_far_no_is_a_local_loss():
+    o = get(evidence(p=placebo(p=0.02), far=placebo(p=0.4)), "regional_trend")
+    assert o.outcome == "rebutted" and "local loss" in o.finding_en
+
+
+def test_regional_trend_neither_is_conceded():
+    assert get(evidence(p=placebo(p=0.4), far=placebo(p=0.4)), "regional_trend").outcome == "conceded"
+
+
+def test_missing_far_test_is_not_significant_never_a_pass():
+    o = get(evidence(p=placebo(p=0.4), far=None), "regional_trend")
+    assert o.outcome == "conceded" and o.measured["far_p_value"] is None
+    assert "not available" in o.finding_en
+
+
+def test_bonferroni_boundary():
+    assert get(evidence(p=placebo(p=0.025), far=None), "regional_trend").outcome == "rebutted"
+    assert get(evidence(p=placebo(p=0.026), far=None), "regional_trend").outcome == "conceded"
+
+
+def test_regional_trend_too_few_placebos_is_unresolved():
+    ev = evidence(p=placebo(p=0.01, n=10), far=placebo(p=0.01, n=10))
+    assert get(ev, "regional_trend").outcome == "unresolved"
+
+
+def test_regional_trend_on_radar():
+    assert get(evidence(optical=False, sar=sar_evidence(p=0.02)), "regional_trend").outcome == "rebutted"
+    assert get(evidence(optical=False, sar=sar_evidence(p=0.4)), "regional_trend").outcome == "conceded"
+    assert get(evidence(optical=False), "regional_trend").outcome == "unresolved"
+
+
+def test_pre_trend_outcomes():
+    assert get(evidence(pretrend=-0.2), "pre_trend").outcome == "conceded"
+    assert get(evidence(pretrend=-0.10), "pre_trend").outcome == "conceded"
+    assert get(evidence(pretrend=-0.02), "pre_trend").outcome == "rebutted"
+    assert get(evidence(pretrend=None), "pre_trend").outcome == "unresolved"
+    assert get(evidence(optical=False), "pre_trend").outcome == "unresolved"
 
 
 def test_too_small_outcomes():
@@ -114,7 +158,7 @@ def test_stale_crop_outcomes():
 
 def test_measured_values_are_copied_from_evidence():
     o = get(evidence(p=placebo(p=0.02, n=200, k=3)), "regional_trend")
-    assert (o.measured["n_placebos"], o.measured["n_at_least_as_extreme"]) == (200, 3)
+    assert (o.measured["ring_n_placebos"], o.measured["ring_n_at_least_as_extreme"]) == (200, 3)
     assert "3" in o.finding_en and "200" in o.finding_en
 
 

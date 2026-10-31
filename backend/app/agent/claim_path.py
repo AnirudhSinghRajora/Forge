@@ -99,7 +99,7 @@ TEXT = {
     "late": (
         actions.LAPSED_HI,
         actions.LAPSED_EN,
-        "నియమం 72 గంటల్లో సమాచారం ఇవ్వమని చెబుతోంది. ఆ సమయం దాటినా ఇప్పుడే తెలియజేసి రిఫరెన్స్ నంబర్ దాచుకోండి; సర్వే సమయంలో అందిన సమాచారాన్ని కూడా పరిగణిస్తామని మార్గదర్శకాలు చెబుతున్నాయి.",
+        actions.LAPSED_TE,
     ),
     "filed": (
         "आपने सूचना दर्ज कर दी है। संदर्भ संख्या संभालकर रखें और सर्वे के समय खेत पर रहें।",
@@ -327,6 +327,16 @@ def with_deadline(
         updated.next_steps = [_t("late", lang), *updated.next_steps[1:]]
         updated.clause_ids = list(dict.fromkeys([*updated.clause_ids, *_cited("late_intimation")]))
     return updated, [deadline]
+
+
+def text_by_language(case, now: datetime | None = None) -> dict:
+    """The route's wording in every language, so switching language needs no new request."""
+    out = {}
+    for lang in ("hi", "en", "te"):
+        path, _ = for_case(case, lang, now)
+        out[lang] = {"reasons": path.reasons, "next_steps": path.next_steps,
+                     "evidence_use": path.evidence_use}
+    return out
 
 
 def for_case(case, lang: str | None = None, now: datetime | None = None

@@ -124,6 +124,17 @@ def test_testimony_never_claims_the_cause():
     assert "do not know the cause" in en and "consistent with" in en
 
 
+def test_testimony_states_both_answers_in_plain_words():
+    from tests.conftest import placebo
+
+    area = with_verdict(evidence(p=placebo(p=0.4), far=placebo(p=0.01)))
+    assert "whole area was hit, not only your field" in testimony.templates(area)[1]
+    local = with_verdict(evidence(p=placebo(p=0.02), far=placebo(p=0.4)))
+    assert "looks local to your field" in testimony.templates(local)[1]
+    neither = with_verdict(evidence(p=placebo(p=0.4), far=placebo(p=0.4)))
+    assert "did not change more" in testimony.templates(neither)[1]
+
+
 def test_testimony_says_no_damage_visible_honestly():
     from tests.conftest import placebo
 

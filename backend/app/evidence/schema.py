@@ -273,6 +273,7 @@ class ReplayCore(BaseModel):
     sar_pre_id: str | None = None
     sar_post_id: str | None = None
     history_scene_ids: list[str] = []
+    scene_archives: dict[str, str] = {}  # scene id -> public archive it was read from
     seed: int
     numbers: dict[str, float | None]  # flat "field.path" -> value, rounded to 4 dp
 

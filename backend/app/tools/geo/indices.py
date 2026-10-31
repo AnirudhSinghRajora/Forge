@@ -32,6 +32,19 @@ def boa_offset(baseline: str | None) -> int:
     return OFFSET_DN if value >= OFFSET_BASELINE else 0
 
 
+def scene_offset(baseline: str | None, offset_applied: bool | None) -> int:
+    """The offset to subtract for one item, given its baseline and what its archive did to it.
+
+    Earth Search serves DN with the offset already removed (verified on identical pixels: Planetary
+    Computer minus Earth Search is exactly 1000 DN), and says so in earthsearch:boa_offset_applied.
+    Its raster:bands metadata still says offset -0.1, which would subtract it twice, so that field
+    is never used. If an item does not say what was done, the offset is unknown: an error, not a guess.
+    """
+    if offset_applied is None:
+        raise ValueError("the item does not say whether the reflectance offset was already applied")
+    return 0 if offset_applied else boa_offset(baseline)
+
+
 def to_reflectance(dn: np.ndarray, offset: int) -> np.ndarray:
     """(DN - offset) / 10000 as float32. DN 0 is the L2A nodata value and becomes NaN."""
     out = (dn.astype(np.float32) - float(offset)) / 10000.0

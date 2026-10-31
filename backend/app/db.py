@@ -142,6 +142,7 @@ class EvidenceRow(Base):
     verdict_level: Mapped[str | None] = mapped_column(String(32))
     evidence_hash: Mapped[str | None] = mapped_column(String(64))
     replay_core: Mapped[dict | None] = mapped_column(JSON)
+    exhibits: Mapped[dict | None] = mapped_column(JSON)  # name -> {status, reason, updated_at}
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         UtcDateTime, default=utcnow, onupdate=utcnow

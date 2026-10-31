@@ -13,7 +13,7 @@ from sqlalchemy import select
 
 from app.agent.trace import Tracer
 from app.config import get_settings
-from app.db import Case, Run, RunEvent, new_id, session_scope, utcnow
+from app.db import Case, EvidenceRow, Run, RunEvent, new_id, session_scope, utcnow
 
 log = logging.getLogger(__name__)
 
@@ -52,6 +52,34 @@ def start_run(case_id: str, trigger: str = "user") -> tuple[str, bool]:
             s.add(Run(id=run_id, case_id=case_id, trigger=trigger, status="queued"))
     _pool().submit(_execute, run_id, case_id)
     return run_id, True
+
+
+def start_retry(case_id: str, name: str) -> str | None:
+    """A retry is a small run of its own. None if another run is active on this case."""
+    with _lock:
+        if active_run_id(case_id):
+            return None
+        run_id = new_id()
+        with session_scope() as s:
+            s.add(Run(id=run_id, case_id=case_id, trigger="retry", status="queued"))
+    _pool().submit(_execute_retry, run_id, case_id, name)
+    return run_id
+
+
+def _execute_retry(run_id: str, case_id: str, name: str) -> None:
+    tracer = Tracer(run_id)
+    try:
+        with session_scope() as s:
+            s.get(Run, run_id).status = "running"
+        from app.agent.graph import retry_exhibit
+
+        finish_run(run_id, retry_exhibit(run_id, case_id, name, tracer))
+    except Exception as exc:
+        log.exception("retry %s failed", run_id)
+        tracer.emit("error", "exhibits", "दोबारा कोशिश नहीं हो सकी", f"The retry failed: {exc}",
+                    error=f"{type(exc).__name__}: {exc}")
+        tracer.emit("done", "exhibits", "समाप्त", "Finished", status="failed", exhibit=name)
+        finish_run(run_id, "failed", f"{type(exc).__name__}: {exc}")
 
 
 def _next_seq(run_id: str) -> int:
@@ -104,6 +132,14 @@ def recover_interrupted() -> int:
         )
         tracer.emit("done", "runner", "जाँच समाप्त", "Investigation ended", status="interrupted")
         finish_run(run_id, "interrupted", "server restarted during the run")
+        with session_scope() as s:
+            row = s.scalar(select(EvidenceRow).where(EvidenceRow.run_id == run_id))
+            if row is not None and row.exhibits:
+                row.exhibits = {
+                    name: {**entry, "status": "failed", "reason": "the server restarted"}
+                    if entry.get("status") == "pending" else entry
+                    for name, entry in row.exhibits.items()
+                }
     return len(ids)
 
 

@@ -61,7 +61,8 @@ def _marker(ax, x: float, label: str, ymax: float, color: str, side: str = "righ
                 va="top", fontsize=8, color=INK, fontweight="bold")
 
 
-def placebo_histogram(placebo: PlaceboTest | None, path: Path) -> str | None:
+def placebo_histogram(placebo: PlaceboTest | None, path: Path, label: str = "same-shape look-alike fields"
+                      ) -> str | None:
     if placebo is None or not placebo.histogram_counts or placebo.n_placebos <= 0:
         return None
     fig, ax = plt.subplots(figsize=(6.4, 2.5))
@@ -71,7 +72,7 @@ def placebo_histogram(placebo: PlaceboTest | None, path: Path) -> str | None:
     side = "right" if placebo.plot_value < sum(placebo.histogram_edges) / len(placebo.histogram_edges) else "left"
     _marker(ax, placebo.plot_value, f"Your field {signed(placebo.plot_value)}", ymax * 1.08, SERIES_2, side)
     ax.set_ylim(0, ymax * 1.15)
-    ax.set_xlabel(f"{placebo.statistic} on {placebo.n_placebos} same-shape look-alike fields",
+    ax.set_xlabel(f"{placebo.statistic} on {placebo.n_placebos} {label}",
                   fontsize=8, color=INK_2)
     ax.set_ylabel("fields", fontsize=8, color=INK_2)
     return _save(fig, path)

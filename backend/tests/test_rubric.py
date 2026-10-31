@@ -1,7 +1,9 @@
-"""Every level of rubric v2, including its boundaries."""
+"""Every level of rubric v3, including its boundaries."""
+from datetime import timedelta
+
 from app.agent import rubric
 from app.evidence.schema import Objection
-from tests.conftest import an_alert, evidence, history_ok, placebo, sar_evidence, weather
+from tests.conftest import EVENT, an_alert, evidence, history_ok, placebo, sar_evidence, stats, weather
 
 
 def _objection(oid, outcome):
@@ -13,27 +15,66 @@ def level(ev):
     return rubric.decide(ev).level
 
 
-def test_strong_when_all_conditions_hold():
-    assert level(evidence(history=history_ok())) == "strong"
+def good(**kwargs):
+    """A clean case: rebutted pre-trend and history, so that only what a test changes matters."""
+    kwargs.setdefault("history", history_ok())
+    kwargs.setdefault("pretrend", -0.01)
+    return evidence(**kwargs)
 
 
-def test_strong_boundary_values_are_inclusive():
-    assert level(evidence(delta=-0.15, p=placebo(p=0.05), history=history_ok())) == "strong"
+def test_version():
+    assert rubric.RUBRIC_VERSION == "v3" and rubric.decide(good()).version == "v3"
 
 
-def test_delta_just_above_threshold_is_not_strong():
-    assert level(evidence(delta=-0.149, p=placebo(p=0.05), history=history_ok())) == "moderate"
+def test_strong_on_the_ring_test():
+    assert level(good(p=placebo(p=0.02))) == "strong"
 
 
-def test_p_just_above_threshold_is_not_strong():
-    # p of 0.06 also concedes nothing (it is unresolved), so moderate through the loose branch.
-    assert level(evidence(p=placebo(p=0.06), history=history_ok())) == "moderate"
+def test_strong_on_the_far_test_when_the_ring_is_not_significant():
+    assert level(good(p=placebo(p=0.4), far=placebo(p=0.01))) == "strong"
+
+
+def test_strong_boundaries_are_inclusive():
+    assert level(good(delta=-0.15, p=placebo(p=0.025))) == "strong"
+    assert level(good(delta=-0.15, p=placebo(p=0.4), far=placebo(p=0.025))) == "strong"
+
+
+def test_delta_just_above_threshold_is_moderate():
+    assert level(good(delta=-0.149, p=placebo(p=0.02))) == "moderate"
+
+
+def test_p_just_above_bonferroni_has_no_field_signal():
+    ev = good(p=placebo(p=0.026), far=placebo(p=0.026))
+    assert not rubric.field_signal(ev) and level(ev) == "weak"
+
+
+def test_the_old_ten_percent_tier_is_gone():
+    assert level(good(delta=-0.2, p=placebo(p=0.09))) == "weak"
+
+
+def test_missing_far_is_not_a_pass():
+    ev = good(p=placebo(p=0.4), far=None)
+    assert not rubric.far_significant(ev) and level(ev) == "weak"
+
+
+def test_far_with_too_few_placebos_does_not_count():
+    ev = good(p=placebo(p=0.4), far=placebo(p=0.01, n=10))
+    assert not rubric.far_significant(ev) and level(ev) == "weak"
+
+
+def test_far_with_an_insufficient_reason_does_not_count():
+    ev = good(p=placebo(p=0.4), far=placebo(p=0.01, reason="too few"))
+    assert not rubric.far_significant(ev)
 
 
 def test_any_conceded_objection_blocks_strong():
-    ev = evidence(history=history_ok())
+    ev = good()
     ev.cross_examination.append(_objection("too_small", "conceded"))
     assert level(ev) == "moderate"
+
+
+def test_conceded_pre_trend_blocks_strong():
+    assert level(good(pretrend=-0.2)) == "moderate"
 
 
 def test_harvest_conceded_is_evaluated_first():
@@ -59,77 +100,80 @@ def test_few_placebos_with_another_signal_is_not_insufficient():
     assert level(evidence(p=placebo(p=0.01, n=20))) != "insufficient"
 
 
-def test_moderate_optical_loose_branch():
-    assert level(evidence(delta=-0.10, p=placebo(p=0.10), history=history_ok())) == "moderate"
+def test_moderate_field_signal_boundary():
+    assert level(good(delta=-0.10, p=placebo(p=0.025))) == "moderate"
+    assert level(good(delta=-0.099, p=placebo(p=0.025))) == "weak"
 
 
 def test_moderate_sar_alone_never_exceeds_moderate():
-    ev = evidence(optical=False, sar=sar_evidence(p=0.001))
-    assert level(ev) == "moderate"
+    assert level(evidence(optical=False, sar=sar_evidence(p=0.001))) == "moderate"
 
 
-def test_moderate_sar_needs_corroboration():
+def test_moderate_sar_threshold_and_corroboration():
+    assert level(evidence(optical=False, sar=sar_evidence(p=0.05))) == "moderate"
+    assert level(evidence(optical=False, sar=sar_evidence(p=0.06))) == "weak"
     ev = evidence(optical=False, sar=sar_evidence(p=0.001), wx=weather(corroborated=False, max_mm=0.0))
     assert level(ev) == "weak"
 
 
 def test_moderate_new_water():
-    ev = evidence(optical=False, sar=sar_evidence(p=0.5, water=0.2))
-    assert level(ev) == "moderate"
+    assert level(evidence(optical=False, sar=sar_evidence(p=0.5, water=0.2))) == "moderate"
 
 
-def test_moderate_strong_field_conditions_with_unresolved_date():
-    """The Sirsa rule: a clear field signal, and no source that speaks to the date at all."""
-    ev = evidence(wx=weather(corroborated=False, max_mm=0.5), history=history_ok())
-    assert rubric.event_date_unresolved(ev)
-    assert level(ev) == "moderate"
-
-
-def test_weather_pointing_elsewhere_is_not_unresolved():
-    from datetime import date
-
-    ev = evidence(wx=weather(corroborated=False, max_mm=0.5, proposed=date(2026, 10, 20)),
-                  history=history_ok())
-    assert not rubric.event_date_unresolved(ev)
-    assert level(ev) == "weak"
+def test_field_signal_without_corroboration_is_weak_in_v3():
+    """v2 allowed moderate here when no source spoke to the date. v3's fixed rules do not list it."""
+    assert level(good(wx=weather(corroborated=False, max_mm=0.5))) == "weak"
 
 
 def test_weak_corroborated_without_plot_signal():
-    assert level(evidence(delta=-0.02, p=placebo(p=0.6), history=history_ok())) == "weak"
+    assert level(good(delta=-0.02, p=placebo(p=0.6))) == "weak"
 
 
 def test_weak_no_signal_at_all_with_good_data():
-    ev = evidence(delta=0.02, p=placebo(p=0.7), wx=weather(corroborated=False, max_mm=0.0),
-                  history=history_ok())
-    assert level(ev) == "weak"
+    assert level(good(delta=0.02, p=placebo(p=0.7), wx=weather(corroborated=False, max_mm=0.0))) == "weak"
 
 
 def test_wrong_plot_caps_at_weak():
-    ev = evidence(pre_ndvi=0.2, post_ndvi=0.1, history=history_ok())
-    assert level(ev) == "weak"
+    assert level(good(pre_ndvi=0.2, post_ndvi=0.1)) == "weak"
 
 
 def test_suspect_post_cannot_be_strong():
-    ev = evidence(post_status="suspect", sar=sar_evidence(p=0.02), history=history_ok())
-    assert level(ev) == "moderate"
+    assert level(good(post_status="suspect", sar=sar_evidence(p=0.02))) == "moderate"
 
 
 def test_suspect_post_without_confirmation_gets_no_optical_credit():
-    ev = evidence(post_status="suspect", history=history_ok())
-    assert level(ev) == "insufficient" or level(ev) == "weak"
+    assert level(good(post_status="suspect")) in ("insufficient", "weak")
 
 
 def test_alert_or_news_corroborates_without_weather():
-    ev = evidence(wx=weather(corroborated=False, max_mm=0.0), alerts=[an_alert()], history=history_ok())
-    assert rubric.corroboration(ev) == ["official_alert"]
-    assert level(ev) == "strong"
+    ev = good(wx=weather(corroborated=False, max_mm=0.0), alerts=[an_alert()])
+    assert rubric.corroboration(ev) == ["official_alert"] and level(ev) == "strong"
 
 
 def test_absent_weather_never_refutes():
-    ev = evidence(wx=weather(corroborated=False, max_mm=0.0), history=history_ok())
-    wrong_date = next(o for o in ev.cross_examination if o.id == "wrong_date")
-    assert wrong_date.outcome == "unresolved"
+    ev = good(wx=weather(corroborated=False, max_mm=0.0))
+    assert next(o for o in ev.cross_examination if o.id == "wrong_date").outcome == "unresolved"
 
 
 def test_recheck_scheduled_when_insufficient():
     assert rubric.decide(evidence(optical=False)).schedule_recheck
+
+
+def test_early_post_scene_gets_a_caveat_and_a_recheck():
+    ev = good()
+    ev.optical.post = stats("S2_POST", EVENT + timedelta(days=2), 0.45)
+    result = rubric.decide(ev)
+    assert rubric.post_too_early(ev) and result.schedule_recheck
+    assert any("may be too early" in c for c in result.caveats)
+
+
+def test_settled_post_scene_has_no_such_caveat():
+    ev = good()
+    ev.optical.post = stats("S2_POST", EVENT + timedelta(days=5), 0.45)
+    result = rubric.decide(ev)
+    assert not rubric.post_too_early(ev) and not result.schedule_recheck
+    assert not any("too early" in c for c in result.caveats)
+
+
+def test_wide_events_are_named_as_the_limit_of_the_far_test():
+    assert any("wider than 12 km" in c for c in rubric.decide(good()).caveats)

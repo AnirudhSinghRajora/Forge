@@ -118,6 +118,91 @@ def test_upstream_outage_is_not_reported_as_a_mismatch(monkeypatch):
     assert events[-1]["status"] == "upstream_unavailable" and "says nothing" in events[-1]["message_en"]
 
 
+def test_start_carries_the_stored_numbers_and_the_source(monkeypatch):
+    install_fake_geo(monkeypatch)
+    start = collect(seed_row())[0]
+    assert start["numbers"] == CORE.numbers
+    assert start["source"]["read"] == "network" and "fresh=True" in start["source"]["cache"]
+
+
+def _with_groups(monkeypatch, groups):
+    install_fake_geo(monkeypatch, replay_groups=lambda core: groups)
+
+
+def test_groups_stream_as_they_finish(monkeypatch):
+    _with_groups(monkeypatch, [
+        ("optical", lambda: {"optical.plot_delta_ndvi": -0.25, "neighbours.placebo.p_value": 0.02}),
+        ("radar", lambda: {"sar.vh_change_db": None}),
+    ])
+    events = collect(seed_row())
+    kinds = [e["type"] for e in events]
+    assert kinds.index("group_done") < kinds.index("group_started", kinds.index("group_done"))
+    assert [e["group"] for e in events if e["type"] == "number"] == ["optical", "optical", "radar"]
+    assert events[-1]["status"] == "verified" and events[-1]["checked"] == 3
+
+
+def test_partial_result_says_n_of_m(monkeypatch):
+    def down():
+        raise RuntimeError("archive slow")
+
+    _with_groups(monkeypatch, [
+        ("optical", lambda: {"optical.plot_delta_ndvi": -0.25, "neighbours.placebo.p_value": 0.02}),
+        ("radar", down),
+    ])
+    events = collect(seed_row())
+    result = events[-1]
+    assert result["status"] == "partial" and not result["ok"]
+    assert (result["checked"], result["total"]) == (2, 3) and result["unchecked"] == ["sar.vh_change_db"]
+    assert "2 of 3 numbers checked" in result["message_en"]
+    assert any(e["type"] == "group_failed" and e["group"] == "radar" for e in events)
+
+
+def test_all_groups_failing_is_upstream_not_mismatch(monkeypatch):
+    def down():
+        raise RuntimeError("archive down")
+
+    _with_groups(monkeypatch, [("optical", down)])
+    assert collect(seed_row())[-1]["status"] == "upstream_unavailable"
+
+
+def test_a_group_past_the_time_limit_is_partial(monkeypatch):
+    import time
+
+    monkeypatch.setattr(verify, "REPLAY_TIMEOUT_S", 0.05)
+    monkeypatch.setattr(verify, "PROGRESS_EVERY_S", 0.02)
+    _with_groups(monkeypatch, [
+        ("optical", lambda: {"optical.plot_delta_ndvi": -0.25, "neighbours.placebo.p_value": 0.02}),
+        ("radar", lambda: time.sleep(1) or {"sar.vh_change_db": None}),
+    ])
+    result = collect(seed_row())[-1]
+    assert result["status"] == "partial" and result["checked"] == 2
+
+
+def test_real_recomputations_really_read_fresh():
+    """A verification that read our own cache would prove nothing, so the switch is pinned."""
+    import inspect
+
+    from app.tools.geo.optical import _optical_compare, history_from_ids
+    from app.tools.geo.sar import _sar_compare
+    from app.tools.geo.scale import _scale_fade
+    from app.tools.geo.village import _village_witness
+
+    for fn in (_optical_compare, _sar_compare, history_from_ids, _scale_fade, _village_witness):
+        assert "fresh" in inspect.signature(fn).parameters, fn
+    source = inspect.getsource(verify.default_groups)
+    assert source.count("fresh=True") == 5
+
+
+def test_a_superseded_hash_stays_verifiable(monkeypatch):
+    from app.db import cache_put
+
+    install_fake_geo(monkeypatch)
+    h = evidence_hash(CORE)
+    cache_put(f"sealed:{h}", "superseded-seal", None, CORE.model_dump(mode="json"))
+    events = collect(h)
+    assert events[0]["superseded"] is True and events[-1]["status"] == "verified"
+
+
 def test_engine_version_difference_is_said(monkeypatch):
     install_fake_geo(monkeypatch, ENGINE_VERSION="test-2")
     events = collect(seed_row())

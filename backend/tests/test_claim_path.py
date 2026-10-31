@@ -126,3 +126,56 @@ def test_draw_applicability_follows_the_route():
 def test_contest_routes_are_stated_on_add_on_routes():
     path = route_claim("yes", "standing", "hail", "cotton")
     assert any("written notice" in step and "7 days" in step for step in path.next_steps)
+
+
+ALL_ROUTES = [
+    ("yes", "standing", "hail", "cotton"), ("yes", "standing", "cyclone", "paddy"),
+    ("yes", "cut_and_spread", "cyclone", "paddy"), ("no", "standing", "hail", "x"),
+    (None, None, "hail", "x"), ("yes", "standing", "flood", "paddy"),
+    ("yes", "harvested_stored", "hail", "paddy"), ("yes", "cut_and_spread", "flood", "cotton"),
+    ("yes", "standing", "unseasonal_rain", "paddy"),
+]
+
+
+def test_every_cited_clause_has_its_text():
+    from app.tools import policy
+
+    for route in ALL_ROUTES:
+        path, deadlines = with_deadline(route_claim(*route, lang="en"), "", date(2026, 1, 1), None, "en")
+        clauses = []
+        policy.ensure_cited(path, clauses, deadlines)
+        have = {c.clause_id for c in clauses}
+        assert set(path.clause_ids) <= have, route
+        assert all(c.text for c in clauses)
+        assert all(d.basis in have for d in deadlines), route
+
+
+def test_previously_missing_clause_ids_resolve():
+    from app.tools import policy
+
+    for clause_id in ("21.5.6.2", "21.5.4.4", "21.5.9.8"):
+        assert policy._clause_by_id(clause_id) is not None, clause_id
+
+
+def test_a_clause_with_no_text_is_dropped_not_shown():
+    from app.evidence.schema import ClaimPath
+    from app.tools import policy
+
+    path = ClaimPath(route="undetermined", clause_ids=["no-such-clause", "21.5.8"])
+    clauses = []
+    policy.ensure_cited(path, clauses)
+    assert path.clause_ids == ["21.5.8"] and [c.clause_id for c in clauses] == ["21.5.8"]
+
+
+def test_draft_has_telugu_including_the_lapsed_note():
+    case = {"id": "", "crop": "paddy", "event_time": None}
+    ev = {"event": {"date": "2026-01-01", "type": "hail"}, "plot": {"area_ha": 1.0, "centroid": [80, 16]}}
+    now = datetime(2026, 2, 1, tzinfo=UTC)
+    path, deadlines = with_deadline(route_claim("yes", "standing", "hail", "paddy", "te"), "", date(2026, 1, 1),
+                                    None, "te", now)
+    draft = actions.draft_intimation(case, ev, path, deadlines)
+    assert "వడగళ్ల" in draft["text_te"] and "[దయచేసి నింపండి]" in draft["text_te"]
+    assert draft["lapsed_note_te"] and "14447" not in draft["lapsed_note_te"]
+    assert draft["whatsapp_url_te"].startswith("https://wa.me/?text=")
+    assert all(c["label_te"] for c in draft["channels"])
+    assert draft["partial_allowed_note_te"]

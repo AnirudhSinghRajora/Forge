@@ -87,6 +87,7 @@ def evidence(
     *, delta=-0.25, pre_ndvi=0.7, post_ndvi=0.45, p=None, pre_status="accepted",
     post_status="accepted", bare=0.1, pattern="patchy", neighbour_bare=0.1, history=None,
     sar=None, wx=None, alerts=(), area=1.5, post_valid=0.98, optical=True, cross=None,
+    far=None, pretrend=None,
 ) -> Evidence:
     p = p if p is not None else placebo()
     pre_date, post_date = EVENT - timedelta(days=7), EVENT + timedelta(days=5)
@@ -102,7 +103,8 @@ def evidence(
         )
         neighbours = NeighbourEvidence(
             n_comparable_pixels=5000, neighbour_median_delta=-0.03, plot_minus_neighbour=delta + 0.03,
-            neighbour_bare_fraction_post=neighbour_bare, placebo=p,
+            neighbour_bare_fraction_post=neighbour_bare, placebo=p, far_placebo=far,
+            pretrend_delta=pretrend,
             counterfactual=Counterfactual(
                 n_control_pixels=800, pre_fit_rmse=0.02, gap_at_post=-0.2, method="test",
                 series=[CounterfactualPoint(date=pre_date, observed=pre_ndvi, expected=pre_ndvi),

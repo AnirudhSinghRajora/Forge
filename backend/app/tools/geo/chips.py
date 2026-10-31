@@ -56,7 +56,7 @@ def _save(rgb: np.ndarray, plot: Plot, grid: Grid, path: Path) -> None:
 def _reflectance(scene_id: str, assets: list[str], grid: Grid) -> tuple[dict, np.ndarray]:
     scene = get_scene(scene_id)
     try:
-        offset = ix.boa_offset(scene.processing_baseline)
+        offset = ix.scene_offset(scene.processing_baseline, scene.boa_offset_applied)
     except ValueError as exc:
         raise SceneUnusable(f"{scene_id}: {exc}") from exc
     bands = read_assets(scene_id, assets + ["SCL"], grid)

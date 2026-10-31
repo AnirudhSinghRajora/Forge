@@ -24,7 +24,7 @@ from rasterio.vrt import WarpedVRT
 
 from .base import GeoUnavailable, var_dir
 from .grid import Grid
-from .stac import get_item
+from .stac import asset_href, get_item
 
 log = logging.getLogger(__name__)
 
@@ -223,11 +223,10 @@ def read_many(
             if cached is not None:
                 out[item_id][asset] = cached
                 continue
-        item = get_item(item_id)
-        if asset not in item.assets:
+        href = asset_href(get_item(item_id), asset)
+        if href is None:
             out[item_id][asset] = None
             continue
-        href = item.assets[asset].href
         pending.append((item_id, asset, key, _pool.submit(_read_with_retries, item_id, href, asset, grid, is_float)))
     for item_id, asset, key, fut in pending:
         try:

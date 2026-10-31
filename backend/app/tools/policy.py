@@ -348,6 +348,23 @@ def ask(question: str, lang: str = "hi") -> dict:
     }
 
 
+def ensure_cited(path, clauses: list[PolicyClause], deadlines=()) -> None:
+    """Every clause id on the route has its text in `clauses`. An id with no text in the corpus is
+    dropped from the route rather than shown as a citation nobody can read."""
+    have = {c.clause_id for c in clauses}
+    keep = []
+    for clause_id in dict.fromkeys([*path.clause_ids, *(d.basis for d in deadlines)]):
+        row = _clause_by_id(clause_id)
+        if row is None:
+            log.warning("cited clause %s is not in the corpus", clause_id)
+            continue
+        keep.append(clause_id)
+        if clause_id not in have:
+            clauses.append(to_clause(row, "Cited on your claim route"))
+            have.add(clause_id)
+    path.clause_ids = keep
+
+
 def clauses_for_rules(rule_names: list[tuple[str, str]]) -> list[PolicyClause]:
     """Clauses cited by named key rules, each with the reason it applies to this case."""
     rules = (load_key_rules() or {}).get("rules") or {}

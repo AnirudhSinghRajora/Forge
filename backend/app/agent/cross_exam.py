@@ -15,7 +15,7 @@ from app.evidence.schema import Evidence, Objection
 
 ORDER = (
     "harvest", "wrong_plot", "wrong_date", "cloud_shadow", "corrupt_scene", "regional_trend",
-    "too_small", "stale_crop",
+    "pre_trend", "too_small", "stale_crop",
 )
 
 BARE_MIN = 0.6
@@ -27,6 +27,7 @@ TOO_SMALL_HA = 0.2
 HISTORY_PRE_DIFF = 0.2
 WATER_PRE_MIN_PCT = 70
 HARVEST_MIN_DELTA = -0.10
+PRE_TREND_FALLING = -0.10
 WHOLE_FIELD_DROP = 0.8
 
 _HI_MONTHS = ["जनवरी", "फ़रवरी", "मार्च", "अप्रैल", "मई", "जून", "जुलाई", "अगस्त", "सितंबर", "अक्टूबर",
@@ -401,7 +402,7 @@ def check_corrupt_scene(ev: Evidence) -> tuple[Objection, list[str]]:
         suspects = [
             s.scene_id for s, st in ((ev.optical.pre, pre_st), (post, post_st)) if s and st == "suspect"
         ]
-        if sar_ok and sp is not None and sp <= rubric.P_LOOSE:
+        if sar_ok and sp is not None and sp <= rubric.P_SAR:
             return out(
                 "rebutted",
                 f"इस तस्वीर में पूरे इलाक़े की हरियाली अचानक बदली दिखती है, पर रडार (p = {sp:.3f}) भी बदलाव "
@@ -426,60 +427,128 @@ def check_corrupt_scene(ev: Evidence) -> tuple[Objection, list[str]]:
 def check_regional_trend(ev: Evidence) -> Objection:
     challenge_hi = "पूरे इलाक़े में ऐसा ही हुआ है। इसमें आपके खेत की क्या ख़ास बात है?"
     challenge_en = "The whole area looks like this. What's special about your field?"
-    test = "Same-shape pseudo-plots on comparable cropland nearby: share at least as extreme (placebo p)."
-    placebo, sensor_hi, sensor_en = None, "", ""
-    if ev.neighbours is not None and ev.neighbours.placebo is not None and ev.optical.post is not None:
-        placebo, sensor_hi, sensor_en = ev.neighbours.placebo, "", ""
-    elif ev.sar is not None and ev.sar.placebo is not None:
-        placebo, sensor_hi, sensor_en = ev.sar.placebo, "रडार में ", "on radar "
-    measured = {
-        "n_placebos": placebo.n_placebos if placebo else None,
-        "n_at_least_as_extreme": placebo.n_at_least_as_extreme if placebo else None,
-        "p_value": placebo.p_value if placebo else None,
-        "plot_value": placebo.plot_value if placebo else None,
-        "placebo_median": placebo.placebo_median if placebo else None,
-        "statistic": placebo.statistic if placebo else None,
-        "insufficient_reason": placebo.insufficient_reason if placebo else None,
-    }
+    test = (
+        "Two same-shape placebo tests: against immediate neighbours (ring) and against comparable "
+        f"fields 5-12 km away (far). Either at p <= {rubric.P_FIELD} counts."
+    )
+    optical = ev.neighbours is not None and ev.optical.post is not None
+    ring = ev.neighbours.placebo if optical else None
+    far = ev.neighbours.far_placebo if optical else None
+    sar = ev.sar.placebo if not optical and ev.sar is not None else None
+
+    def facts(prefix: str, placebo) -> dict:
+        return {
+            f"{prefix}_n_placebos": placebo.n_placebos if placebo else None,
+            f"{prefix}_n_at_least_as_extreme": placebo.n_at_least_as_extreme if placebo else None,
+            f"{prefix}_p_value": placebo.p_value if placebo else None,
+            f"{prefix}_insufficient_reason": placebo.insufficient_reason if placebo else None,
+        }
+
+    measured = {**facts("ring", ring), **facts("far", far), **facts("radar", sar)}
 
     def out(outcome, hi, en):
         return _obj("regional_trend", challenge_hi, challenge_en, test, measured, outcome, hi, en)
 
-    p = rubric.usable_p(placebo)
-    if placebo is None or p is None:
-        n = placebo.n_placebos if placebo else 0
+    if not optical:
+        p = rubric.usable_p(sar)
+        if p is None:
+            n = sar.n_placebos if sar else 0
+            return out(
+                "unresolved",
+                f"तुलना के लिए आसपास पर्याप्त मिलते-जुलते खेत नहीं मिले ({n}; कम से कम {rubric.MIN_PLACEBOS} "
+                "चाहिए), इसलिए यह जाँच नहीं हो सकी।",
+                f"Too few comparable fields nearby ({n}; at least {rubric.MIN_PLACEBOS} are needed), so "
+                "this could not be tested.",
+            )
+        n, k = sar.n_placebos, sar.n_at_least_as_extreme
+        if p <= rubric.P_SAR:
+            return out(
+                "rebutted",
+                f"रडार में आसपास के {n} मिलते-जुलते खेतों में से केवल {k} में इतना बदलाव हुआ (p = {p:.3f})।",
+                f"On radar, only {k} of {n} look-alike fields nearby changed this much (p = {p:.3f}).",
+            )
+        return out(
+            "conceded",
+            f"रडार में आसपास के {n} मिलते-जुलते खेतों में से {k} में इतना बदलाव हुआ (p = {p:.3f})। आपका खेत इलाक़े "
+            "से अलग नहीं दिखता।",
+            f"On radar, {k} of {n} look-alike fields nearby changed this much (p = {p:.3f}). Your field "
+            "does not stand out from the area.",
+        )
+
+    ring_p, far_p = rubric.usable_p(ring), rubric.usable_p(far)
+    if ring_p is None and far_p is None:
+        n = ring.n_placebos if ring else 0
         return out(
             "unresolved",
-            f"तुलना के लिए आसपास पर्याप्त मिलते-जुलते खेत नहीं मिले ({n}; कम से कम {rubric.MIN_PLACEBOS} "
-            "चाहिए), इसलिए यह जाँच नहीं हो सकी।",
-            f"Too few comparable fields nearby ({n}; at least {rubric.MIN_PLACEBOS} are needed), so "
-            "this could not be tested.",
+            f"तुलना के लिए पर्याप्त मिलते-जुलते खेत नहीं मिले ({n}; कम से कम {rubric.MIN_PLACEBOS} चाहिए), इसलिए यह "
+            "जाँच नहीं हो सकी।",
+            f"Too few comparable fields ({n}; at least {rubric.MIN_PLACEBOS} are needed), so this "
+            "could not be tested.",
         )
-    n, k = placebo.n_placebos, placebo.n_at_least_as_extreme
-    if p <= rubric.P_STRICT:
+    ring_yes, far_yes = rubric.ring_significant(ev), rubric.far_significant(ev)
+    far_hi = (f"5-12 किमी दूर के {far.n_placebos} मिलते-जुलते खेतों में से {far.n_at_least_as_extreme} में इतना बदलाव हुआ "
+              f"(p = {far_p:.3f})") if far_p is not None else "दूर के खेतों से तुलना नहीं हो सकी"
+    far_en = (f"{far.n_at_least_as_extreme} of {far.n_placebos} comparable fields 5-12 km away changed this "
+              f"much (p = {far_p:.3f})") if far_p is not None else "the comparison with distant fields was not available"
+    ring_hi = (f"आसपास के {ring.n_placebos} खेतों में से {ring.n_at_least_as_extreme} में इतना बदलाव हुआ "
+               f"(p = {ring_p:.3f})") if ring_p is not None else "पास के खेतों से तुलना नहीं हो सकी"
+    ring_en = (f"{ring.n_at_least_as_extreme} of {ring.n_placebos} fields right around it changed this much "
+               f"(p = {ring_p:.3f})") if ring_p is not None else "the comparison with nearby fields was not available"
+    if far_yes and ring_yes:
         return out(
             "rebutted",
-            f"{sensor_hi}आसपास के {n} मिलते-जुलते खेतों में से केवल {k} में इतना या इससे ज़्यादा बदलाव हुआ "
-            f"(p = {p:.3f})। यह इलाक़े का आम रुझान नहीं है।",
-            f"Only {k} of {n} look-alike fields nearby changed this much {sensor_en}(p = {p:.3f}). "
-            "This is not the area's general trend.",
+            f"आपका खेत दूर के खेतों से भी अलग है और पास के खेतों से भी: {far_hi}; {ring_hi}।",
+            f"Your field stands apart from both distant and nearby fields: {far_en}; {ring_en}.",
         )
-    if p <= rubric.P_LOOSE:
+    if far_yes:
         return out(
-            "unresolved",
-            f"{sensor_hi}आसपास के {n} मिलते-जुलते खेतों में से {k} में इतना बदलाव हुआ (p = {p:.3f})। यह "
-            "इलाक़े से कुछ अलग है, पर पक्के तौर पर नहीं।",
-            f"{k} of {n} look-alike fields nearby changed this much {sensor_en}(p = {p:.3f}). This "
-            "stands out somewhat from the area, but not decisively.",
+            "rebutted",
+            f"आपका पूरा इलाक़ा प्रभावित हुआ, सिर्फ़ आपका खेत नहीं: {far_hi}; {ring_hi}।",
+            f"Your whole area was hit, not only your field: {far_en}; {ring_en}.",
+        )
+    if ring_yes:
+        return out(
+            "rebutted",
+            f"यह आपके खेत का स्थानीय नुकसान दिखता है: आसपास के खेतों से यह अलग है। {ring_hi}; {far_hi}।",
+            f"This looks like a local loss on your field: it stands apart from the fields around it. "
+            f"{ring_en}; {far_en}.",
         )
     return out(
         "conceded",
-        f"{sensor_hi}आसपास के {n} मिलते-जुलते खेतों में से {k} में इतना ही या इससे ज़्यादा बदलाव हुआ "
-        f"(p = {p:.3f})। आपका खेत इलाक़े से अलग नहीं दिखता। अगर पूरा इलाक़ा आपदा की चपेट में था तो यह आपकी "
-        "बात को ग़लत नहीं ठहराता, पर यह आपके खेत का अलग सबूत भी नहीं है।",
-        f"{k} of {n} look-alike fields nearby changed at least this much {sensor_en}(p = {p:.3f}). "
-        "Your field does not stand out from the area. If the whole area was hit that does not refute "
-        "you, but it is not field-specific evidence either.",
+        f"आपका खेत न पास के खेतों से अलग दिखता है, न दूर के खेतों से: {ring_hi}; {far_hi}। यह आपकी बात को ग़लत नहीं "
+        "ठहराता, पर यह आपके खेत का अलग सबूत भी नहीं है।",
+        f"Your field stands apart from neither nearby nor distant fields: {ring_en}; {far_en}. That "
+        "does not refute you, but it is not field-specific evidence either.",
+    )
+
+
+def check_pre_trend(ev: Evidence) -> Objection:
+    challenge_hi = "आपका खेत तो घटना से पहले ही गिर रहा था। इसका घटना से क्या लेना-देना?"
+    challenge_en = "Your field was already falling before the event. What has that to do with it?"
+    test = f"The same statistic on the last accepted pre-event pair: conceded at or below {PRE_TREND_FALLING}."
+    neighbours = ev.neighbours
+    delta = neighbours.pretrend_delta if neighbours else None
+    placebo = neighbours.pretrend_placebo if neighbours else None
+    measured = {"pretrend_delta": delta, "pretrend_p_value": placebo.p_value if placebo else None}
+    if delta is None:
+        return _obj(
+            "pre_trend", challenge_hi, challenge_en, test, measured, "unresolved",
+            "घटना से पहले की तस्वीरों की जोड़ी नहीं मिली, इसलिए यह जाँच नहीं हो सकी।",
+            "No pair of images from before the event was available, so this could not be tested.",
+        )
+    if delta <= PRE_TREND_FALLING:
+        return _obj(
+            "pre_trend", challenge_hi, challenge_en, test, measured, "conceded",
+            f"यह सही है: घटना से पहले ही इस खेत की हरियाली {signed(delta)} बदल रही थी। इसलिए सारी गिरावट को घटना से जोड़ना "
+            "ठीक नहीं होगा।",
+            f"That's fair: this field's greenness was already changing by {signed(delta)} before the "
+            "event, so not all of the fall can be put down to it.",
+        )
+    return _obj(
+        "pre_trend", challenge_hi, challenge_en, test, measured, "rebutted",
+        f"घटना से पहले यह खेत नहीं गिर रहा था: उससे पहले की तस्वीरों के बीच बदलाव {signed(delta)} था।",
+        f"This field was not falling before the event: the change between the earlier images was "
+        f"{signed(delta)}.",
     )
 
 
@@ -564,6 +633,6 @@ def run(
         followups.append(FollowUp("widen_pre", "wrong_plot", note="no accepted pre scene"))
     objections = [
         check_harvest(ev), check_wrong_plot(ev), wrong_date, cloud, corrupt,
-        check_regional_trend(ev), check_too_small(ev), check_stale_crop(ev),
+        check_regional_trend(ev), check_pre_trend(ev), check_too_small(ev), check_stale_crop(ev),
     ]
     return objections, followups

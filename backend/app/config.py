@@ -46,6 +46,7 @@ class Settings(BaseSettings):
 
     run_budget_tool_calls: int = Field(default=12, ge=4)
     run_budget_seconds: float = Field(default=150.0, ge=10)
+    run_hard_limit_s: float = 420.0  # exhibits still running at this point are marked failed
     run_workers: int = 4
     sse_poll_s: float = 0.4
 
