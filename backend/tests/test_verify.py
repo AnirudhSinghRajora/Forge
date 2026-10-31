@@ -235,6 +235,60 @@ def test_engine_version_difference_is_said(monkeypatch):
     assert any(e["type"] == "note" and e["kind"] == "engine_version_differs" for e in events)
 
 
+def test_a_difference_under_another_engine_is_not_called_a_mismatch(monkeypatch):
+    install_fake_geo(monkeypatch, ENGINE_VERSION="test-2",
+                     replay=lambda core: {**core.numbers, "neighbours.placebo.p_value": 0.03})
+    result = collect(seed_row())[-1]
+    assert result["status"] == "engine_changed" and result["ok"] is False
+    assert result["mismatched"] == ["neighbours.placebo.p_value"]
+    assert (result["sealed_engine"], result["current_engine"]) == ("test-1", "test-2")
+    assert "earlier engine version" in result["message_en"] and "legitimately" in result["message_en"]
+    assert result["message_hi"] and result["message_te"] and "1 of 3" in result["message_en"]
+
+
+def test_a_difference_under_the_same_engine_stays_a_mismatch(monkeypatch):
+    install_fake_geo(monkeypatch, replay=lambda core: {**core.numbers, "neighbours.placebo.p_value": 0.03})
+    assert collect(seed_row())[-1]["status"] == "mismatch"
+
+
+def test_no_difference_under_another_engine_is_simply_verified(monkeypatch):
+    install_fake_geo(monkeypatch, ENGINE_VERSION="test-2")
+    result = collect(seed_row())[-1]
+    assert result["status"] == "verified" and result["ok"] is True
+
+
+def test_a_field_difference_under_another_engine_is_said_at_the_stage_too(monkeypatch):
+    install_fake_geo(monkeypatch, ENGINE_VERSION="test-2")
+    _staged(monkeypatch, ("field_post", lambda: {"optical.plot_delta_ndvi": -0.5}, verify._is_field_post), RING, RADAR)
+    events = collect(seed_row())
+    assert next(e for e in events if e["type"] == "stage_result")["status"] == "field_engine_changed"
+    assert events[-1]["status"] == "engine_changed"
+
+
+def test_an_engine_changed_check_is_kept_like_any_full_check(monkeypatch):
+    calls = []
+    install_fake_geo(monkeypatch, ENGINE_VERSION="test-2")
+    _staged(monkeypatch, ("all", lambda: calls.append(1) or {**CORE.numbers, "optical.plot_delta_ndvi": -0.5}, lambda key: True))
+    h = seed_row()
+    assert collect(h)[-1]["status"] == "engine_changed"
+    again = collect(h)
+    assert len(calls) == 1 and again[-1]["status"] == "engine_changed" and again[-1]["cached"] is True
+
+
+def test_a_mismatch_stored_before_this_status_existed_reads_as_engine_changed():
+    from app.db import VerifyEvent, VerifyRun
+
+    with session_scope() as s:
+        s.add(VerifyRun(id="old", evidence_hash="h" * 64, status="mismatch"))
+        s.add(VerifyEvent(run_id="old", seq=1, payload={"type": "note", "seq": 1, "kind": "engine_version_differs"}))
+    stored = {"type": "result", "status": "mismatch", "mismatched": ["a"], "checked": 3}
+    assert verify._with_engine_status(stored, "old")["status"] == "engine_changed"
+    with session_scope() as s:
+        s.add(VerifyRun(id="same", evidence_hash="i" * 64, status="mismatch"))
+        s.add(VerifyEvent(run_id="same", seq=1, payload={"type": "note", "seq": 1, "kind": "source"}))
+    assert verify._with_engine_status(stored, "same")["status"] == "mismatch"
+
+
 def _staged(monkeypatch, *groups):
     monkeypatch.setattr(verify, "_groups_for", lambda core: [
         verify.Group(name, fn, select) for name, fn, select in groups

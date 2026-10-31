@@ -10,7 +10,7 @@ from typing import Literal
 from pydantic import BaseModel
 
 # Bump whenever a change could alter any computed number. It is part of the evidence hash.
-ENGINE_VERSION = "geo-1.1.0"
+ENGINE_VERSION = "geo-1.2.0"
 
 S2_COLLECTION = "sentinel-2-l2a"
 S1_COLLECTION = "sentinel-1-rtc"

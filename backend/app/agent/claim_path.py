@@ -76,9 +76,14 @@ TEXT = {
         "అకాల వర్షం ప్రాథమిక కవర్ జాబితాలో విడిగా లేదు, కాబట్టి 14447 ద్వారా నిర్ధారించుకోండి.",
     ),
     "stored": (
-        "कटाई-बाद का कवर खेत में सूख रही फ़सल के लिए है। रखी जा चुकी फ़सल का रास्ता दिशानिर्देशों में साफ़ नहीं मिला, इसलिए 14447 से पूछें।",
-        "Post-harvest cover is for a crop drying in the field. We found no clear route for a crop already stored, so please ask 14447.",
-        "కోత అనంతర కవర్ పొలంలో ఆరబెడుతున్న పంటకు. నిల్వ చేసిన పంటకు స్పష్టమైన మార్గం మార్గదర్శకాల్లో కనిపించలేదు, కాబట్టి 14447 ని అడగండి.",
+        "PIB के सरकारी पाठ के अनुसार \"फ़सल को खेत से हटाने के बाद\" हुआ नुकसान कवर नहीं है। इसलिए खेत से हटाई जा चुकी फ़सल कवर से बाहर है।",
+        "The official PIB text says crop losses \"after removal of the crop from the field\" are not covered. So a crop already taken off the field is outside the cover.",
+        "PIB అధికారిక పాఠం ప్రకారం \"పంటను పొలం నుంచి తొలగించిన తర్వాత\" జరిగే నష్టానికి కవర్ లేదు. కాబట్టి పొలం నుంచి తీసేసిన పంట కవర్ పరిధిలో లేదు.",
+    ),
+    "stored_post_harvest": (
+        "कटाई-बाद का कवर सिर्फ़ उस फ़सल के लिए है जो खेत में ही कटी-फैली या छोटे गट्ठरों में केवल सूखने के लिए रखी हो, कटाई से अधिकतम 14 दिन तक, और जहाँ राज्य ने यह कवर और फ़सल अधिसूचित की हो।",
+        "Post-harvest cover is only for a crop lying in the field, cut and spread or in small bundles, kept solely to dry, for up to 14 days from harvesting, where the State has notified this cover and this crop.",
+        "కోత అనంతర కవర్ పొలంలోనే కోసి పరిచిన లేదా చిన్న కట్టలుగా కేవలం ఆరబెట్టడానికి ఉంచిన పంటకు మాత్రమే, కోత నుంచి గరిష్ఠంగా 14 రోజుల వరకు, రాష్ట్రం ఈ కవర్‌ను, పంటను నోటిఫై చేసిన చోట మాత్రమే.",
     ),
     "not_listed_post_harvest": (
         "यह नुकसान कटाई-बाद के कवर की सूची में नहीं है, इसलिए रास्ता साफ़ नहीं है। 14447 से पूछें।",
@@ -141,6 +146,16 @@ TEXT = {
         "Your insurer's name is on your PMFBY application or policy receipt.",
         "మీ బీమా కంపెనీ పేరు మీ PMFBY దరఖాస్తు లేదా పాలసీ రసీదుపై ఉంటుంది.",
     ),
+    "stored_if_in_field": (
+        "अगर उस समय फ़सल अभी खेत में ही सूख रही थी, तो अपना जवाब \"कटकर खेत में फैली\" कर दें: उसका रास्ता अलग है।",
+        "If the crop was still lying in the field to dry at the time, change your answer to \"Cut and spread to dry\": that is a different route.",
+        "ఆ సమయంలో పంట ఇంకా పొలంలోనే ఆరుతూ ఉంటే, మీ సమాధానాన్ని \"కోసి పొలంలో పరిచింది\"గా మార్చండి: దాని మార్గం వేరు.",
+    ),
+    "stored_ask": (
+        "अगर पक्का नहीं है कि यह आप पर कैसे लागू होता है, तो अपने बैंक या 14447 से पूछें।",
+        "If you are not sure how this applies to you, ask your bank or 14447.",
+        "ఇది మీకు ఎలా వర్తిస్తుందో స్పష్టంగా తెలియకపోతే మీ బ్యాంకు లేదా 14447 ని అడగండి.",
+    ),
     # What the evidence is for
     "use_addon": (
         "यह सबूत आपकी सूचना के साथ रखने का एक सहायक रिकॉर्ड है। बीमा कंपनी घटना और उसकी गंभीरता पर \"कोई अन्य उपलब्ध सबूत\" जुटाती है, पर किसान के सैटेलाइट सबूत के लिए अलग से कोई नियम नहीं है और इसे माना ही जाएगा, ऐसा नहीं है।",
@@ -156,6 +171,11 @@ TEXT = {
         "यह आपके खेत की तारीख़वार स्थिति का रिकॉर्ड है। इससे फ़सल बीमा का दावा नहीं बनता।",
         "This is a dated record of your field. It does not create a PMFBY claim.",
         "ఇది మీ పొలం స్థితి తేదీలతో కూడిన రికార్డు. దీని వల్ల PMFBY క్లెయిమ్ ఏర్పడదు.",
+    ),
+    "use_stored": (
+        "यह आपके खेत की तारीख़वार स्थिति का रिकॉर्ड है। यह खेत से हटाई जा चुकी फ़सल को नहीं दिखा सकता, और इससे फ़सल बीमा का दावा नहीं बनता।",
+        "This is a dated record of your field. It cannot show a crop that has left the field, and it does not create a PMFBY claim.",
+        "ఇది మీ పొలం స్థితి తేదీలతో కూడిన రికార్డు. పొలం నుంచి వెళ్లిపోయిన పంటను ఇది చూపలేదు, దీని వల్ల PMFBY క్లెయిమ్ ఏర్పడదు.",
     ),
     "use_undetermined": (
         "रास्ता तय होने तक यह आपके खेत की तारीख़वार स्थिति का रिकॉर्ड है; इसे माना ही जाएगा, ऐसा नहीं है।",
@@ -216,6 +236,16 @@ def route_claim(
             clause_ids=_cited("when_individual_cover_is_available"),
         )
 
+    # The text answers this whichever the peril and whether or not the crop was insured.
+    if stage == "harvested_stored":
+        return ClaimPath(
+            route="outside_cover", **base,
+            reasons=[_t("stored", lang), _t("stored_post_harvest", lang)],
+            next_steps=[_t("stored_if_in_field", lang), _t("stored_ask", lang)],
+            evidence_use=_t("use_stored", lang),
+            clause_ids=_cited("after_removal_from_field"),
+        )
+
     unknowns: list[str] = []
     reasons: list[str] = []
     if insured == "unknown":
@@ -240,13 +270,6 @@ def route_claim(
 
     notification_steps = [_t("confirm_notification", lang), _t("where_insurer", lang)]
     is_paddy = (crop or "").strip().lower() in ("paddy", "rice")
-
-    if stage == "harvested_stored":
-        return ClaimPath(
-            route="undetermined", unknowns=["cover_for_stored_crop"], **base,
-            reasons=[_t("stored", lang)], next_steps=[*notification_steps, _t("photos", lang)],
-            evidence_use=_t("use_undetermined", lang), clause_ids=_cited("post_harvest_14_day"),
-        )
 
     if stage == "cut_and_spread":
         if peril in post_harvest:

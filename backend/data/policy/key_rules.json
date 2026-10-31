@@ -382,6 +382,37 @@
         }
       ]
     },
+    "after_removal_from_field": {
+      "status": "verified",
+      "statement": "PIB's 29 Aug 2026 factsheet says crop losses after removal of the crop from the field are not covered. Post-harvest cover reaches only harvested crop lying in the field in cut-and-spread or small bundled condition, kept solely to dry, for up to 14 days from harvesting, where the State notified the cover and the crop.",
+      "app_note": "A crop already taken off the field routes to outside_cover. Quote the factsheet, and point a farmer whose crop was still drying in the field to the post-harvest route.",
+      "do_not_say": "The guidelines themselves have no sentence on stored crop; the exclusion is PIB's wording. Say nothing here about State relief, other schemes or private cover: none of these texts addresses them.",
+      "citations": [
+        {
+          "clause_id": "PIB-FS-2026-08-29/not-covered",
+          "doc": "PIB Research factsheet: Pradhan Mantri Fasal Bima Yojana - Affordable Crop Insurance for Every Farmer (29 Aug 2026)",
+          "page": 3,
+          "url": "https://static.pib.gov.in/WriteReadData/specificdocs/documents/2026/aug/doc_9735_20260829_18493301.pdf",
+          "quote": "crop losses in non-notified areas, outside the covered crop lifecycle (i.e., before sowing and after removal of the crop from the field), and losses caused by negligence or man-made or preventable risks are not covered."
+        },
+        {
+          "clause_id": "21.6.1",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 111,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Provision has been made for assessment of loss on individual plot basis in the case of occurrence of hailstorm, cyclone, cyclonic rains and unseasonal rains resulting in damage to harvested crop lying in the field in 'cut and spread' or small bundled condition depending on nature of the crop in that area kept solely to dry up to a maximum period of two weeks (14 days) from harvesting.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "5.2.3",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 17,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Post-Harvest Losses: Coverage is available only up to a maximum period of two weeks from harvesting, for those crops which are required to be dried in cut and spread / small, bundled condition depending on requirement of the crops in that area and left in the field after harvesting, against specific perils of hailstorm, cyclone, cyclonic rains and unseasonal rains.",
+          "also_in_circular_copy": true
+        }
+      ]
+    },
     "twenty_five_percent_rule": {
       "status": "verified",
       "statement": "The 25% rule exists, but it does not make all farmers in a unit eligible. If insured area under loss intimation (elsewhere worded \"affected area\") exceeds 25% of insured area in the insurance unit for one weather event, the event is treated as widespread localized: 10 randomly selected parcels from the intimation list are surveyed and the average loss applies to all intimations. Claims go to eligible insured farmers who gave intimation or for whom intimation was received or accepted. Below 25%, every intimation is surveyed individually.",

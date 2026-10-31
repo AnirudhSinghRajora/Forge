@@ -12,7 +12,8 @@ Last updated 31 Oct 2026, by the GEO owner. Engine version `geo-1.1.0`. Every nu
 | False-positive rate, design window | p<=0.05 at 5.0%. p<=0.10 at 15.4%, above nominal, so that tier was removed from the rubric |
 | Bhiwani hail 2024 | A coherent band, consistent with a hail swath. It does not repeat in other years. Radar does not confirm it |
 | Cyclone Arnab | No signal established. One optical scene after landfall. Next radar about 4 Nov |
-| Rubric v3 holdout and independent event | See "Locked runs" |
+| Rubric v3 false positives, locked | 2.0% strong and 2.5% moderate field conditions, on both no-event windows |
+| Independent event (Sirsa hail 14 Mar 2025) | No signal. Consistent with "minor" damage, so not a positive test. Sensitivity is shown only on Bhiwani, the design event |
 | Cold read time | Well over target on this machine. See "Read time" |
 
 ## 1. Scene QA regression
@@ -39,7 +40,7 @@ Sirsa, `S2C_MSIL2A_20251018T053841_R005_T43REN_20251018T085916` to `S2B_MSIL2A_2
 **Why these confidence intervals are too narrow.**
 - One scene pair, so all plots share that pair's conditions.
 - Plots and placebos sit in the same region and are spatially correlated.
-- Placebos beyond the non-overlapping ones overlap each other and are correlated. `n_non_overlapping` reports how many do not. The median plot here had all 200 non-overlapping, but small rings on larger plots will not.
+- Placebos beyond the non-overlapping ones overlap each other and are correlated. `n_non_overlapping` reports how many do not. Here 81% of plots had every placebo non-overlapping; the median was 200 and the lowest quartile below 156.
 
 **What random squares cannot show.** A square lies across field boundaries. A real plot follows one field, so it can move as a unit more than a square does. Matching on uniformity narrows this gap without proving it closed.
 
@@ -121,8 +122,7 @@ These are design data. The far test and the post-scene rule were designed after 
 
 **What this says.**
 1. **The typical plot barely fades until 3 km,** where about a third of the signal goes (3 km value is a median 0.67 of the plot's own change). The -0.369 to -0.098 fade belongs to the strongest of 200 plots.
-2. **The two Draw scenarios differ by about 0.18, far more than either one's sampling spread (about 0.07).** On this event, who is in the sampling pool matters more than which 10 are drawn.
-3. **The two scenarios are bounds, not an estimate.** Parcels in the second are below -0.15 by construction, so its average must be too. The real intimation list lies somewhere between, and we do not know it.
+2. **The two Draw scenarios are bounds, not an estimate.** Across plots the all-cropland average has a median of -0.069 and the only-dropped average a median of -0.245, with a sampling spread of about 0.07 within each. Parcels in the second scenario are at or below -0.15 by construction, so its average must be too, and the gap between the scenarios is partly built in. It is not a measured effect of who reports. The real intimation list lies somewhere between, and we do not know where.
 
 **Typical demo plot, by rule (median of the 40 by plot change):** 28.715212 N, 76.231138 E, 104.7 m square. Plot change -0.1259. Blocks: -0.1233 (100 m), -0.1196 (500 m), -0.1300 (1 km), -0.0811 (3 km). Draw, all cropland: -0.0654 (p05 -0.1067, p95 -0.0335). Draw, only dropped: -0.2382 (p05 -0.2653, p95 -0.2141), from 37 parcels. Affected share 0.2034.
 
@@ -183,8 +183,54 @@ The storm was the evening of Saturday 24 Oct. **The 24 Oct Sentinel-1 pass was a
 
 ## 7. Locked runs
 
-Not yet run at the time of this entry.
+Rubric v3 (`app/agent/rubric.py`, `cross_exam.py`) and all engine settings were frozen before these started. Each ran once on 200 random cropland plots. Scripts: `geo_holdout.py`, `geo_holdout_report.py`. "Field conditions" means the rubric's plot rule without corroboration: change at threshold, either test at p<=0.025, and no conceded pre-trend. The rubric's actual `strong` and `moderate` also need corroboration.
+
+| Run | Scenes | Strong | Moderate | Ring p<=0.05 | Far p<=0.05 |
+|---|---|---|---|---|---|
+| No event, around 29.40 N 75.45 E (outside the design region) | `S2B_MSIL2A_20251013T053659_R005_T43REN_20251013T081845` to `S2C_MSIL2A_20251018T053841_R005_T43REN_20251018T085916` | 4/200 = 2.0% (CI 0.8-5.0) | 5/200 = 2.5% (CI 1.1-5.7) | 5.0% | 6.0% |
+| No event, Bhiwani region, a year after the hail | `S2B_MSIL2A_20250304T052649_R105_T43RFM_20250304T073919` to `S2B_MSIL2A_20250314T052649_R105_T43RFM_20250314T095315` | 4/200 = 2.0% (CI 0.8-5.0) | 5/200 = 2.5% (CI 1.1-5.7) | 3.5% | 3.5% |
+| Sirsa hail, 14 Mar 2025, around 29.66 N 74.88 E (events.md C2) | `S2C_MSIL2A_20250312T053701_R005_T43RDN_20250312T104508` to `S2C_MSIL2A_20250322T053701_R005_T43RDN_20250322T104614` | 0/200 (CI 0.0-1.9) | 0/200 (CI 0.0-1.9) | 2.0% | 3.0% |
+
+**No-event windows.** Both sit under the 5% the Bonferroni split allows. In the October window the far p-values lean slightly low (deciles 23, 28, 21, 25, 26, 17, 24, 11, 17, 8), so the far test may be slightly liberal there; March does not show it. Each window is one scene pair with correlated plots, so the CIs are too narrow. "No event" means none reported in our sources. I did not search exhaustively for March 2025 around Bhiwani.
+
+**Sirsa hail, the independent event: no signal, and that does not validate sensitivity.** The Tribune called the damage "minor", so the engine not claiming anything is consistent with the report. I cannot distinguish little damage from a miss.
+- Without the pre-trend check, 3 plots would have met field conditions (2 strong, 3 moderate). All 3 were already falling (pre-trend -0.104 to -0.170) with bare soil at 0.41-0.56, which looks like ripening or harvest. Mustard harvest had begun.
+- 33 of 200 plots dropped at least 0.15; 13 of them were already falling. 21 of 200 were flagged as already falling overall.
+- Near the named villages: Kharian 38 plots within 3 km, median change -0.040, no signal. Panniwala 27 plots, median -0.070, 1 signal.
+- Scene rule, fixed before results: post is 22 Mar, because 17 Mar is under 5 days. Pre is 12 Mar, because 14 Mar is 84.5% cloud. 9 plot attempts were skipped because QA rejected the 12 Mar scene over them.
+
+**So sensitivity is shown only on Bhiwani, the event the far test and post-scene rule were designed on.** That is the main thing this validation does not establish.
+
+**One restart.** The March run was stopped after 40 plots and restarted to fix a harness omission: it was re-downloading the pass between pre and post for every plot. Only placebo counts and pre-event NDVI had been looked at. All 40 rows matched the restarted run exactly. Method, plots and seeds did not change.
+
+## 7b. Punjab floods, August 2025: pre-registered independent positive test
+
+Written before any Punjab data was opened. Frozen rubric v3. Run once. Script: `tests/geo_punjab.py`.
+
+- **Sites** (`events.md` C5, named villages with reported dates only): Pakhoke Mehmaran 32.01496, 75.01210; Dera Baba Nanak 32.03325, 75.02517; Kot Gurbaksh 31.98063, 74.91547. Fazilka is excluded because the source gives no exact flood date.
+- **Event date:** 27 Aug 2025. The sources differ by up to a day on when the flooding began.
+- **Plots:** 60 random squares of 1-2 ha, 20 per site, centres within 1.5 km of the point, at least 80% WorldCover cropland, seed 20250827.
+- **Control:** the same 60 plots over the same calendar window in 2024. No comparable flood is documented in our sources. That has not been exhaustively verified.
+- **Radar pair, per plot, by rule:** for each relative orbit and pass direction, the last pass before 26 Aug and the first pass after 27 Aug. Use the orbit whose post pass comes soonest; ties go to the shorter gap, then the lower orbit number. The same rule applies in 2024.
+- **Optical pair, per plot, by rule:** latest accepted scene before 26 Aug; first accepted scene at least 5 days after the event, else the earliest accepted scene within 20 days. Monsoon cloud may leave few.
+- **Reported, 2025 against 2024:** `new_water_frac`, SAR placebo p, optical availability, and verdict-level field conditions (optical: rubric v3 field conditions; radar: placebo p<=0.05 or new water >= 0.2).
+
+**What counts, fixed now:**
+
+| Outcome | Criterion, on plots with a usable radar pair in that year |
+|---|---|
+| **New-water part passes** | Share of plots with `new_water_frac` >= 0.2 in 2025 is at least 3 times the 2024 share and at least 15 percentage points above it |
+| **SAR-signal part passes** | Share of plots with SAR placebo p<=0.05 in 2025 is at least 2 times the 2024 share and at least 15 percentage points above it |
+| **Pass** | Both parts pass |
+| **Partial** | Exactly one part passes. Reported as partial, not as a pass |
+| **Miss** | Neither part passes |
+
+If either year has under 30 of the 60 plots with a usable radar pair, the result is **not testable** rather than a pass or a miss.
+
+A miss is reported as a miss. Silt, ponding that drained before the pass, or orbit gaps may explain one, but do not convert it into a pass. The placebo may have low power in a flood wider than its ring, as in Bhiwani. That is a reason to expect a partial result. It does not change the score.
 
 ## 8. Read time
 
 Measured on this machine, whose link to the blob store measured about 0.39 MB/s, shared with other jobs. Cold timings are upper bounds and depend on who else is downloading. Tracked separately below once the read-time work is done.
+
+Verify timings from BACKEND's records (`backend/var`; the live record's hash starts `97b0da03e868`): all 20 field numbers in 41 s and 26 s on two runs; all 104 numbers in 1066 s while sharing the link. My own full `replay` of the typical plot also matched all 104 numbers exactly, in 1587 s while sharing the link with a locked run's download.

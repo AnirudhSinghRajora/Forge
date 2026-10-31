@@ -46,6 +46,7 @@ ul { margin: 2pt 0 6pt; padding-left: 13pt; } li { margin-bottom: 2pt; }
 .clause .why { font-size: 8pt; color: #5d5b55; } .clause q { font-size: 8.6pt; quotes: "\201C" "\201D"; }
 .seal { display: flex; gap: 12pt; align-items: center; border: 1pt solid #d8d6cf; padding: 8pt; border-radius: 3pt; break-inside: avoid; }
 .seal img { width: 90pt; height: 90pt; }
+.selection { font-size: 11pt; font-weight: 600; line-height: 1.35; border: 1.5pt solid #1d1c1a; padding: 7pt 10pt; margin: 10pt 0 0; break-inside: avoid; }
 .disclaimer { font-size: 8.4pt; color: #4a4843; margin-top: 10pt; }
 </style>
 </head>
@@ -58,6 +59,8 @@ ul { margin: 2pt 0 6pt; padding-left: 13pt; } li { margin-bottom: 2pt; }
   </div>
   <div class="qr"><img src="{{ qr }}" alt="QR"><div>/verify</div></div>
 </div>
+
+{% if selection_note %}<div class="selection">{{ selection_note }}</div>{% endif %}
 
 <div class="verdict {{ level }}">
   <div class="level">{{ L.verdict }} · {{ level }} · rubric {{ ev.verdict.rubric_version if ev.verdict else '' }}</div>

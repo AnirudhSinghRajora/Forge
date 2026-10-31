@@ -17,14 +17,18 @@ from app.evidence.schema import SceneQA
 
 from . import indices as ix
 from .base import ENGINE_VERSION, S1_COLLECTION, GeoUnavailable, SceneRef, r4, var_dir
-from .grid import Plot
-from .raster import read_assets
+from .grid import Grid, Plot
+from .raster import read_assets, read_overview
 
 log = logging.getLogger(__name__)
 
 QA_BANDS = ["B02", "B03", "B04", "B08", "B11", "SCL"]
 # For scenes that only feed the NDVI series of the field twin: those three bands are all it uses.
 LITE_BANDS = ["B04", "B08", "SCL"]
+# Q1 only needs to know these are present and not empty, and nothing is computed from them in QA, so
+# one coarse read each is enough. B04, B08 and SCL stay native because Q2-Q4 measure them.
+PRESENCE_BANDS = ["B02", "B03", "B11"]
+PRESENCE_RES_M = 160
 BAND_NAMES = {"B02": "blue", "B03": "green", "B04": "red", "B08": "infrared", "B11": "shortwave-infrared", "SCL": "scene classification"}
 PLOT_VALID_MIN = 0.80
 B08_RANGE = (0.05, 0.60)
@@ -51,6 +55,18 @@ class RawQA:
 def _median_or_none(values: np.ndarray) -> float | None:
     values = values[np.isfinite(values)]
     return float(np.median(values)) if values.size else None
+
+
+def presence_problem(band: str, data: np.ndarray | None, scl: np.ndarray | None) -> str | None:
+    """Q1 and Q3 for a band judged from its overview: missing, empty or zero-filled where imaged."""
+    if data is None:
+        return f"Q1: {BAND_NAMES[band]} band ({band}) is missing or unreadable"
+    imaged = scl != 0 if scl is not None else np.ones(data.shape, bool)
+    bad = float(np.mean(data[imaged] == 0)) if imaged.any() else 1.0
+    if bad >= BAD_SHARE_MAX:
+        label = "empty" if bad > 0.99 else f"{bad:.0%} zero-filled"
+        return f"Q3: {BAND_NAMES[band]} band ({band}) is {label} where the scene claims data"
+    return None
 
 
 def plot_clear_share(scl: np.ndarray, plot_mask: np.ndarray) -> float:
@@ -227,7 +243,6 @@ def raw_qa(scene: SceneRef, plot: Plot, *, fresh: bool = False, lite: bool = Fal
         bands = read_assets(scene.id, ["vv", "vh"], grid, is_float=True, fresh=fresh)
         raw = evaluate_sar(bands["vv"], bands["vh"], mask)
     else:
-        required = LITE_BANDS if lite else QA_BANDS
         scl = read_assets(scene.id, ["SCL"], grid, fresh=fresh)["SCL"]
         try:
             offset: int | None = ix.scene_offset(scene.processing_baseline, scene.boa_offset_applied)
@@ -237,12 +252,35 @@ def raw_qa(scene: SceneRef, plot: Plot, *, fresh: bool = False, lite: bool = Fal
             # Every other check would only add reasons to a scene already rejected over this plot.
             raw = evaluate_optical({"SCL": scl}, offset, mask, ["SCL"])
         else:
-            others = [b for b in required if b != "SCL"]
-            bands = read_assets(scene.id, others, grid, fresh=fresh) if scl is not None else {}
+            bands = read_assets(scene.id, ["B04", "B08"], grid, fresh=fresh) if scl is not None else {}
             bands["SCL"] = scl
-            raw = evaluate_optical(bands, offset, mask, required)
+            raw = evaluate_optical(bands, offset, mask, LITE_BANDS)
+            if not lite:
+                raw = _with_presence_checks(raw, scene, grid, fresh)
     _cache_store(path, raw)
     return raw
+
+
+def _with_presence_checks(raw: RawQA, scene: SceneRef, grid, fresh: bool) -> RawQA:
+    """Add Q1 for the bands QA does not measure, read coarsely. A found problem rejects the scene."""
+    res = PRESENCE_RES_M
+    coarse = Grid(grid.epsg, grid.left, grid.top, max(1, grid.width * grid.res // res), max(1, grid.height * grid.res // res), res)
+    if scene.epsg == grid.epsg:
+        scl = read_overview(scene.id, "SCL", coarse, fresh=fresh)
+        arrays = {band: read_overview(scene.id, band, coarse, fresh=fresh) for band in PRESENCE_BANDS}
+    else:
+        # Overviews are only read in the scene's own CRS. A scene from the next UTM zone reads natively.
+        scl = read_assets(scene.id, ["SCL"], grid, fresh=fresh)["SCL"]
+        arrays = read_assets(scene.id, PRESENCE_BANDS, grid, fresh=fresh)
+    problems = []
+    for band in PRESENCE_BANDS:
+        problem = presence_problem(band, arrays.get(band), scl)
+        if problem:
+            problems.append(problem)
+    if not problems:
+        return raw
+    notes = raw.reasons if raw.status == "rejected" else []
+    return RawQA("rejected", notes + problems, raw.plot_valid_frac, raw.context_ndvi_median)
 
 
 def to_scene_qa(scene: SceneRef, raw: RawQA) -> SceneQA:

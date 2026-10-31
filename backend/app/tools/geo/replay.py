@@ -13,6 +13,7 @@ from app.evidence.schema import (
     VillageWitness,
 )
 
+from . import blocks
 from .base import r4
 from .optical import _optical_compare, history_from_ids
 from .sar import _sar_compare
@@ -96,7 +97,16 @@ def flatten_numbers(
 
 
 def replay(core: ReplayCore) -> dict[str, float | None]:
-    """Recompute from public data, bypassing every cache. Compare the result with core.numbers."""
+    """Recompute from public data, bypassing every cache. Compare the result with core.numbers.
+
+    Nothing is served from our caches. Blocks this replay itself has just downloaded are shared within
+    it, so overlapping windows are fetched once.
+    """
+    with blocks.fresh_session():
+        return _replay(core)
+
+
+def _replay(core: ReplayCore) -> dict[str, float | None]:
     optical = neighbours = sar = hist = None
     if core.optical_pre_id and core.optical_post_id:
         optical, neighbours = _optical_compare(

@@ -57,6 +57,14 @@ _EVENT_LABELS = {
 }
 
 
+# The chips at Confirm send these English names. Anything else is the farmer's own word, as written.
+_CROP_LABELS = {
+    "paddy": ("धान", "వరి"), "rice": ("धान", "వరి"), "cotton": ("कपास", "పత్తి"), "wheat": ("गेहूँ", "గోధుమ"),
+    "sugarcane": ("गन्ना", "చెరకు"), "maize": ("मक्का", "మొక్కజొన్న"), "mustard": ("सरसों", "ఆవాలు"),
+    "soybean": ("सोयाबीन", "సోయాబీన్"), "groundnut": ("मूँगफली", "వేరుశనగ"),
+}
+
+
 def load_key_rules() -> dict | None:
     path = get_settings().policy_dir / "key_rules.json"
     try:
@@ -184,12 +192,15 @@ def draft_intimation(case: dict, evidence: dict, path: ClaimPath, deadlines: lis
     for name in contents.get("fields") or []:
         label_hi, label_en = _FIELD_LABELS.get(name, (name, name))
         value = prefilled.get(name)
+        value_hi = value_te = value
+        if name == "insured_crop" and value is not None:
+            value_hi, value_te = _CROP_LABELS.get(str(value).strip().lower(), (value, value))
         if value is None:
             missing.append(name)
-        hi_lines.append(f"{label_hi}: {value if value is not None else '[कृपया भरें]'}")
+        hi_lines.append(f"{label_hi}: {value_hi if value is not None else '[कृपया भरें]'}")
         en_lines.append(f"{label_en}: {value if value is not None else '[please fill in]'}")
         te_lines.append(f"{_FIELD_LABELS_TE.get(name, label_en)}: "
-                        f"{value if value is not None else '[దయచేసి నింపండి]'}")
+                        f"{value_te if value is not None else '[దయచేసి నింపండి]'}")
     if "latitude_longitude" in (contents.get("optional_per_text") or []):
         hi_lines.append(f"अक्षांश, देशांतर: {lat}, {lon}")
         en_lines.append(f"Latitude, longitude: {lat}, {lon}")

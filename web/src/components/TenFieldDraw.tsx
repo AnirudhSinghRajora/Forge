@@ -6,7 +6,6 @@ import { CopyButton, Missing, useInView, usePrefersReducedMotion } from "./Bits"
 import { linear, useWidth } from "../charts/util";
 import { num, pct, rawNum } from "../format";
 import { moveWords } from "../plain";
-import { selectionNear } from "../places";
 
 /** Small changes keep a third decimal, so +0.005 does not read as nothing. */
 const change = (v: number | null | undefined) => num(v, v !== null && v !== undefined && Math.abs(v) < 0.1 ? 3 : 2, { signed: true });
@@ -374,11 +373,9 @@ export function TenFieldDraw({ ev }: { ev: Evidence }) {
   const domVals = [sim.average_p05, sim.average_p95, sim.affected_only_p05, sim.affected_only_p95, sim.plot_value, 0].filter((x): x is number => typeof x === "number");
   const domPad = (Math.max(...domVals) - Math.min(...domVals) || 0.1) * 0.06;
   const dom: [number, number] = [Math.min(...domVals) - domPad, Math.max(...domVals) + domPad];
-  const selected = selectionNear(ev.plot.centroid[0], ev.plot.centroid[1]);
 
   return (
     <div className="tenfield" ref={slot}>
-      {selected && <p className="selected-note">{selected[lang]}</p>}
       <p className={`drw-applies ${applies ? "" : "drw-applies-no"}`}>{t(applies ? "draw.may_apply" : "draw.illustration")}</p>
       <p className="drw-claim">
         {t("draw.claim_a")} <b className="mono">{sim.parcels_per_survey}</b> {t("draw.claim_b")}

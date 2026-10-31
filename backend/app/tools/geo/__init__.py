@@ -2,6 +2,7 @@
 
 Importing this package does no network I/O.
 """
+from .blocks import fresh_session
 from .base import ENGINE_VERSION, GeoUnavailable, PlotError, SceneRef, SceneUnusable
 from .chips import render_chips
 from .grid import plot_info, utm_epsg
@@ -28,6 +29,7 @@ __all__ = [
     "SceneRef",
     "SceneUnusable",
     "flatten_numbers",
+    "fresh_session",
     "history",
     "history_scene_ids",
     "optical_compare",

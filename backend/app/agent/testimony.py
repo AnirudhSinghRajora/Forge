@@ -37,9 +37,9 @@ def _caveat_lines(ev: Evidence) -> tuple[list[str], list[str], list[str]]:
         en.append("The images and the radar disagree here: the images show a change, and the radar does not support it.")
         te.append("చిత్రాలు, రాడార్ ఇక్కడ ఏకీభవించడం లేదు: చిత్రాల్లో మార్పు కనిపిస్తోంది, రాడార్ దాన్ని సమర్థించడం లేదు.")
     if rubric.area_wide(ev):
-        hi.append("पूरे इलाक़े का यह बदलाव घटना से मेल खाता है, पर यह उसके कारण का प्रमाण नहीं है।")
-        en.append("This change across the area is consistent with the event, but it is not proof of the cause.")
-        te.append("ప్రాంతమంతటా ఈ మార్పు సంఘటనకు సరిపోలుతోంది, కానీ అది కారణానికి రుజువు కాదు.")
+        hi.append("असर सिर्फ़ मेरे तक सीमित नहीं दिखता। यह घटना से मेल खाता है, पर यह उसके कारण का प्रमाण नहीं है।")
+        en.append("The effect does not look limited to me. That is consistent with the event, but it is not proof of the cause.")
+        te.append("ప్రభావం నా వరకే పరిమితమైనట్లు కనిపించడం లేదు. ఇది సంఘటనకు సరిపోలుతోంది, కానీ అది కారణానికి రుజువు కాదు.")
     if ev.weather is None:
         hi.append("उस समय का मौसम डेटा मुझे नहीं मिल सका।")
         en.append("I could not get weather data for that time.")

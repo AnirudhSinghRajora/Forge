@@ -7,11 +7,12 @@ import { CopyButton, useNow, usePrefersReducedMotion } from "../components/Bits"
 import { clock, dateTimeLabel, dayLabel } from "../format";
 
 interface Row { key: string; label: string; stored: number | null; recomputed: number | null; state: "match" | "mismatch" | "unavailable" }
-type Status = "verified" | "mismatch" | "partial" | "field_verified" | "unknown_hash" | "tampered" | "upstream_unavailable" | "archive_mismatch" | "nothing_to_recompute";
+type Status = "verified" | "mismatch" | "engine_changed" | "partial" | "field_verified" | "unknown_hash" | "tampered" | "upstream_unavailable" | "archive_mismatch" | "nothing_to_recompute";
 interface Cachable { cached?: boolean; checked_at?: string | null; rerun?: string }
 interface Result extends Cachable {
   status: Status; ok: boolean; matched?: number; total?: number; checked?: number; unchecked?: string[]; errors?: Record<string, string> | string[];
-  field_verified?: boolean; message_hi?: string; message_en?: string; recomputed_hash?: string; error?: string; elapsed_s?: number;
+  field_verified?: boolean; message_hi?: string; message_en?: string; message_te?: string; recomputed_hash?: string; error?: string; elapsed_s?: number;
+  sealed_engine?: string; current_engine?: string;
 }
 interface Start extends Cachable {
   hash_verified?: boolean; engine_version?: string; event_date?: string; optical_pre_id?: string | null; optical_post_id?: string | null;
@@ -19,7 +20,7 @@ interface Start extends Cachable {
   numbers?: Record<string, number | null>; superseded?: boolean; started_at?: string;
   last_full_check?: { status: string; checked: number | null; total: number | null; finished_at: string | null } | null;
 }
-interface Stage { status: "field_verified" | "field_mismatch" | "field_failed"; matched: number; total: number; remaining: number }
+interface Stage { status: "field_verified" | "field_mismatch" | "field_engine_changed" | "field_failed"; matched: number; total: number; remaining: number }
 interface GroupState { name: string; state: "running" | "done" | "failed"; n?: number; budget?: number; elapsed?: number; startedAt?: number; reason?: string; fields?: string[] }
 interface StreamEvent extends Record<string, unknown> { type: string; seq?: number; run_id?: string }
 
@@ -63,7 +64,7 @@ export default function Verify({ hash }: { hash: string }) {
   const [stage, setStage] = useState<Stage | null>(null);
   const [groupList, setGroupList] = useState<GroupState[]>([]);
   const [sourceSeen, setSourceSeen] = useState(false);
-  const [note, setNote] = useState<{ message_hi?: string; message_en?: string } | null>(null);
+  const [note, setNote] = useState<{ kind?: string; message_hi?: string; message_en?: string; message_te?: string } | null>(null);
   const [nonce, setNonce] = useState<{ n: number; rerun: boolean }>({ n: 0, rerun: false });
   const [firstSeen, setFirstSeen] = useState(() => Date.now());
   const reduced = usePrefersReducedMotion();
@@ -73,7 +74,7 @@ export default function Verify({ hash }: { hash: string }) {
   const apply = useCallback((msg: StreamEvent) => {
     switch (msg.type) {
       case "start": setStart(msg as Start); break;
-      case "note": if (msg.message_en) setNote(msg as { message_hi?: string; message_en?: string }); else setSourceSeen(true); break;
+      case "note": if (msg.message_en) setNote(msg as { kind?: string; message_hi?: string; message_en?: string; message_te?: string }); else setSourceSeen(true); break;
       case "number": setArrived((r) => (r.some((x) => x.key === String(msg.field)) ? r : [...r, toRow(msg)])); break;
       case "stage_result": setStage(msg as unknown as Stage); break;
       case "result": setResult(msg as unknown as Result); break;
@@ -247,16 +248,20 @@ export default function Verify({ hash }: { hash: string }) {
   const stored = start?.numbers ? Object.entries(start.numbers) : [];
   const failedKeys = useMemo(() => new Set(groupList.flatMap((g) => g.fields ?? [])), [groupList]);
   const pendingStored = stored.filter(([k]) => !rows.some((r) => r.key === k));
-  const message = result ? (lang === "hi" ? result.message_hi : result.message_en) ?? result.message_en ?? null : null;
+  const message = result ? (lang === "hi" ? result.message_hi : lang === "te" ? result.message_te : result.message_en) ?? result.message_en ?? null : null;
+  // Under another engine version a difference is expected to be possible, so it is not called a mismatch.
+  const engineChanged = status === "engine_changed" || note?.kind === "engine_version_differs";
   const unchecked = result?.unchecked?.length ?? Math.max(0, total - (result?.checked ?? rows.length));
 
   const nothing = status === "nothing_to_recompute";
   // "ok" comes only from the server's `verified`. Everything short of that says how far it got.
-  const lineKind: "ok" | "bad" | "field" | "partial" | null = !settled || !result || refused
+  const lineKind: "ok" | "bad" | "engine" | "field" | "partial" | null = !settled || !result || refused
     ? null
     : status === "verified"
       ? "ok"
-      : status === "mismatch" || counts.mismatch > 0
+      : status === "engine_changed"
+        ? "engine"
+        : status === "mismatch" || counts.mismatch > 0
         ? "bad"
         : status === "field_verified"
           ? "field"
@@ -308,7 +313,9 @@ export default function Verify({ hash }: { hash: string }) {
               <p className="stage-big">
                 {stage.status === "field_failed"
                   ? t("verify.stage_failed", { m: stage.matched, n: stage.total })
-                  : stage.status === "field_mismatch"
+                  : stage.status === "field_engine_changed"
+                    ? t("verify.stage_engine", { m: stage.matched, n: stage.total })
+                    : stage.status === "field_mismatch"
                     ? t("verify.stage_mismatch", { m: stage.matched, n: stage.total })
                     : t("verify.stage_ok", { m: stage.matched, n: stage.total })}
               </p>
@@ -324,6 +331,8 @@ export default function Verify({ hash }: { hash: string }) {
                   ? t("verify.stamp_nothing")
                   : lineKind === "ok"
                     ? t("verify.stamp_ok")
+                    : lineKind === "engine"
+                      ? t("verify.stamp_engine")
                     : lineKind === "bad"
                       ? t("verify.stamp_bad")
                       : t("verify.stamp_checked", { k: result?.checked ?? rows.length, n: result?.total ?? total })}
@@ -331,6 +340,7 @@ export default function Verify({ hash }: { hash: string }) {
               <p>
                 {lineKind === "ok" && t("verify.line_ok", { n: result?.matched ?? counts.match })}
                 {lineKind === "bad" && t("verify.line_bad", { k: counts.mismatch, n: rows.length })}
+                {lineKind === "engine" && message}
                 {lineKind === "field" && t("verify.line_field", { f: stage?.total ?? 0, k: result?.checked ?? rows.length, n: result?.total ?? total, u: unchecked })}
                 {lineKind === "partial" && (nothing ? message : t("verify.line_checked", { k: result?.checked ?? rows.length, n: result?.total ?? total, m: result?.matched ?? counts.match }))}
               </p>
@@ -368,7 +378,7 @@ export default function Verify({ hash }: { hash: string }) {
             <>
               <div className="tally" aria-live="polite">
                 <div><b className="mono">{counts.match}</b><span>{t("verify.matched")}</span></div>
-                <div><b className="mono">{counts.mismatch}</b><span>{t("verify.mismatched")}</span></div>
+                <div><b className="mono">{counts.mismatch}</b><span>{t(engineChanged ? "verify.differed" : "verify.mismatched")}</span></div>
                 <div><b className="mono">{pending}</b><span>{t("verify.waiting")}</span></div>
                 {counts.unavailable > 0 && <div><b className="mono">{counts.unavailable}</b><span>{t("verify.unavailable")}</span></div>}
                 {running && !cached && <div className="tally-clock"><b className="mono">{clock(elapsed)}</b><span>{t("verify.elapsed")}</span></div>}
@@ -404,7 +414,7 @@ export default function Verify({ hash }: { hash: string }) {
           )}
           {activeGroup?.name === "far_twin" && <p className="small">{t("verify.far_twin_slow")}</p>}
           {sourceSeen && !cached && <p className="small verify-source">{t("verify.source")}</p>}
-          {note && <p className="notice small">{(lang === "hi" ? note.message_hi : note.message_en) ?? note.message_en}</p>}
+          {note && status !== "engine_changed" && <p className="notice small">{(lang === "hi" ? note.message_hi : lang === "te" ? note.message_te : note.message_en) ?? note.message_en}</p>}
 
           {(rows.length > 0 || pendingStored.length > 0) && (
             <div className="table-scroll">
@@ -428,7 +438,9 @@ export default function Verify({ hash }: { hash: string }) {
                       <td className="mono num" data-label={t("verify.col_recomputed")}>{r.recomputed ?? "—"}</td>
                       <td className="vresult">
                         {r.state === "match" && <span className="v-ok"><Icon name="check" size={18} stroke={2.2} /> {t("verify.ok")}</span>}
-                        {r.state === "mismatch" && <span className="v-bad"><Icon name="cross" size={18} stroke={2.2} /> {t("verify.bad")}</span>}
+                        {r.state === "mismatch" && (engineChanged
+                          ? <span className="v-diff">{t("verify.differs")}</span>
+                          : <span className="v-bad"><Icon name="cross" size={18} stroke={2.2} /> {t("verify.bad")}</span>)}
                         {r.state === "unavailable" && <span className="faint">{t("verify.unavailable")}</span>}
                       </td>
                     </tr>

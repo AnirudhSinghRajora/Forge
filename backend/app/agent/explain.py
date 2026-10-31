@@ -102,8 +102,9 @@ def _sat_line(ev: Evidence) -> tuple[str, str]:
 
 
 def tests_line(ev: Evidence) -> tuple[str, str, str] | None:
-    """Both answers in plain words. "Far yes, ring no" is the whole area, and never a weakness.
-    Telugu NEEDS NATIVE REVIEW."""
+    """Both answers in plain words. "Far yes, ring no" reads "the effect does not look limited to
+    your field", and never as a weakness. A ring test that misses its threshold does not show that
+    the neighbours changed as much. Telugu NEEDS NATIVE REVIEW."""
     if ev.neighbours is None or ev.optical.post is None:
         placebo = ev.sar.placebo if ev.sar else None
         if rubric.usable_p(placebo) is None:

@@ -80,7 +80,7 @@ export interface VillageWitness {
   radius_m: number; sensor: "s2" | "s1"; n_cropland_pixels: number; affected_share: number | null; affected_definition: string;
   nearby_real_cases?: number | null; lottery?: SurveyLottery | null;
 }
-export type ClaimRoute = "not_insured" | "localized_addon" | "post_harvest_addon" | "area_yield_basic" | "undetermined";
+export type ClaimRoute = "not_insured" | "localized_addon" | "post_harvest_addon" | "area_yield_basic" | "outside_cover" | "undetermined";
 export interface ClaimPath {
   route: ClaimRoute; insured: "yes" | "no" | "unknown"; crop_stage: "standing" | "cut_and_spread" | "harvested_stored" | "unknown";
   intimation: "essential" | "not_essential" | "unknown"; countdown_applies: boolean; reasons: string[]; next_steps: string[];

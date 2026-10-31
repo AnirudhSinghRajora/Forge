@@ -33,7 +33,7 @@ function Card({ q, test, unmeasuredWhy, pField }: { q: Key; test: PlaceboTest | 
   );
 }
 
-/** Two tests, two different questions. "Far yes, ring no" is a finding about the area, not a weakness. */
+/** Two tests, two different questions. "Far yes, ring no" reads "the effect does not look limited to your field", not as a weakness. */
 export function TwoQuestions({ ev, pField }: { ev: Evidence; pField: number | null }) {
   const { t } = useI18n();
   const n = ev.neighbours;

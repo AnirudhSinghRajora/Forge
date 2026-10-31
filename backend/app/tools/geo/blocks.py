@@ -20,6 +20,7 @@ import os
 import tempfile
 import threading
 from collections import OrderedDict
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -58,6 +59,26 @@ _layouts: dict[tuple[str, str], Layout] = {}
 _key_locks: dict[tuple[str, str], threading.Lock] = {}
 _key_locks_guard = threading.Lock()
 _writes = 0
+# Blocks re-downloaded during a replay. A replay must not trust our cache, but it has no reason to
+# download one block twice either. Emptied when the last replay in progress ends.
+_session: dict[tuple, np.ndarray] = {}
+_session_users = 0
+_session_lock = threading.Lock()
+
+
+@contextmanager
+def fresh_session():
+    """While active, `fresh` reads share what they themselves downloaded, and nothing older."""
+    global _session_users
+    with _session_lock:
+        _session_users += 1
+    try:
+        yield
+    finally:
+        with _session_lock:
+            _session_users -= 1
+            if _session_users == 0:
+                _session.clear()
 
 
 def _root() -> Path:
@@ -240,15 +261,21 @@ def read_through(item_id: str, asset: str, grid: Grid, opener, *, fresh: bool = 
     rows, cols = source_indices(layout, grid)
     wanted = needed_blocks(layout, rows, cols)
     fill = layout.nodata if layout.nodata is not None else 0
-    if fresh:
-        if not wanted:
-            return np.full(grid.shape, fill, dtype=layout.dtype), layout
-        with opener() as ds:
-            blocks = _fetch(ds, layout, wanted)
-        return assemble(layout, rows, cols, blocks, fill), layout
-
     with _key_locks_guard:
         lock = _key_locks.setdefault((item_id, asset), threading.Lock())
+    if fresh:
+        with lock:
+            blocks = {b: _session[(item_id, asset, *b)] for b in wanted if (item_id, asset, *b) in _session}
+            missing = [b for b in wanted if b not in blocks]
+            if missing:
+                with opener() as ds:
+                    fetched = _fetch(ds, layout, missing)
+                blocks.update(fetched)
+                with _session_lock:
+                    if _session_users:
+                        _session.update({(item_id, asset, *b): arr for b, arr in fetched.items()})
+        return assemble(layout, rows, cols, blocks, fill), layout
+
     with lock:  # two tools asking for the same blocks must not download them twice
         blocks = {}
         missing = []

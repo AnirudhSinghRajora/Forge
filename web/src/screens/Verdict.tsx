@@ -1,10 +1,10 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { useI18n, translateRubric, keyLabel, type Key } from "../i18n";
+import { useI18n, translateRubric, keyLabel, cropLabel, type Key } from "../i18n";
 import { ApiError, getCase, pdfUrl, startInvestigation, type CaseEnvelope, type ExhibitStatus } from "../api";
 import { linkProps, navigate } from "../router";
 import { Icon } from "../components/Icon";
 import { Stamp } from "../components/Stamp";
-import { ErrorNote, Loading, Missing, useInView, useNow } from "../components/Bits";
+import { ErrorNote, Loading, Missing, SelectionNote, useInView, useNow } from "../components/Bits";
 import { ObjectionCard } from "../components/ObjectionCard";
 import { Voice } from "../components/Voice";
 import { TenFieldDraw } from "../components/TenFieldDraw";
@@ -355,7 +355,7 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
         <p className="eyebrow">{t("verdict.eyebrow")}</p>
         <h1 className="h-page">{t(active ? "verdict.running" : "verdict.none")}</h1>
         <p className="lede">{t(active ? "verdict.running_body" : !c.plot ? "verdict.none_plot" : "verdict.none_body")}</p>
-        {c.latest_run?.error && <p className="small" lang="en">{c.latest_run.error}</p>}
+        {c.latest_run?.error && <p className="small">{lang !== "en" && <>{t("exhibit.technical")}: </>}<span lang="en">{c.latest_run.error}</span></p>}
         <a className="btn btn-primary btn-big" {...linkProps(nextPath)}>{t(active ? "verdict.watch" : !c.plot ? "verdict.go_plot" : "verdict.go_run")} <Icon name="arrow" /></a>
       </div>
     );
@@ -383,8 +383,11 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
     </ExhibitGate>
   );
 
+  const selection = env.selection_note ?? null;
+
   return (
     <div className="page verdict">
+      <SelectionNote note={selection} className="selected-note-top" />
       {!provisional && <Testimony ev={ev} caseId={caseId} verdictLine={headline} passes={env.exhibits?.timeline?.status} />}
       <header className="verdict-top">
         <div className="verdict-main">
@@ -437,7 +440,7 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
           <div className="file-facts">
             <p><span>{t("facts.event")}</span> <b>{t(`event.${ev.event.type}` as Key)}</b> · <span className="mono">{dayLabel(ev.event.date, lang)}</span>
               {ev.event.date_source !== "farmer" && <em className="small"> ({t(`date_source.${ev.event.date_source}` as Key)})</em>}</p>
-            {ev.event.crop && <p><span>{t("facts.crop")}</span> <b>{ev.event.crop}</b></p>}
+            {ev.event.crop && <p><span>{t("facts.crop")}</span> <b>{cropLabel(ev.event.crop, lang)}</b></p>}
             <p><span>{t("facts.area")}</span> <b className="mono">{num(ev.plot.area_ha, 2)} {t("unit.hectare")}</b></p>
           </div>
           <div className="side-actions">
@@ -478,6 +481,7 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
         <section className="signature" aria-labelledby="foot-t">
           <p className="exhibit-mark"><span>{t("ex.label")}</span> <b>{t("ex.foot")}</b></p>
           <h2 id="foot-t" className="signature-title">{t("ex.foot_t")}</h2>
+          <SelectionNote note={selection} />
           <div className="foot-grid">
             <div className="foot-map">
               <ErrorBoundary>
@@ -490,13 +494,14 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
                 ))}
               </ErrorBoundary>
             </div>
-            <div className="foot-answers"><TwoQuestions ev={ev} pField={env.rubric?.p_field ?? null} /></div>
+            <div className="foot-answers"><SelectionNote note={selection} className="selected-note-stacked" /><TwoQuestions ev={ev} pField={env.rubric?.p_field ?? null} /></div>
           </div>
         </section>
 
         <section className="signature" aria-labelledby="van-t">
           <p className="exhibit-mark"><span>{t("ex.label")}</span> <b>{t("ex.van")}</b></p>
           <h2 id="van-t" className="signature-title">{t("ex.van_t")}</h2>
+          <SelectionNote note={selection} />
           <ErrorBoundary>
             {gate("scale_fade", ev.scale_fade && ev.scale_fade.levels.length > 0 ? (
               <Suspense fallback={<Loading what={t("loading.map")} />}>
@@ -511,6 +516,7 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
         <section className="signature" aria-labelledby="draw-t">
           <p className="exhibit-mark"><span>{t("ex.label")}</span> <b>{t("ex.draw")}</b></p>
           <h2 id="draw-t" className="signature-title">{t("ex.draw_t")}</h2>
+          <SelectionNote note={selection} />
           <ErrorBoundary>{gate("village", <TenFieldDraw ev={ev} />)}</ErrorBoundary>
         </section>
 

@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 import qrcode
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
+from app import disclosures
 from app.agent import explain as explain_mod
 from app.agent import rubric
 from app.config import get_settings
@@ -164,6 +165,7 @@ def build_context(ev: Evidence, case: dict, actions: list[dict], lang: str, char
         "ev": ev,
         "case": case,
         "headline": _headline(ev, lang),
+        "selection_note": (disclosures.selection_note(ev.plot.centroid) or {}).get(lang),
         "explanation": _pick(ev, "explanation", lang),
         "testimony": _pick(ev, "testimony", lang),
         "level": ev.verdict.level if ev.verdict else "insufficient",

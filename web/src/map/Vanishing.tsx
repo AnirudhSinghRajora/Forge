@@ -7,7 +7,6 @@ import { useInView, usePrefersReducedMotion } from "../components/Bits";
 import { bboxOfRing } from "../geo";
 import { num } from "../format";
 import { moveWords } from "../plain";
-import { selectionNear } from "../places";
 import type { Evidence, ScaleFade } from "../types";
 
 function scaleName(m: number): string {
@@ -115,7 +114,7 @@ export default function Vanishing({ ev, fade }: { ev: Evidence; fade: ScaleFade 
   const unit = isSar ? " dB" : "";
   const first = levels[0]?.plot_cell_value ?? null;
   const last = levels[levels.length - 1]?.plot_cell_value ?? null;
-  // The message comes only from the values, so a strong fade and a whole-area change both read true.
+  // The message comes only from the values, so a strong fade and a change that holds at every scale both read true.
   const fell = first !== null && last !== null && first < 0 && Math.abs(first) >= (isSar ? 0.5 : 0.05);
   const keptPct = fell ? Math.round((Math.abs(last as number) / Math.abs(first as number)) * 100) : null;
   const reading = keptPct === null ? (first !== null && last !== null ? "van.read_none" : null) : keptPct < 50 ? "van.read_fades" : "van.read_holds";
@@ -131,12 +130,10 @@ export default function Vanishing({ ev, fade }: { ev: Evidence; fade: ScaleFade 
   const pinLeft = (((pw + pe) / 2 - w) / (e - w)) * 100;
   const pinTop = ((n - (ps + pn) / 2) / (n - s)) * 100;
   const words = level && level.plot_cell_value !== null && !isSar ? moveWords(level.plot_cell_value) : null;
-  const selected = selectionNear(ev.plot.centroid[0], ev.plot.centroid[1]);
 
   return (
     <div className="vanish" ref={slot}>
       <p className="vanish-lede">{t("van.lede")}</p>
-      {selected && <p className="selected-note">{selected[lang]}</p>}
 
       <div className="vanish-stage">
         <div className="vanish-mapcol">

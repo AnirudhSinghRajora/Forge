@@ -222,7 +222,7 @@ function SensorSwitch({ ev, title }: { ev: TraceEvent; title: string }) {
     <div className="switch fresh">
       <p className="switch-flow">
         <span className="switch-from"><Icon name="satellite" size={30} /> {t("trace.optical")}</span>
-        <span className="switch-arrow" aria-hidden="true"><Icon name="arrow" size={34} /></span>
+        <span className="switch-arrow" aria-hidden="true">{ev.detail.optical_continues === true ? <b>+</b> : <Icon name="arrow" size={34} />}</span>
         <span className="switch-to"><Icon name="radar" size={30} /> {t("trace.radar")}</span>
       </p>
       <p className="switch-title">{title}</p>

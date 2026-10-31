@@ -494,7 +494,7 @@ def timeline(polygon: dict, start: Date, end: Date) -> list[TimelinePoint]:
     points: list[TimelinePoint] = []
 
     s2 = sorted(search_scenes(S2_COLLECTION, plot, start, end), key=lambda s: (s.datetime, s.id))
-    for scene, qa in zip(s2, qa_chain(s2, plot)):
+    for scene, qa in zip(s2, qa_chain(s2, plot, lite=True)):
         value = None
         if qa.status != "rejected":
             bands = read_assets(scene.id, ["B04", "B08", "SCL"], grid)
@@ -505,6 +505,7 @@ def timeline(polygon: dict, start: Date, end: Date) -> list[TimelinePoint]:
                 value = r4(np.median(vi[good]))
         points.append(TimelinePoint(date=scene.date, sensor="s2", ndvi=value, qa=qa.status))
 
+    # The timeline only plots NDVI, so its scenes need only the bands NDVI uses.
     s1 = sorted(_search_s1_tolerant(plot, start, end), key=lambda s: (s.datetime, s.id))
     for scene, qa in zip(s1, qa_chain(s1, plot)):
         vv_db = vh_db = None

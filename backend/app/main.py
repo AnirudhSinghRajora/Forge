@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
 
 from app.agent import parse as report_parse
+from app import disclosures
 from app.agent import rubric, runner
 from app.agent.plot import PlotRejected, check_pin, validate_polygon
 from app.config import VERSION, get_settings
@@ -406,8 +407,11 @@ def get_case(case_id: str, lang: str | None = Query(None)) -> dict:
         out = [_action_dict(a) for a in items]
         if evidence is not None:
             _refresh_draft(out, info, evidence)
+        # The plot the shown evidence was read on, which a later redraw does not change.
+        centroid = ((evidence or {}).get("plot") or {}).get("centroid") or (info["plot"] or {}).get("centroid")
         return {
             "case": info, "evidence": evidence, "actions": out,
+            "selection_note": disclosures.selection_note(centroid),
             "sealed": bool(row is not None and row.evidence_hash),
             "verdict_ready": bool(row is not None and row.verdict_level),
             "exhibits": (row.exhibits or {}) if row is not None else {},

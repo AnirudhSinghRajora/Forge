@@ -12,6 +12,7 @@ import os
 import tempfile
 import threading
 import time
+from contextlib import contextmanager
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 
@@ -21,8 +22,9 @@ import rasterio
 from rasterio.enums import Resampling
 from rasterio.errors import RasterioError, RasterioIOError
 from rasterio.vrt import WarpedVRT
-from rasterio.windows import from_bounds
+from rasterio.windows import Window, from_bounds
 
+from . import blocks
 from .base import GeoUnavailable, var_dir
 from .grid import Grid
 from .stac import asset_href, get_item
@@ -41,6 +43,8 @@ GDAL_ENV = dict(
     VSI_CACHE="TRUE",
     VSI_CACHE_SIZE="5000000",
     GDAL_CACHEMAX=256,
+    GDAL_INGESTED_BYTES_AT_OPEN="65536",  # the COG header in one request, not several
+    GDAL_HTTP_TCP_KEEPALIVE="YES",
 )
 RETRY_DELAYS = (2.0, 5.0, 15.0)
 MAX_WORKERS = 8  # the link is the limit (about 0.35 MB/s measured); more workers only cause timeouts
@@ -212,10 +216,24 @@ def read_overview(item_id: str, asset: str, grid: Grid, *, fresh: bool = False) 
                 return None
             right, bottom = grid.left + grid.width * grid.res, grid.top - grid.height * grid.res
             window = from_bounds(grid.left, bottom, right, grid.top, ds.transform)
-            return ds.read(
-                1, window=window, out_shape=grid.shape, resampling=Resampling.nearest, boundless=True,
-                fill_value=ds.nodata if ds.nodata is not None else 0,
+            fill = ds.nodata if ds.nodata is not None else 0
+            out = np.full(grid.shape, fill, dtype=ds.dtypes[0])
+            # Clip by hand: a boundless read goes through a VRT and would lose the overviews.
+            col0, row0 = max(window.col_off, 0.0), max(window.row_off, 0.0)
+            col1 = min(window.col_off + window.width, float(ds.width))
+            row1 = min(window.row_off + window.height, float(ds.height))
+            if col1 <= col0 or row1 <= row0:
+                return out
+            sx, sy = grid.width / window.width, grid.height / window.height
+            c0, r0 = int(round((col0 - window.col_off) * sx)), int(round((row0 - window.row_off) * sy))
+            w = min(grid.width - c0, int(round((col1 - col0) * sx)))
+            h = min(grid.height - r0, int(round((row1 - row0) * sy)))
+            if w < 1 or h < 1:
+                return out
+            out[r0: r0 + h, c0: c0 + w] = ds.read(
+                1, window=Window(col0, row0, col1 - col0, row1 - row0), out_shape=(h, w), resampling=Resampling.nearest,
             )
+            return out
 
     last: Exception | None = None
     for delay in (*RETRY_DELAYS, None):
@@ -232,7 +250,29 @@ def read_overview(item_id: str, asset: str, grid: Grid, *, fresh: bool = False) 
     raise GeoUnavailable(f"overview read of {item_id}/{asset} failed: {last}") from last
 
 
-def _read_once(href: str, grid: Grid, is_float: bool) -> np.ndarray:
+@contextmanager
+def _open_cog(href: str):
+    with _sign_lock:
+        signed = planetary_computer.sign(href)
+    with rasterio.Env(**GDAL_ENV), rasterio.open(signed) as ds:
+        yield ds
+
+
+def _read_once(item_id: str, asset: str, href: str, grid: Grid, is_float: bool, fresh: bool) -> np.ndarray:
+    """Through the block cache where possible. Results are identical to the warped read."""
+    result = blocks.read_through(item_id, asset, grid, lambda: _open_cog(href), fresh=fresh)
+    if result is None:
+        return _warped_once(href, grid, is_float)
+    data, layout = result
+    if not is_float:
+        return data
+    nodata = layout.nodata if layout.nodata is not None else -32768.0
+    out = data.astype(np.float32)
+    out[data == nodata] = np.nan
+    return out
+
+
+def _warped_once(href: str, grid: Grid, is_float: bool) -> np.ndarray:
     with _sign_lock:
         signed = planetary_computer.sign(href)
     with rasterio.Env(**GDAL_ENV):
@@ -256,11 +296,11 @@ def _read_once(href: str, grid: Grid, is_float: bool) -> np.ndarray:
     return data
 
 
-def _read_with_retries(item_id: str, href: str, asset: str, grid: Grid, is_float: bool) -> np.ndarray:
+def _read_with_retries(item_id: str, href: str, asset: str, grid: Grid, is_float: bool, fresh: bool) -> np.ndarray:
     last: Exception | None = None
     for delay in (*RETRY_DELAYS, None):
         try:
-            return _read_once(href, grid, is_float)
+            return _read_once(item_id, asset, href, grid, is_float, fresh)
         except (RasterioError, RasterioIOError, OSError) as exc:
             last = exc
             text = f"{exc} {exc.__cause__ or ''}"
@@ -298,10 +338,6 @@ def read_many(
             cached = _crop_from_region(item_id, asset, grid)
             if cached is None:
                 cached = _lru_get(key)
-            if cached is None:
-                cached = _disk_get(key)
-                if cached is not None:
-                    _lru_put(key, cached)
             if cached is not None:
                 out[item_id][asset] = cached
                 continue
@@ -309,7 +345,7 @@ def read_many(
         if href is None:
             out[item_id][asset] = None
             continue
-        pending.append((item_id, asset, key, _pool.submit(_read_with_retries, item_id, href, asset, grid, is_float)))
+        pending.append((item_id, asset, key, _pool.submit(_read_with_retries, item_id, href, asset, grid, is_float, fresh)))
     for item_id, asset, key, fut in pending:
         try:
             arr = fut.result()
@@ -317,7 +353,6 @@ def read_many(
             out[item_id][asset] = None
             continue
         if not fresh:
-            _disk_put(key, arr)
             _lru_put(key, arr)
         out[item_id][asset] = arr
     return out

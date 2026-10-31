@@ -19,13 +19,15 @@ const CHANNELS: { id: string; key: Key }[] = [
   { id: "other", key: "channel.other" },
 ];
 
+/** The clause itself is an English legal text, and is said to be one rather than left unmarked. */
 function Clause({ c }: { c: PolicyClause }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   return (
     <blockquote className="clause">
-      <p>{c.text}</p>
+      {lang !== "en" && <p className="small faint clause-lang">{t("clause.in_english")}</p>}
+      <p lang="en">{c.text}</p>
       <footer>
-        <span className="mono">{t("clause.label")} {c.clause_id}</span> · <span>{c.doc}</span>
+        <span className="mono">{t("clause.label")} {c.clause_id}</span> · <span lang="en">{c.doc}</span>
         {c.page ? <> · {t("clause.page")} <span className="mono">{c.page}</span></> : null}
         {c.url && <> · <a href={c.url} target="_blank" rel="noreferrer">{t("clause.open")}</a></>}
       </footer>
@@ -59,7 +61,7 @@ function ClaimPathBlock({ ev, caseRecord }: { ev: Evidence | null; caseRecord: C
             <div><dt>{t("path.stage")}</dt><dd>{t(`stage.${cp.crop_stage}` as Key)}</dd></div>
             <div><dt>{t("path.intimation")}</dt><dd>{t(`intimation.${cp.intimation}` as Key)}</dd></div>
           </dl>
-          {(cp.insured === "unknown" || cp.crop_stage === "unknown") && (
+          {(cp.insured === "unknown" || cp.crop_stage === "unknown" || cp.route === "outside_cover") && (
             <p className="small">{t("path.tell_more")} <a {...linkProps(`/case/${encodeURIComponent(caseRecord.id)}/confirm`)}>{t("path.tell_link")}</a></p>
           )}
           <div className="path-grid">
@@ -244,7 +246,8 @@ function AskBox({ caseId }: { caseId: string }) {
                   <p key={i} className="mono small">{c}</p>
                 ) : (
                   <blockquote key={i} className="clause">
-                    {c.text && <p>{c.text}</p>}
+                    {c.text && lang !== "en" && <p className="small faint clause-lang">{t("clause.in_english")}</p>}
+                    {c.text && <p lang="en">{c.text}</p>}
                     <footer>
                       <span className="mono">{t("clause.label")} {c.clause_id ?? "—"}</span>
                       {c.doc ? ` · ${c.doc}` : ""}{c.page ? ` · ${t("clause.page")} ${c.page}` : ""}
@@ -345,7 +348,7 @@ export default function ActionScreen({ caseId }: { caseId: string }) {
       <div className="action-grid">
         <section className="block" aria-labelledby="draft-t">
           <h2 id="draft-t" className="h-sec"><Icon name="doc" /> {t("draft.title")}</h2>
-          {draft?.needed === false && <p className="draft-not-needed">{t("draft.not_needed")}</p>}
+          {draft?.needed === false && <p className="draft-not-needed">{t(ev?.claim_path?.route === "outside_cover" ? "draft.outside" : "draft.not_needed")}</p>}
           {text ? (
             <>
               <pre className="draft" lang={lang}>{text}</pre>
@@ -365,7 +368,7 @@ export default function ActionScreen({ caseId }: { caseId: string }) {
               )}
             </>
           ) : (
-            <Missing what={t("draft.missing")} why={draft?.reason ?? t(ev ? "draft.no_draft" : "draft.no_evidence")}>
+            <Missing what={t("draft.missing")} why={draft?.reason ? translateRubric(draft.reason, lang) : t(ev ? "draft.no_draft" : "draft.no_evidence")}>
               <a className="btn" href={`tel:${phone}`}><Icon name="phone" /> {t("draft.call")} <span className="mono">{phone}</span></a>
             </Missing>
           )}
@@ -399,7 +402,7 @@ export default function ActionScreen({ caseId }: { caseId: string }) {
             {ev.policy.map((c) => (
               <div key={c.clause_id}>
                 <Clause c={c} />
-                {c.applies_because && <p className="small" lang="en">{c.applies_because}</p>}
+                {c.applies_because && <p className="small">{translateRubric(c.applies_because, lang)}</p>}
               </div>
             ))}
           </details>

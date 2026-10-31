@@ -336,7 +336,8 @@ class VillageWitness(BaseModel):
 
 
 ClaimRoute = Literal[
-    "not_insured", "localized_addon", "post_harvest_addon", "area_yield_basic", "undetermined",
+    "not_insured", "localized_addon", "post_harvest_addon", "area_yield_basic", "outside_cover",
+    "undetermined",
 ]
 
 

@@ -11,6 +11,7 @@ the seed only, never the pixels. Placebos come only from the sampled windows.
 from __future__ import annotations
 
 import math
+from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 
@@ -87,8 +88,11 @@ def far_placements(
     offsets: list[np.ndarray] = []
     n_non_overlapping = n_candidates = n_evaluated = 0
     per_window = math.ceil(TARGET_PLACEBOS / len(windows))
-    for index, window in enumerate(windows):
-        bands = read_many([(s.id, b) for s in (pre, post) for b in ("B04", "B08", "SCL")], window, fresh=fresh)
+    requests = [(s.id, b) for s in (pre, post) for b in ("B04", "B08", "SCL")]
+    # All windows at once: the pool bounds concurrency, and the order they arrive in changes nothing.
+    with ThreadPoolExecutor(max_workers=len(windows), thread_name_prefix="geo-far") as pool:
+        all_bands = list(pool.map(lambda w: read_many(requests, w, fresh=fresh), windows))
+    for index, (window, bands) in enumerate(zip(windows, all_bands)):
         a, valid_a = layer(pre, bands[pre.id], False)
         b, valid_b = layer(post, bands[post.id], True)
         if a is None or b is None:

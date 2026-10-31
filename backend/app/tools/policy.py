@@ -73,9 +73,9 @@ CORPUS_MISSING = {
 }
 # Rule statements are our summaries of the cited clauses, so they are not introduced as quotes.
 SUMMARY_INTRO = {
-    "hi": "दिशानिर्देशों का हमारा सार (मूल धाराएँ नीचे हैं, अंग्रेज़ी में):",
+    "hi": "दिशानिर्देशों का हमारा सार, अंग्रेज़ी में (मूल धाराएँ नीचे हैं):",
     "en": "Our summary of the guidelines (the clauses are cited below):",
-    "te": "మార్గదర్శకాల మా సారాంశం (మూల నిబంధనలు కింద ఉన్నాయి, ఆంగ్లంలో):",
+    "te": "మార్గదర్శకాల మా సారాంశం, ఆంగ్లంలో (మూల నిబంధనలు కింద ఉన్నాయి):",
 }
 QUOTE_INTRO = {
     "hi": "दिशानिर्देशों में यह लिखा है (अंग्रेज़ी में मूल पाठ):",
@@ -249,6 +249,9 @@ _INTENTS = [
     ("late_intimation", re.compile(
         rf"(?i)(late|delay|missed|after the deadline|देर|विलंब|ఆలస్యం).*({_REPORTING}|claim|दावा|క్లెయిమ్)"
         rf"|({_REPORTING}).*(late|delay|missed|देर|विलंब|ఆలస్యం)")),
+    ("after_removal_from_field", re.compile(
+        r"(?i)\bstored\b|\bstorage\b|godown|granary|removed from the field|taken (off|from) the field|"
+        r"खेत से (हट|उठा)|गोदाम|रखी (हुई|गई)|నిల్వ")),
     ("post_harvest_14_day", re.compile(r"(?i)post.?harvest|after harvest|cut.and.spread|कटाई के बाद|కోత తర్వాత")),
     ("intimation_deadline", re.compile(
         rf"(?i)(how long|how many (hours|days)|how much time|by when|time limit|deadline|last date|"

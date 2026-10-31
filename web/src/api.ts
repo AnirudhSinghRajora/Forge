@@ -90,7 +90,11 @@ export interface CaseEnvelope {
   case: CaseRecord; evidence: Evidence | null; actions: ActionRecord[] | null;
   sealed?: boolean; verdict_ready?: boolean; exhibits?: Record<string, ExhibitStatus>;
   rubric?: { version?: string; p_field?: number; strong_delta?: number; moderate_delta?: number } | null;
+  /** How this plot was chosen, when it came from a scan. Never part of the evidence or its hash. */
+  selection_note?: SelectionNoteText | null;
 }
+
+export interface SelectionNoteText { hi: string; te: string; en: string; kind: "strongest" | "typical" }
 
 /** The case row from _case_dict in backend/app/main.py. */
 export interface CaseRecord {

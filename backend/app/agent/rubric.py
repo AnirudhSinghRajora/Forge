@@ -280,7 +280,8 @@ def _caveats(ev: Evidence, level: str) -> list[str]:
         )
     if area_wide(ev):
         caveats.append(
-            "The change across this area is consistent with the event. That is not proof of its cause."
+            "The effect does not look limited to your field. That is consistent with the event, but "
+            "it is not proof of its cause."
         )
     if ev.weather is None:
         caveats.append("Weather data could not be retrieved for this run.")

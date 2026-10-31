@@ -20,9 +20,10 @@ Events, each with a monotonic `seq`:
   number          stored vs recomputed for one field, as soon as its group finishes
   group_done      that group finished
   group_failed    it could not finish, with `fields` naming exactly what stayed unchecked
-  stage_result    field_verified | field_mismatch | field_failed, with the honest count so far
+  stage_result    field_verified | field_mismatch | field_engine_changed | field_failed, with the honest count so far
   note            kind=source says whether GDAL's HTTP cache was emptied first; kind=engine_version_differs
-  result          final: verified | mismatch | field_verified | partial | upstream_unavailable
+  result          final: verified | mismatch | engine_changed | field_verified | partial | upstream_unavailable
+                  (engine_changed: a number differs, and the record was sealed by another engine version)
 
 Nothing is called verified overall until every number is. Without a sealed core to work on, the only
 event is a `result` with status unknown_hash, tampered or archive_mismatch.
@@ -344,7 +345,8 @@ class _Job:
                       current=geo.ENGINE_VERSION,
                       message_en="This record was sealed by a different engine version, so numbers "
                                  "could differ for that reason.",
-                      message_hi="यह रिकॉर्ड इंजन के दूसरे संस्करण से बना था, इसलिए आँकड़े इस कारण भी अलग हो सकते हैं।")
+                      message_hi="यह रिकॉर्ड इंजन के दूसरे संस्करण से बना था, इसलिए आँकड़े इस कारण भी अलग हो सकते हैं।",
+                      message_te="ఈ రికార్డు ఇంజిన్ వేరే వెర్షన్‌తో తయారైంది, కాబట్టి ఈ కారణంగా కూడా సంఖ్యలు వేరుగా ఉండవచ్చు.")
         groups = _groups_for(core)
         total = len(core.numbers)
         checked: dict[str, dict] = {}
@@ -414,13 +416,18 @@ class _Job:
                         message_en=UPSTREAM_EN, message_hi=UPSTREAM_HI, **common)
             return
         if mismatched:
-            status = "mismatch"
+            status = "engine_changed" if self._engine_differs() else "mismatch"
         elif not unchecked:
             status = "verified"
         elif common["field_verified"]:
             status = "field_verified"
         else:
             status = "partial"
+        if status == "engine_changed":
+            self.finish(status, ok=False, sealed_engine=self.core.engine_version,
+                        current_engine=self._current_engine(),
+                        **_engine_changed_text(len(mismatched), n_checked), **common)
+            return
         self.finish(
             status, ok=status == "verified",
             message_en=f"{n_checked} of {total} numbers checked against the public archive; "
@@ -431,6 +438,14 @@ class _Job:
             **common,
         )
 
+    def _current_engine(self) -> str:
+        from app.tools import geo
+
+        return geo.ENGINE_VERSION
+
+    def _engine_differs(self) -> bool:
+        return self._current_engine() != self.core.engine_version
+
     def _stage(self, field_keys: set[str], checked: dict) -> None:
         done = [k for k in field_keys if k in checked]
         matched = sum(1 for k in done if checked[k]["match"])
@@ -439,7 +454,7 @@ class _Job:
         if len(done) < n:
             status = "field_failed"
         elif matched < n:
-            status = "field_mismatch"
+            status = "field_engine_changed" if self._engine_differs() else "field_mismatch"
         else:
             status = "field_verified"
         self.emit(
@@ -448,6 +463,20 @@ class _Job:
                        "still being checked.",
             message_hi=f"खेत के {n} में से {matched} आँकड़े मेल खाते हैं; आसपास के {remaining} आँकड़ों की जाँच अभी जारी है।",
         )
+
+
+def _engine_changed_text(n_different: int, n_checked: int) -> dict:
+    return {
+        "message_en": f"This record was sealed by an earlier engine version, so numbers may legitimately "
+                      f"differ: {n_different} of {n_checked} checked numbers differ. The record still "
+                      "matches its seal. To compare like with like, run a new investigation.",
+        "message_hi": f"यह रिकॉर्ड इंजन के पहले के संस्करण से बना था, इसलिए आँकड़े जायज़ तौर पर अलग हो सकते हैं: जाँचे गए "
+                      f"{n_checked} में से {n_different} आँकड़े अलग हैं। रिकॉर्ड अपनी मुहर से अब भी मेल खाता है। बराबर की "
+                      "तुलना के लिए नई जाँच चलाएँ।",
+        "message_te": f"ఈ రికార్డు ఇంజిన్ పాత వెర్షన్‌తో తయారైంది, కాబట్టి సంఖ్యలు సహేతుకంగానే వేరుగా ఉండవచ్చు: తనిఖీ చేసిన "
+                      f"{n_checked} సంఖ్యలలో {n_different} వేరుగా ఉన్నాయి. రికార్డు ఇప్పటికీ దాని ముద్రతో సరిపోలుతోంది. "
+                      "సమానంగా పోల్చడానికి కొత్త పరిశీలన చేయండి.",
+    }
 
 
 def _start_job(hash_value: str, core: ReplayCore, case_id: str | None, superseded: bool,
@@ -550,10 +579,23 @@ def _prepare(hash_value: str, after: int, rerun: bool) -> tuple[str | None, bool
         latest = _latest(hash_value)
         if after > 0 and latest is not None:
             return latest.id, False, None  # a client coming back to a job that has since finished
-        full = _latest(hash_value, "verified", "mismatch", "nothing_to_recompute")
+        full = _latest(hash_value, "verified", "mismatch", "engine_changed", "nothing_to_recompute")
         if full is not None and not rerun:
             return full.id, True, None
         return _start_job(hash_value, core, case_id, superseded, _summary(full)), False, None
+
+
+def _with_engine_status(payload: dict, run_id: str) -> dict:
+    """A check finished before engine_changed existed still reads as what it was."""
+    if payload.get("type") != "result" or payload.get("status") != "mismatch":
+        return payload
+    with session_scope() as s:
+        rows = s.scalars(select(VerifyEvent).where(VerifyEvent.run_id == run_id)).all()
+        differed = any((r.payload or {}).get("kind") == "engine_version_differs" for r in rows)
+    if not differed:
+        return payload
+    text = _engine_changed_text(len(payload.get("mismatched") or []), payload.get("checked") or 0)
+    return {**payload, "status": "engine_changed", **text}
 
 
 def _as_stored(payload: dict, run: VerifyRun | None) -> dict:
@@ -579,6 +621,8 @@ async def stream(hash_value: str, after: int = 0, rerun: bool = False) -> AsyncI
             cursor = payload["seq"]
             if stored and payload["type"] == "progress":
                 continue
+            if payload["type"] == "result":
+                payload = await asyncio.to_thread(_with_engine_status, payload, run_id)
             yield _sse(_as_stored(payload, run) if stored else payload)
             if payload["type"] == "result":
                 return

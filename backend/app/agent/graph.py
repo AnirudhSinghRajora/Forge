@@ -949,8 +949,13 @@ def _apply_sar(ev: Evidence, sar) -> None:
 def n_sensor_switch(state: State, ctx: Ctx) -> dict:
     ev: Evidence = state["evidence"]
     rejected = [q for q in ev.optical.scenes_considered if q.status == "rejected"]
+    continuing = ctx.optical_future is not None  # nothing has been concluded about the optical pair yet
     if state.get("sar_first"):
         hi, en = "योजना के अनुसार पहले रडार देखा जाएगा", "As planned, going to radar first"
+    elif continuing:
+        # Radar queues behind the optical reads (see n_sar_compare), so this does not say it is reading.
+        hi = "ऑप्टिकल तस्वीरें अभी डाउनलोड हो रही हैं। साथ में रडार भी शुरू हो रहा है, और अपनी बारी पर पढ़ेगा।"
+        en = "The optical images are still downloading. Radar is starting alongside them and will read when its turn comes."
     elif ctx.archive_failed:
         hi = "ऑप्टिकल तस्वीरों का संग्रह जवाब नहीं दे रहा, इसलिए रडार पर जा रहे हैं"
         en = "The optical image archive is not responding, so trying radar"
@@ -961,7 +966,7 @@ def n_sensor_switch(state: State, ctx: Ctx) -> dict:
         hi = "भरोसेमंद ऑप्टिकल जोड़ी नहीं मिली, इसलिए रडार पर जा रहे हैं, जो बादलों के पार देखता है"
         en = "No trustworthy optical pair was found, so switching to radar, which sees through cloud"
     ctx.emit("sensor_switch", "sensor_switch", hi, en, frm="sentinel-2", to="sentinel-1",
-             n_rejected=len(rejected), rejected=[{"id": q.id, "date": q.date, "reasons": q.reasons}
+             optical_continues=continuing, n_rejected=len(rejected), rejected=[{"id": q.id, "date": q.date, "reasons": q.reasons}
                                                  for q in rejected])
     return {}
 
@@ -1187,6 +1192,9 @@ def _apply_late_optical(ctx: Ctx, ev: Evidence, result: dict, state: State) -> N
     considered = sorted(by_id.values(), key=lambda q: q.date)
     if result["optical"] is None:
         ev.optical.scenes_considered = considered
+        ctx.emit("decision", "search_optical", "जाँच पूरी हुई: भरोसेमंद ऑप्टिकल जोड़ी नहीं मिली",
+                 "The search has finished: no trustworthy optical pair was found",
+                 action="optical_concluded_no_pair", n_considered=len(considered))
         return
     ev.optical = OpticalEvidence(**{**result["optical"].model_dump(exclude={"scenes_considered"}),
                                     "scenes_considered": []})
@@ -1682,6 +1690,9 @@ def _rule_names_for(path) -> list[tuple[str, str]]:
     if path.route == "area_yield_basic":
         names.insert(0, ("no_individual_intimation_for_widespread", "Why an individual intimation is not essential here"))
         names.append(("grievance", "Where to go if the unit's result looks wrong"))
+    if path.route == "outside_cover":
+        names = [("after_removal_from_field", "Why a crop already off the field is outside the cover"),
+                 ("post_harvest_14_day", "Post-harvest cover is for a crop still drying in the field")]
     if path.route == "undetermined":
         names.append(("intimation_deadline", "The add-on rule, if it turns out to apply"))
         names.append(("no_individual_intimation_for_widespread", "The area-yield rule, if it turns out to apply"))

@@ -45,8 +45,49 @@ def test_cut_and_spread_cyclone_is_post_harvest():
     assert "state_notification" in path.unknowns
 
 
-def test_stored_crop_is_undetermined():
-    assert route_claim("yes", "harvested_stored", "hail", "paddy").route == "undetermined"
+def test_stored_crop_is_outside_the_cover_with_the_text_cited():
+    path = route_claim("yes", "harvested_stored", "hail", "paddy")
+    assert path.route == "outside_cover" and not path.countdown_applies and path.intimation == "unknown"
+    assert {"PIB-FS-2026-08-29/not-covered", "21.6.1", "5.2.3"} <= set(path.clause_ids)
+    assert "after removal of the crop from the field" in path.reasons[0]
+    assert "14 days" in path.reasons[1] and "solely to dry" in path.reasons[1]
+
+
+def test_stored_crop_text_exists_in_all_languages_and_goes_no_further_than_the_text():
+    for lang in ("hi", "en", "te"):
+        path = route_claim("yes", "harvested_stored", "cyclone", "paddy", lang)
+        assert len(path.reasons) == 2 and len(path.next_steps) == 2 and path.evidence_use
+        text = " ".join([*path.reasons, *path.next_steps, path.evidence_use])
+        assert "14447" in text and "14" in text
+    english = " ".join(route_claim("yes", "harvested_stored", "hail", "paddy").reasons).lower()
+    for beyond in ("subsidy", "relief", "enumeration", "ndrf", "rejected", "you will"):
+        assert beyond not in english
+
+
+def test_stored_crop_route_does_not_depend_on_the_peril_or_on_knowing_about_insurance():
+    assert route_claim("yes", "harvested_stored", "unknown", "paddy").route == "outside_cover"
+    assert route_claim(None, "harvested_stored", "hail", "paddy").route == "outside_cover"
+    assert route_claim("no", "harvested_stored", "hail", "paddy").route == "not_insured"
+
+
+def test_stored_crop_quote_is_verbatim_in_the_kept_source():
+    import re
+    from pathlib import Path
+
+    from app.config import get_settings
+    from app.tools import policy
+
+    clause = policy._clause_by_id("PIB-FS-2026-08-29/not-covered")
+    raw = Path(get_settings().policy_dir, "raw/facts/pib2304549.html").read_text(errors="ignore")
+    assert clause["text"] in re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", raw))
+
+
+def test_asking_about_stored_crop_reaches_the_same_rule():
+    from app.tools import policy
+
+    answer = policy.ask("Is my stored crop covered?", "en")
+    assert answer["covered"] and "removal of the crop from the field" in answer["answer"]
+    assert "PIB-FS-2026-08-29/not-covered" in [c["clause_id"] for c in answer["citations"]]
 
 
 def test_flood_cut_crop_is_not_on_post_harvest_list():
@@ -165,6 +206,17 @@ def test_a_clause_with_no_text_is_dropped_not_shown():
     clauses = []
     policy.ensure_cited(path, clauses)
     assert path.clause_ids == ["21.5.8"] and [c.clause_id for c in clauses] == ["21.5.8"]
+
+
+def test_draft_names_the_crop_in_the_readers_language():
+    ev = {"event": {"date": "2024-03-03", "type": "hail"}, "plot": {"area_ha": 1.0, "centroid": [80, 16]}}
+    draft = actions.draft_intimation({"id": "", "crop": "wheat", "event_time": None}, ev,
+                                     route_claim("yes", "standing", "hail", "wheat"), [])
+    assert "गेहूँ" in draft["text_hi"] and "wheat" not in draft["text_hi"]
+    assert "గోధుమ" in draft["text_te"] and "wheat" in draft["text_en"]
+    own_word = actions.draft_intimation({"id": "", "crop": "bajra", "event_time": None}, ev,
+                                        route_claim("yes", "standing", "hail", "bajra"), [])
+    assert "bajra" in own_word["text_hi"]
 
 
 def test_draft_has_telugu_including_the_lapsed_note():
