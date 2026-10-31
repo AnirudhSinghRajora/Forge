@@ -2,18 +2,7 @@
 
 **For:** the people building the deck. Six slides (the limit is 5-7). One idea per slide. Every number below has a source. If you want to add a number, take it from `docs/submission/facts.md` or `docs/validation/engine-results.md`, with its wording, or leave it out.
 
-**Screenshots** are paths under the shots folder the lead shared (`r5/`, `r6/`). That folder isn't in the repo, so copy what you use. Most are in Hindi. For the deck, **recapture from the live app in English** where you can. The table says which ones must be recaptured.
-
-| Screenshot | Use it? |
-|---|---|
-| `r6/two.png` | Yes. Corrected wording, and the p-values match the sealed case. Hindi only |
-| `r6/stored-d.png` | Yes. Stored check, 104 of 104 |
-| `r6/stage-d.png` | Yes. 20 of 20 field numbers at 00:51 |
-| `r5/strong/foot-d.png` | **Map only: crop off the right column.** Its right column has wording we corrected and p-values from a different polygon |
-| `r5/strong/van-end-d.png` | **Recapture.** Its 10 m row shows an old value (-0.437). The live record shows -0.3701 |
-| `r5/typical/van-end-d.png` | **Recapture.** Its reading sentence has wording we corrected |
-| `r5/strong/draw-end-d.png` | Usable. Its numbers differ a little from the sealed case, so use only what's on the image if you quote it. Keep the "strongest of 200" box in the crop |
-| `r5/strong/top-d.png` | **Do not use.** Its testimony has wording we corrected. Recapture |
+**Screenshots** are in `docs/submission/screens/`. They are real English captures of the final sealed records, with Hindi versions of some. Check any number you quote against the image. Keep the selection note in the crop wherever it appears.
 
 ## Slide 1. Title and team
 
@@ -25,7 +14,7 @@
 
 **Footer:** Forge '26 Gen AI Buildathon · Theme 2, Problem 2
 
-**Image:** none, or a recaptured testimony panel from the live app, with the caption "Strongest of 200 scanned".
+**Image:** none, or `strongest-testimony-hi.png`, with the caption "Strongest of 200 scanned".
 
 **Speaker note:** "Saakshi" means witness. A witness must survive cross-examination, and anyone must be able to check what it said.
 
@@ -55,11 +44,11 @@
 
 1. **It testifies.** The field's own record, with caveats, in Hindi, Telugu or English.
 2. **It's cross-examined.** Nine objections from a hostile surveyor, each answered by a test on real values. It can concede.
-3. **Anyone can check it.** A QR code opens a public page that re-downloads the same scenes and recomputes the numbers.
+3. **Anyone can check it.** A QR code opens a public page that re-downloads the same scenes and recomputes the satellite numbers. The verdict and weather are checked for tampering only.
 
 **One line under them:** We did not find a farmer-side tool that gives a field its own placebo-tested satellite evidence and lets anyone recompute it.
 
-**Image:** a recaptured cross-examination card showing a concession, from the live app. Add `r6/stored-d.png` if there's room.
+**Image:** the conceded card, cropped from `typical-cross-exam-en.png`, with the caption "Median of the original 40". Add `strongest-verify-stored-en.png` if there's room.
 
 **Speaker note:** Name the close neighbours if asked: Proof of Loss (farmer-side, photos), CropSnap (same satellites, aimed at insurers), Farmonaut (field monitoring, vendor claims, not tested by us). Sources: `facts.md` section 7.
 
@@ -67,29 +56,29 @@
 
 **Headline:** Two questions: unlike fields outside the storm? Unlike its neighbours?
 
-**Left:** the footprint map, cropped from `r5/strong/foot-d.png`, or recaptured. Caption: "Hail of 2-3 March 2024, Bhiwani. Change in greenness, 28 Feb to 9 Mar. Consistent with a hail swath, not proof of cause. Plot marked: strongest of 200 scanned."
+**Left:** `strongest-footprint-map-en.png`. Caption: "Hail of 2-3 March 2024, Bhiwani. Change in greenness, 28 Feb to 9 Mar. Consistent with a hail swath, not proof of cause. Plot marked: strongest of 200 scanned."
 
-**Right:** the two answers (recapture in English, or `r6/two.png`):
+**Right:** `strongest-two-answers-en.png`, or this table:
 
-| Question | Answer on this plot (2.12 ha square, strongest of 200 scanned) |
+| Question | Answer on this plot (strongest of 200 scanned) |
 |---|---|
-| Far test, 5-12 km: did it fall more than comparable fields outside the storm? | Yes: 1 of 200, p = 0.010 |
-| Ring test, nearby: did it fall more than its neighbours? | No: 5 of 200, p = 0.0299, line 0.025 |
+| Far test, 5-12 km: did it fall more than comparable fields outside the storm? | Yes: 0 of 200, p = 0.005 |
+| Ring test, nearby: did it fall more than its neighbours? | No, but near the line: 11 of 200, p = 0.0597, threshold 0.025 |
 
-**Below:** "The band does not repeat in 2022, 2023 or 2025." Rule: change at threshold and either test at p ≤ 0.025, then corroboration, then no conceded objection.
+**Below:** "The band does not repeat in 2022, 2023 or 2025." Rule: change at threshold and either test at p ≤ 0.025, then corroboration from the weather model or a matching official alert, then no conceded objection. A deciding p from 0.01 to 0.075 is marked as near the threshold.
 
 **Optional small panel, the Vanishing (strongest beside typical):**
 
-| Cell | Strongest of 200 scanned | Typical, chosen by rule |
+| Cell | Strongest of 200 scanned | Typical, median of the original 40 |
 |---|---|---|
 | Plot | -0.37 | -0.13 |
 | 3 km | -0.10 | -0.08 |
 
-Caption: "Our illustration from public satellite data, not output of YES-TECH."
+Caption: "Our illustration from public satellite data, not output of YES-TECH." Images: `strongest-vanishing-end-en.png`, `typical-vanishing-end-en.png`.
 
-**Sources:** live API case `5f8ccaa5d7da407fb3dd2672434d6a3f`; engine-results sections 3c and 3e.
+**Sources:** live records `1ce7e64b754248abb18f0d29ac6203eb` and `c157d2d75ce94501ad08930624a10e76`; engine-results sections 3c and 3e.
 
-**Speaker note:** If you add the Draw, use only: "the average depends heavily on who is on the list, and nobody outside the insurer can see that list." Across 40 plots, all cropland averages -0.07 and fields that visibly dropped -0.245. Those are bounds, not an estimate. One draw moves about ±0.035. It doesn't say the rule is unfair. No rupee figures.
+**Speaker note:** If you add the Draw, use only: "the average depends heavily on who is on the list, and nobody outside the insurer can see that list." On the strongest of 200 scanned, all cropland averages -0.080 and fields that visibly dropped -0.239. Across 40 plots, the medians are -0.069 and -0.245. Those are bounds, not an estimate. One draw moves about ±0.035. It doesn't say the rule is unfair. No rupee figures.
 
 ## Slide 5. Validation and limits
 
@@ -97,23 +86,23 @@ Caption: "Our illustration from public satellite data, not output of YES-TECH."
 
 **Two columns:**
 
-| Held up | Did not, or not yet |
+| Held up | Did not, or not established |
 |---|---|
-| Corrupt scene with about 0% metadata cloud rejected | **No plot-level ground truth.** This shows consistency, not accuracy |
-| p ≤ 0.05 fired on 5.0% of 299 no-event squares (CI 3.1-8.1; one scene pair, so the CI is too narrow) | p ≤ 0.10 fired on 15.4%, so we removed it |
+| **False alarms: 2.0% strong and 2.5% moderate field conditions**, on two no-event windows, 200 plots each, rules frozen in advance | Each window is one scene pair with correlated plots, so the CIs (0.8-5.0, 1.1-5.7) are too narrow |
 | Band contrast of -0.146 in 2024 (mask set on this pair, so inflated), against +0.007 to +0.052 in other years | **Radar does not confirm it.** Orbits disagree: +0.50 dB and -0.47 dB |
-| 104 of 104 sealed numbers recomputed from the archive, within 0.001 | Full check took about 18 minutes on our link. Field numbers, under a minute |
-| Typical plot chosen by rule, shown beside the strongest of 200 | Typical plot is weak |
-| | **Cyclone Arnab: no signal established yet** |
-| | **Rubric v3 holdout: pending.** Independent event: pending |
+| Punjab floods, pre-registered: new water on 28.3% of plots against 0.0% in the control year | **Punjab is partial.** Radar placebo fails: 1.7% against 8.3%. Pass timing differs between the years, and one site of three shows almost nothing |
+| Clear cases are stable across 30 seeds. Far p on the strongest of 200 scanned is 0.005 on all 30 | Near 0.025, the level flips on up to a third of seeds, so those results carry a caveat |
+| Corrupt scene with about 0% metadata cloud rejected | **Independent hail event, Sirsa: 0 of 200.** Damage was reported as "minor", so this isn't a pass |
+| 104 of 104 satellite numbers recomputed within 0.001. Clean-database runs gave identical hashes | Verdict and weather are checked for tampering only |
+| Typical plot, median of the original 40, shown beside the strongest of 200 | **Sensitivity via the field-signal test is shown only on Bhiwani, the design event** |
+| | **No plot-level ground truth.** This shows consistency, not accuracy |
+| | **Cyclone Arnab: no signal established.** A later pass will help |
 
 **Footer:** Far test and post-scene rule were designed after seeing Bhiwani. Bhiwani is a signal case, not a PMFBY claim case.
 
-**Image:** `r6/stage-d.png` or `r6/stored-d.png`, small.
+**Image:** `strongest-verify-stored-en.png`, small.
 
-**Sources:** engine-results sections 1, 2, 3c, 3e, 4, 6, 7; live API for the verification counts.
-
-**Update before submitting:** when section 7 of `engine-results.md` lands, replace the "pending" lines with what it shows, whatever it shows.
+**Sources:** engine-results sections 1, 2, 3c, 4, 6, 7, 7a, 7b; live API for the verification counts.
 
 ## Slide 6. Impact and roadmap
 
@@ -127,21 +116,21 @@ Caption: "Our illustration from public satellite data, not output of YES-TECH."
 **Say plainly:** no measured farmer outcomes yet. No insurer or State has reviewed this.
 
 **Roadmap (in order):**
-1. Finish the locked holdout runs, and publish them whatever they show.
-2. Re-check Arnab when the next usable radar arrives, about 4 Nov.
+1. Re-check Arnab when the next clear passes arrive: Sentinel-2 about 2 Nov, radar about 4 Nov.
+2. Test sensitivity on an independent event with real damage, because that is what this validation lacks.
 3. Test against real records: crop-cutting or joint survey results for specific plots.
 4. Verify the Gemini paths, and get Telugu reviewed by a native speaker.
 5. Pilot with an FPO or KVK, and ask an insurer and a State team what they'd need from this record.
 6. Verify State notifications, so routes stop saying "confirm with 14447".
 
-**Image:** none, or the live URL as a QR code `TODO(deploy)`.
+**Image:** none, or the live URL as a QR code: `TODO(deploy)`.
 
 **Close:** Anyone can check what it said.
 
 ## Before the deck goes out
 
 - [ ] One person spends 15 minutes on Google Scholar with: "localized calamity" PMFBY sample survey; "wide-spread localized"; PMFBY "10" parcels loss assessment. `facts.md` asks for this before any "we did not find" line goes in a final deck.
-- [ ] "Strongest of 200 scanned" appears beside that plot wherever it's shown.
+- [ ] "Strongest of 200 scanned", "median of the original 40" and "strongest of 51 usable" appear beside those plots wherever they're shown.
 - [ ] Every hail mention says "consistent with".
 - [ ] No rupee payout figures. No 70/30 as a selling point. No named AP insurer. No "CSC".
 - [ ] Check each number on the slides against what the live app shows for the same case.
