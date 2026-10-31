@@ -191,7 +191,7 @@ def warm_one(client: httpx.Client, plot: DemoPlot, base_url: str, *, verify: boo
     started = time.monotonic()
     try:
         case_id = create_case(client, plot, lang)
-        row["case_id"], row["url"] = case_id, f"{base_url}/case/{case_id}/verdict"
+        row["case_id"], row["url"] = case_id, f"{base_url}/case/{case_id}"
         print(f"[{plot.name}] case {case_id}: investigating", flush=True)
         _ok(client.post(f"/api/cases/{case_id}/investigate"), "start investigation")
         waited = wait_for_seal(client, case_id, started, timeout, poll)

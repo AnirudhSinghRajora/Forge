@@ -24,6 +24,9 @@ MIN_PLACEBOS = 30
 STRONG_DELTA = -0.15
 MODERATE_DELTA = -0.10
 P_FIELD = 0.025  # Bonferroni across the far and ring tests
+# Not a threshold: a deciding p in this band is reported as near it. Seeds moved far p by a factor of 4-8.
+P_NEAR_LOW = 0.01
+P_NEAR_HIGH = 0.075
 P_SAR = 0.05
 MIN_DAYS_AFTER_EVENT = 5  # hail damage develops, so an earlier image may show too little
 NEW_WATER_MIN = 0.2
@@ -266,8 +269,43 @@ def area_wide(ev: Evidence) -> bool:
     return far_significant(ev) and not ring_significant(ev)
 
 
+def near_threshold(p: float | None) -> bool:
+    """Reported as near the threshold (build contract, addendum 7). Thresholds themselves do not move."""
+    return p is not None and P_NEAR_LOW <= p <= P_NEAR_HIGH
+
+
+def near_line_decides(far: float | None, ring: float | None, delta: float | None) -> bool:
+    """Whether a near-threshold p could change the level, given the field's change. A delta short of the
+    moderate threshold cannot reach either level, and a test clearly passing already carries the field
+    signal, so a near value beside it decides nothing."""
+    if delta is None or delta > MODERATE_DELTA:
+        return False
+    if any(p is not None and p < P_NEAR_LOW for p in (far, ring)):
+        return False
+    return near_threshold(far) or near_threshold(ring)
+
+
+def level_could_change(ev: Evidence, level: str) -> bool:
+    """near_line_decides on this evidence, where the field signal is what the level turns on."""
+    if level not in ("strong", "moderate", "weak") or not corroboration(ev):
+        return False
+    wrong_plot = _objection(ev, "wrong_plot")
+    if wrong_plot is not None and wrong_plot.outcome == "conceded":
+        return False
+    delta = ev.optical.plot_delta_ndvi if ev.optical.post is not None else None
+    return near_line_decides(far_p(ev), optical_p(ev), delta)
+
+
+NEAR_LINE_CAVEAT = (
+    "A deciding comparison is near the threshold, so a slightly different drawing of this field could "
+    "change this result."
+)
+
+
 def _caveats(ev: Evidence, level: str) -> list[str]:
     caveats = []
+    if level_could_change(ev, level):
+        caveats.append(NEAR_LINE_CAVEAT)
     if ripening_unresolved(ev):
         caveats.append(
             "If the crop was near harvest, this fall in greenness cannot be told apart from ripening "

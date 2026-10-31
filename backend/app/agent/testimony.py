@@ -28,6 +28,10 @@ def _date_te(d) -> str:
 
 def _caveat_lines(ev: Evidence) -> tuple[list[str], list[str], list[str]]:
     hi, en, te = [], [], []
+    if rubric.level_could_change(ev, ev.verdict.level if ev.verdict else "insufficient"):
+        hi.append(explain_mod.NEAR_LINE[0])
+        en.append(explain_mod.NEAR_LINE[1])
+        te.append(explain_mod.NEAR_LINE[2])
     if rubric.ripening_unresolved(ev):
         hi.append("अगर मेरी फ़सल कटाई के क़रीब थी, तो यह गिरावट पकने से भी हो सकती है। बिना तुलना के मैं यह अलग नहीं कर सकता; अगली तस्वीर से मदद मिलेगी।")
         en.append("If my crop was near harvest, this fall could also be ripening. Without a control I cannot tell them apart; a later image will help.")

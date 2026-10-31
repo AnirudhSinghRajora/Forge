@@ -500,3 +500,55 @@ def test_a_job_empties_gdals_http_cache_and_says_so(monkeypatch):
 
 def test_gdals_http_cache_can_really_be_emptied():
     assert verify.clear_http_cache() is True
+
+
+def _recording_session(log):
+    from contextlib import contextmanager
+
+    @contextmanager
+    def fresh_session():
+        log.append("enter")
+        try:
+            yield
+        finally:
+            log.append("exit")
+
+    return fresh_session
+
+
+def test_a_check_runs_all_its_groups_inside_one_fresh_session(monkeypatch):
+    log = []
+    install_fake_geo(monkeypatch, fresh_session=_recording_session(log))
+    _staged(monkeypatch, ("field_post", lambda: log.append("field") or {"optical.plot_delta_ndvi": -0.25}, verify._is_field_post),
+            ("ring", lambda: log.append("ring") or {"neighbours.placebo.p_value": 0.02}, verify._is_ring), RADAR)
+    events = collect(seed_row())
+    assert log == ["enter", "field", "ring", "exit"]
+    assert events[-1]["status"] == "verified"
+    note = next(e for e in events if e["type"] == "note" and e["kind"] == "source")
+    assert note["source"]["read"] == "network" and "fresh=True" in note["source"]["cache"]
+    assert "reused within it" in note["source"]["session"]
+
+
+def test_the_session_ends_when_a_check_fails(monkeypatch):
+    log = []
+    install_fake_geo(monkeypatch, fresh_session=_recording_session(log))
+    monkeypatch.setattr(verify, "_groups_for", lambda core: 1 / 0)
+    assert collect(seed_row())[-1]["status"] == "partial"
+    assert log == ["enter", "exit"]
+
+
+def test_a_stored_check_opens_no_session(monkeypatch):
+    log = []
+    install_fake_geo(monkeypatch, fresh_session=_recording_session(log))
+    h = seed_row()
+    collect(h)
+    assert log.count("enter") == 1
+    collect(h)
+    assert log.count("enter") == 1
+
+
+def test_the_engine_exports_the_session():
+    from app.tools import geo
+
+    with geo.fresh_session():
+        pass

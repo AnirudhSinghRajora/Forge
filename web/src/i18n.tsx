@@ -143,7 +143,7 @@ const S = {
   "insured.unknown": ["पता नहीं", "తెలియదు", "Not sure"],
   "stage.standing": ["खड़ी फ़सल", "నిలిచిన పంట", "Standing crop"],
   "stage.cut_and_spread": ["कटकर खेत में फैली", "కోసి పొలంలో పరిచింది", "Cut and spread to dry"],
-  "stage.harvested_stored": ["कटकर रखी जा चुकी", "కోసి నిల్వ చేసింది", "Harvested and stored"],
+  "stage.harvested_stored": ["खेत से हटाकर रखी जा चुकी", "పొలం నుంచి తీసి నిల్వ చేసింది", "Harvested and off the field (stored)"],
   "stage.unknown": ["पता नहीं", "తెలియదు", "Not sure"],
 
   "plot.title": ["अपना खेत चिह्नित करें", "మీ పొలాన్ని గుర్తించండి", "Mark your field"],
@@ -278,6 +278,9 @@ const S = {
   "tq.q_ring": ["आपके पड़ोसियों से तुलना: क्या आपका खेत उनसे ज़्यादा गिरा?", "మీ పొరుగువారితో పోలిక: మీ పొలం వాటి కన్నా ఎక్కువ తగ్గిందా?", "Compared with your neighbours: did yours fall more?"],
   "tq.yes": ["हाँ", "అవును", "Yes"],
   "tq.no": ["नहीं", "లేదు", "No"],
+  "tq.yes_near": ["हाँ, पर सीमा के पास", "అవును, కానీ హద్దు దగ్గర", "Yes, but near the line"],
+  "tq.no_near": ["नहीं, पर सीमा के पास", "లేదు, కానీ హద్దు దగ్గర", "No, but near the line"],
+  "tq.near_note": ["एक निर्णायक तुलना सीमा के पास है, इसलिए इस खेत की सीमा थोड़ी अलग बनाने पर यह नतीजा बदल सकता है।", "ఒక నిర్ణయాత్మక పోలిక హద్దు దగ్గర ఉంది, కాబట్టి ఈ పొలం సరిహద్దును కొద్దిగా వేరుగా గీస్తే ఈ ఫలితం మారవచ్చు.", "A deciding comparison is near the threshold, so a slightly different drawing of this field could change this result."],
   "tq.unmeasured": ["मापा नहीं गया", "కొలవలేదు", "Not measured"],
   "tq.count": ["{n} मिलते-जुलते खेतों में से {k} में इतनी या ज़्यादा गिरावट।", "{n} పోలిన పొలాలలో {k} లో ఇంత లేదా ఎక్కువ తగ్గుదల.", "{k} of {n} look-alike fields changed this much or more."],
   "tq.far_unmeasured": ["इस जाँच में बाहर के खेतों से तुलना नहीं हो सकी।", "ఈ పరిశీలనలో బయటి పొలాలతో పోలిక కుదరలేదు.", "The comparison with fields outside the storm could not be made in this run."],
@@ -393,6 +396,7 @@ const S = {
   "verify.check_rest": ["पूरी जाँच फिर चलाएँ", "పూర్తి తనిఖీ మళ్ళీ నడపండి", "Run the full check again"],
   "verify.last_full": ["पिछली पूरी जाँच:", "గత పూర్తి తనిఖీ:", "Last full check:"],
   "verify.stage_ok": ["आपके खेत की {n} में से {m} संख्याएँ मेल खाती हैं", "మీ పొలం {n} సంఖ్యలలో {m} సరిపోతున్నాయి", "{m} of {n} of your field's numbers match"],
+  "verify.stage_engine": ["आपके खेत की {n} में से {m} संख्याएँ मेल खाती हैं। यह रिकॉर्ड इंजन के पहले के संस्करण का है।", "మీ పొలం {n} సంఖ్యలలో {m} సరిపోతున్నాయి. ఈ రికార్డు ఇంజిన్ పాత వెర్షన్‌ది.", "{m} of {n} of your field's numbers match. This record is from an earlier engine version."],
   "verify.stage_mismatch": ["आपके खेत की {n} में से {m} संख्याएँ ही मेल खाती हैं", "మీ పొలం {n} సంఖ్యలలో {m} మాత్రమే సరిపోతున్నాయి", "Only {m} of {n} of your field's numbers match"],
   "verify.stage_failed": ["आपके खेत की {n} में से {m} संख्याएँ ही जाँची जा सकीं", "మీ పొలం {n} సంఖ్యలలో {m} మాత్రమే తనిఖీ అయ్యాయి", "Only {m} of {n} of your field's numbers could be checked"],
   "verify.stage_rest": ["आस-पास की बाकी {r} संख्याओं की जाँच अभी चल रही है", "చుట్టుపక్కల మిగతా {r} సంఖ్యల తనిఖీ ఇంకా నడుస్తోంది", "The other {r} neighbourhood numbers are still being checked"],
@@ -635,15 +639,19 @@ const S = {
   "route.post_harvest_addon.blurb": ["यह कटकर खेत में सूखने के लिए फैली फ़सल के लिए है, अगर आपके राज्य ने यह कवर अधिसूचित किया हो।", "ఇది కోసి పొలంలో ఆరబెట్టిన పంటకు, మీ రాష్ట్రం ఈ కవర్ నోటిఫై చేస్తే.", "This is for crop cut and spread to dry in the field, if your State notified this cover."],
   "route.area_yield_basic": ["क्षेत्र की उपज का रास्ता: व्यक्तिगत सूचना ज़रूरी नहीं", "ప్రాంత దిగుబడి దారి: వ్యక్తిగత సమాచారం అవసరం లేదు", "Area-yield cover: individual intimation is not essential"],
   "route.area_yield_basic.blurb": ["व्यापक नुकसान का आकलन आपके खेत पर नहीं, पूरे क्षेत्र की उपज पर होता है (फ़सल कटाई प्रयोग और तकनीक से)।", "విస్తృత నష్టం మీ పొలంపై కాదు, ప్రాంత దిగుబడిపై అంచనా వేస్తారు (పంట కోత ప్రయోగాలు, సాంకేతికతతో).", "Widespread loss is assessed on the area's yield (crop cutting and technology), not on your individual field."],
+  "route.outside_cover": ["खेत से हटाई गई फ़सल: कवर से बाहर", "పొలం నుంచి తీసిన పంట: కవర్ పరిధిలో లేదు", "Crop off the field: outside the cover"],
+  "route.outside_cover.blurb": ["फ़सल को खेत से हटाने के बाद हुआ नुकसान कवर नहीं होता। स्रोत का पाठ नीचे है।", "పంటను పొలం నుంచి తొలగించిన తర్వాత జరిగే నష్టానికి కవర్ లేదు. మూల పాఠం కింద ఉంది.", "Loss after the crop is removed from the field is not covered. The source text is below."],
   "route.undetermined": ["रास्ता अभी तय नहीं", "దారి ఇంకా తేలలేదు", "The route is not determined yet"],
   "route.undetermined.blurb": ["यह तय करने के लिए कुछ जानकारी नहीं है। नीचे लिखा है क्या पता नहीं।", "తేల్చడానికి కొంత సమాచారం లేదు. ఏమి తెలియదో కింద ఉంది.", "Some information is missing to decide this. What's unknown is listed below."],
   "intimation.essential": ["ज़रूरी", "అవసరం", "Essential"],
   "intimation.not_essential": ["ज़रूरी नहीं", "అవసరం లేదు", "Not essential"],
   "intimation.unknown": ["पता नहीं", "తెలియదు", "Unknown"],
+  "clause.in_english": ["मूल पाठ, अंग्रेज़ी में", "మూల పాఠం, ఆంగ్లంలో", "Original text"],
   "clause.label": ["धारा", "నిబంధన", "Para"],
   "clause.page": ["पृष्ठ", "పేజీ", "p."],
   "clause.open": ["दस्तावेज़ खोलें", "పత్రం తెరవండి", "Open document"],
   "draft.title": ["अगर सूचना देनी हो: आपका मसौदा", "సమాచారం ఇవ్వాలంటే: మీ చిత్తు", "If you give intimation: your draft"],
+  "draft.outside": ["जिस पाठ का हवाला है, उसके अनुसार यह नुकसान कवर से बाहर है। फिर भी 14447 को बताना चाहें तो यह मसौदा है।", "ఉదహరించిన పాఠం ప్రకారం ఈ నష్టం కవర్ పరిధిలో లేదు. అయినా 14447 కు తెలియజేయాలనుకుంటే ఈ చిత్తు ఉంది.", "On the cited text this loss is outside the cover. This draft is here if you still want to tell 14447."],
   "draft.not_needed": ["इस रास्ते पर व्यक्तिगत सूचना ज़रूरी नहीं है। फिर भी देना चाहें तो यह मसौदा है।", "ఈ దారిలో వ్యక్తిగత సమాచారం అవసరం లేదు. అయినా ఇవ్వాలనుకుంటే ఈ చిత్తు ఉంది.", "Individual intimation is not essential on this route. If you still wish to give it, here is a draft."],
   "draft.fill": ["[ ] में अपना विवरण भरें। यह आपकी ओर से अपने आप नहीं भेजा जाता।", "[ ] లో మీ వివరాలు నింపండి. ఇది స్వయంగా పంపబడదు.", "Fill in the [ ] parts. Nothing is sent on your behalf."],
   "draft.call": ["फ़ोन करें", "ఫోన్ చేయండి", "Call"],
@@ -783,6 +791,9 @@ const S = {
   "verify.ok": ["मेल", "సరిపోయింది", "Match"],
   "verify.bad": ["अंतर", "తేడా", "Mismatch"],
   "verify.stamp_ok": ["सत्यापित", "ధృవీకరించబడింది", "Verified"],
+  "verify.stamp_engine": ["इंजन बदला है", "ఇంజిన్ మారింది", "Engine changed"],
+  "verify.differs": ["अलग", "వేరు", "Differs"],
+  "verify.differed": ["अलग निकलीं", "వేరుగా ఉన్నాయి", "differed"],
   "verify.stamp_bad": ["मेल नहीं", "సరిపోలలేదు", "Does not match"],
   "verify.stamp_nothing": ["गिनने को कुछ नहीं", "లెక్కించడానికి ఏమీ లేదు", "Nothing to recompute"],
   "verify.stamp_partial": ["आंशिक", "పాక్షికం", "Partial"],
@@ -884,11 +895,38 @@ export function keyLabel(k: string, lang: Lang): string {
   return row ? row[IDX[lang]] : k.replace(/_/g, " ");
 }
 
+/** A stored crop name in the reader's language. Anything else is the farmer's own word, as written. */
+export function cropLabel(crop: string, lang: Lang): string {
+  const name = crop.trim().toLowerCase();
+  const row = (S as Record<string, Row | undefined>)[`crop.${name === "rice" ? "paddy" : name}`];
+  return row ? row[IDX[lang]] : crop;
+}
+
 // Exact machine-written rubric strings, plus a few that embed numbers. Anything not listed is
 // shown as written, because a wrong translation of an evidence caveat is worse than English.
 const RUBRIC_EXACT: Record<string, [string, string]> = {
   "Optical and radar disagree: the optical images show a change here, and the radar pair does not support it.": ["प्रकाशीय और रडार में अंतर है: तस्वीरों में यहाँ बदलाव दिखता है, रडार की जोड़ी उसका साथ नहीं देती।", "ఆప్టికల్, రాడార్ భిన్నంగా ఉన్నాయి: చిత్రాలలో మార్పు ఉంది, రాడార్ జత దానికి మద్దతు ఇవ్వదు."],
-  "The change across this area is consistent with the event. That is not proof of its cause.": ["इस इलाके का बदलाव घटना से मेल खाता है। यह उसके कारण का सबूत नहीं है।", "ఈ ప్రాంత మార్పు సంఘటనతో సరిపోతుంది. ఇది కారణానికి రుజువు కాదు."],
+  "The effect does not look limited to your field. That is consistent with the event, but it is not proof of its cause.": ["असर सिर्फ़ आपके खेत तक सीमित नहीं दिखता। यह घटना से मेल खाता है, पर यह उसके कारण का सबूत नहीं है।", "ప్రభావం మీ పొలానికే పరిమితమైనట్లు కనిపించడం లేదు. ఇది సంఘటనతో సరిపోతుంది, కానీ కారణానికి రుజువు కాదు."],
+  "A deciding comparison is near the threshold, so a slightly different drawing of this field could change this result.": ["एक निर्णायक तुलना सीमा के पास है, इसलिए इस खेत की सीमा थोड़ी अलग बनाने पर यह नतीजा बदल सकता है।", "ఒక నిర్ణయాత్మక పోలిక హద్దు దగ్గర ఉంది, కాబట్టి ఈ పొలం సరిహద్దును కొద్దిగా వేరుగా గీస్తే ఈ ఫలితం మారవచ్చు."],
+  // The same caveat as records sealed before the wording correction hold it.
+  "The change across this area is consistent with the event. That is not proof of its cause.": ["असर सिर्फ़ आपके खेत तक सीमित नहीं दिखता। यह घटना से मेल खाता है, पर यह उसके कारण का सबूत नहीं है।", "ప్రభావం మీ పొలానికే పరిమితమైనట్లు కనిపించడం లేదు. ఇది సంఘటనతో సరిపోతుంది, కానీ కారణానికి రుజువు కాదు."],
+  // Why a clause is shown (backend/app/agent/graph.py:_rule_names_for, app/tools/policy.py:ensure_cited).
+  "Cover depends on State notification, which is unknown here": ["कवर राज्य की अधिसूचना पर निर्भर है, जो यहाँ पता नहीं।", "కవర్ రాష్ట్ర నోటిఫికేషన్‌పై ఆధారపడుతుంది, అది ఇక్కడ తెలియదు."],
+  "How and when to report on this route": ["इस रास्ते पर कैसे और कब सूचना दें।", "ఈ దారిలో ఎలా, ఎప్పుడు సమాచారం ఇవ్వాలి."],
+  "What the intimation must contain": ["सूचना में क्या होना चाहिए।", "సమాచారంలో ఏమి ఉండాలి."],
+  "Where to report": ["सूचना कहाँ दें।", "సమాచారం ఎక్కడ ఇవ్వాలి."],
+  "What the guidelines say about intimation timing": ["सूचना के समय के बारे में दिशानिर्देश क्या कहते हैं।", "సమాచార సమయం గురించి మార్గదర్శకాలు ఏమంటున్నాయి."],
+  "Post-harvest cover for a crop drying in the field": ["खेत में सूख रही फ़सल के लिए कटाई-बाद का कवर।", "పొలంలో ఆరుతున్న పంటకు కోత అనంతర కవర్."],
+  "What happens when many fields report the same event": ["जब एक ही घटना की सूचना कई खेतों से आए तो क्या होता है।", "ఒకే సంఘటనపై చాలా పొలాల నుంచి సమాచారం వస్తే ఏమవుతుంది."],
+  "Why an individual intimation is not essential here": ["यहाँ व्यक्तिगत सूचना ज़रूरी क्यों नहीं है।", "ఇక్కడ వ్యక్తిగత సమాచారం ఎందుకు అవసరం లేదు."],
+  "Where to go if the unit's result looks wrong": ["इकाई का नतीजा ग़लत लगे तो कहाँ जाएँ।", "యూనిట్ ఫలితం తప్పుగా అనిపిస్తే ఎక్కడికి వెళ్లాలి."],
+  "Why a crop already off the field is outside the cover": ["खेत से हटाई जा चुकी फ़सल कवर से बाहर क्यों है।", "పొలం నుంచి తీసిన పంట కవర్ పరిధిలో ఎందుకు లేదు."],
+  "Post-harvest cover is for a crop still drying in the field": ["कटाई-बाद का कवर खेत में अभी सूख रही फ़सल के लिए है।", "కోత అనంతర కవర్ పొలంలో ఇంకా ఆరుతున్న పంటకు."],
+  "The add-on rule, if it turns out to apply": ["अतिरिक्त कवर का नियम, अगर वह लागू निकले।", "అదనపు కవర్ నియమం, అది వర్తిస్తే."],
+  "The area-yield rule, if it turns out to apply": ["क्षेत्र-उपज का नियम, अगर वह लागू निकले।", "విస్తీర్ణ-దిగుబడి నియమం, అది వర్తిస్తే."],
+  "What role satellite evidence has in the guidelines": ["दिशानिर्देशों में सैटेलाइट सबूत की क्या भूमिका है।", "మార్గదర్శకాల్లో ఉపగ్రహ ఆధారాల పాత్ర ఏమిటి."],
+  "Cited on your claim route": ["आपके दावे के रास्ते पर इसका हवाला है।", "మీ క్లెయిమ్ దారిలో దీన్ని ఉదహరించారు."],
+  "policy corpus unavailable": ["दिशानिर्देशों की फ़ाइल उपलब्ध नहीं।", "మార్గదర్శకాల ఫైల్ లేదు."],
   "For an event wider than 12 km, such as a whole delta under a cyclone, the far comparison loses power as well, so history and the pre-event trend carry that case.": ["12 km से बड़ी घटना में, जैसे पूरे डेल्टा पर चक्रवात, बाहर वाली तुलना भी कमज़ोर पड़ती है, इसलिए वहाँ पिछले साल और पहले का रुझान ज़्यादा बताते हैं।", "12 km కన్నా పెద్ద సంఘటనలో, డెల్టా మొత్తం మీద తుఫాను లాగా, బయటి పోలిక కూడా బలహీనపడుతుంది; అక్కడ గత సంవత్సరాలు, ముందటి ధోరణి ఎక్కువ చెబుతాయి."],
   "Weather data could not be retrieved for this run.": ["इस जाँच में मौसम के आँकड़े नहीं मिल पाए।", "ఈ పరిశీలనలో వాతావరణ సమాచారం దొరకలేదు."],
   "The gridded weather model shows no signal here. A model this coarse can miss a small storm, so this does not rule the event out.": ["मौसम मॉडल यहाँ कोई संकेत नहीं दिखाता। इतना मोटा मॉडल छोटा तूफ़ान चूक सकता है, इसलिए यह घटना को ग़लत नहीं ठहराता।", "వాతావరణ నమూనా ఇక్కడ సంకేతం చూపదు. ఇంత పెద్ద నమూనా చిన్న తుఫానును తప్పించవచ్చు, కాబట్టి ఇది సంఘటనను తప్పుపట్టదు."],
@@ -913,14 +951,30 @@ const RUBRIC_PATTERNS: [RegExp, string, string][] = [
   [/^plot NDVI change ([-+\d.]+)$/, "खेत का NDVI बदलाव $1", "పొలం NDVI మార్పు $1"],
   [/^optical placebo p = ([\d.]+) \(threshold ([\d.]+)\)$/, "तुलना का p-मान $1 (सीमा $2)", "పోలిక p-విలువ $1 (పరిమితి $2)"],
   [/^optical placebo p = ([\d.]+)$/, "तुलना का p-मान $1", "పోలిక p-విలువ $1"],
-  [/^corroborated by (.+)$/, "$1 से पुष्टि", "$1 తో నిర్ధారణ"],
 ];
+
+// The rubric's own source names (backend/app/agent/rubric.py:corroboration).
+const SOURCES: Record<string, [string, string]> = {
+  weather: ["मौसम मॉडल", "వాతావరణ నమూనా"], official_alert: ["सरकारी चेतावनी", "అధికారిక హెచ్చరిక"], news: ["ख़बरों", "వార్తల"],
+};
+
+function corroboratedBy(s: string, i: 0 | 1): string | null {
+  const m = s.match(/^corroborated by ([a-z_, ]+?)(, but no plot-specific signal)?$/);
+  if (!m) return null;
+  const names = m[1].split(", ").map((n) => SOURCES[n]?.[i]);
+  if (names.some((n) => !n)) return null;
+  const said = i === 0 ? `${names.join(", ")} से पुष्टि` : `${names.join(", ")} తో నిర్ధారణ`;
+  if (!m[2]) return said;
+  return said + (i === 0 ? ", पर खेत का अपना कोई संकेत नहीं" : ", కానీ పొలానికి ప్రత్యేక సంకేతం లేదు");
+}
 
 export function translateRubric(s: string, lang: Lang): string {
   if (lang === "en") return s;
   const i = lang === "hi" ? 0 : 1;
   const exact = RUBRIC_EXACT[s];
   if (exact) return exact[i];
+  const sources = corroboratedBy(s, i);
+  if (sources) return sources;
   for (const [re, hi, te] of RUBRIC_PATTERNS) {
     if (re.test(s)) return s.replace(re, i === 0 ? hi : te);
   }

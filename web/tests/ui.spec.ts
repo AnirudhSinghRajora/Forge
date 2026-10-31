@@ -513,3 +513,152 @@ test.describe("staged verify", () => {
     await expect(page.locator(".tq-a")).toHaveCount(0);
   });
 });
+
+test.describe("selection note from the server", () => {
+  const note = { kind: "strongest", hi: "यह खेत एक स्कैन से चुना गया है: 200 में सबसे ज़्यादा। यह आम खेत नहीं है।", te: "స్కాన్ నుంచి ఎంచుకున్నాం.", en: "This plot was picked from a scan: the strongest of 200 random plots scanned in this area. It is not a typical field." };
+  const envelope = (selection_note: object | null) => async (route: Route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === "/api/health") return route.fulfill({ json: { status: "ok", gemini: false, version: "t" } });
+    if (u.pathname.startsWith("/api/artifacts/")) return route.fulfill({ contentType: "image/png", body: testPng(8, 170, 120, 90) });
+    const ev = evidence();
+    return route.fulfill({ json: { case: { id: "c", lat: 29.5, lon: 75, active_run_id: null, plot: { geometry: ev.plot.geometry, area_ha: 1, centroid: ev.plot.centroid, crs: "EPSG:32643", warnings: [] } }, evidence: ev, actions: [], sealed: true, exhibits: {}, selection_note, rubric: { version: "v3", p_field: 0.025, strong_delta: -0.15, moderate_delta: -0.1 } } });
+  };
+
+  test("it comes first, and on the footprint, the answers, the Vanishing and the Draw", async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await page.route("**/api/**", envelope(note));
+    await page.goto("/case/c");
+    const top = page.locator(".selected-note-top");
+    await expect(top).toHaveText(note.hi);
+    const noteY = (await top.boundingBox())!.y;
+    const testimony = page.locator(".testimony, .tst, [class*=testimony]").first();
+    await expect(testimony).toBeVisible();
+    expect(noteY).toBeLessThan((await testimony.boundingBox())!.y);
+    for (const id of ["foot-t", "van-t", "draw-t"]) {
+      await expect(page.locator(`section:has(#${id}) .selected-note`).first()).toHaveText(note.hi);
+    }
+    await expect(page.locator(".foot-answers .selected-note")).toBeVisible();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    // Side by side, the note above the two columns covers both.
+    await expect(page.locator(".foot-answers .selected-note")).toBeHidden();
+    await expect(page.locator("section:has(#foot-t) > .selected-note")).toBeVisible();
+  });
+
+  test("a plot not chosen from a scan shows none", async ({ page }) => {
+    await page.route("**/api/**", envelope(null));
+    await page.goto("/case/c");
+    await expect(page.locator(".verdict-headline")).toBeVisible();
+    await expect(page.locator(".selected-note")).toHaveCount(0);
+  });
+});
+
+test.describe("language in the headline area and on the Action screen", () => {
+  const shell = (over: object) => async (route: Route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === "/api/health") return route.fulfill({ json: { status: "ok", gemini: false, version: "t" } });
+    if (u.pathname.startsWith("/api/artifacts/")) return route.fulfill({ contentType: "image/png", body: testPng(8, 170, 120, 90) });
+    const ev = evidence(over);
+    return route.fulfill({ json: { case: { id: "c", lat: 29.5, lon: 75, active_run_id: null }, evidence: ev, actions: [], sealed: true, exhibits: {} } });
+  };
+
+  test("the crop is named in Hindi, and an English clause says it is English", async ({ page }) => {
+    const ev = evidence();
+    await page.route("**/api/**", shell({ event: { ...ev.event, crop: "wheat" } }));
+    await page.goto("/case/c");
+    await expect(page.locator(".file-facts")).toContainText("गेहूँ");
+    await expect(page.locator(".file-facts")).not.toContainText("wheat");
+    await page.goto("/case/c/action");
+    await expect(page.locator(".clause-lang").first()).toHaveText("मूल पाठ, अंग्रेज़ी में");
+  });
+
+  test("a corroboration reason has no English source name in Hindi", async ({ page }) => {
+    const ev = evidence();
+    await page.route("**/api/**", shell({ verdict: { ...ev.verdict, caveats: [], reasons: ["corroborated by weather, official_alert"] } }));
+    await page.goto("/case/c");
+    await expect(page.locator(".why-grid")).toContainText("मौसम मॉडल, सरकारी चेतावनी से पुष्टि");
+    await expect(page.locator(".why-grid")).not.toContainText("weather");
+  });
+
+  test("the stored crop route has its own label in every language", async ({ page }) => {
+    const ev = evidence();
+    await page.route("**/api/**", shell({ claim_path: { ...ev.claim_path, route: "outside_cover", crop_stage: "harvested_stored", intimation: "unknown", countdown_applies: false } }));
+    await page.goto("/case/c/action");
+    await expect(page.locator(".path-route")).toHaveText("खेत से हटाई गई फ़सल: कवर से बाहर");
+    await expect(page.locator(".path-route")).not.toContainText("route.");
+  });
+});
+
+test.describe("a record from another engine version", () => {
+  const hash = "c".repeat(64);
+  const R = "run-e";
+  const body = (msgs: object[]) => msgs.map((m) => `data: ${JSON.stringify(m)}\n\n`).join("");
+  const start = { type: "start", seq: 1, run_id: R, hash, hash_verified: true, engine_version: "old", event_date: "2024-03-03", n_numbers: 1, numbers: { "optical.plot_delta_ndvi": -0.37 }, tolerance: 0.001, cached: false };
+  const row = { type: "number", seq: 3, run_id: R, field: "optical.plot_delta_ndvi", label: "optical.plot_delta_ndvi", stored: -0.37, recomputed: -0.31, match: false };
+  const health = (route: Route) => route.fulfill({ json: { status: "ok", gemini: true, version: "t" } });
+
+  test("a difference is not called a mismatch when the engine changed", async ({ page }) => {
+    await page.route("**/api/health", health);
+    await page.route("**/api/verify/**", (r) => r.fulfill({ status: 200, contentType: "text/event-stream", body: body([
+      start,
+      { type: "note", seq: 2, run_id: R, kind: "engine_version_differs", message_en: "sealed by a different engine", message_hi: "इंजन के दूसरे संस्करण से बना" },
+      row,
+      { type: "result", seq: 4, run_id: R, status: "engine_changed", ok: false, checked: 1, matched: 0, total: 1, mismatched: ["optical.plot_delta_ndvi"], message_en: "This record was sealed by an earlier engine version", message_hi: "यह रिकॉर्ड इंजन के पहले के संस्करण से बना था", message_te: "ఈ రికార్డు ఇంజిన్ పాత వెర్షన్‌తో" },
+    ]) }));
+    await page.goto(`/verify/${hash}`);
+    const line = page.locator(".verify-engine");
+    await expect(line).toBeVisible({ timeout: 20000 });
+    await expect(line).toContainText("इंजन बदला है");
+    await expect(line).toContainText("यह रिकॉर्ड इंजन के पहले के संस्करण से बना था");
+    await expect(page.locator(".verify-bad")).toHaveCount(0);
+    await expect(page.locator(".v-bad")).toHaveCount(0);
+    await expect(page.locator(".v-diff").first()).toHaveText("अलग");
+  });
+
+  test("the same difference under the same engine stays a mismatch", async ({ page }) => {
+    await page.route("**/api/health", health);
+    await page.route("**/api/verify/**", (r) => r.fulfill({ status: 200, contentType: "text/event-stream", body: body([
+      start, row,
+      { type: "result", seq: 4, run_id: R, status: "mismatch", ok: false, checked: 1, matched: 0, total: 1, mismatched: ["optical.plot_delta_ndvi"] },
+    ]) }));
+    await page.goto(`/verify/${hash}`);
+    await expect(page.locator(".verify-bad")).toBeVisible({ timeout: 20000 });
+    await expect(page.locator(".verify-engine")).toHaveCount(0);
+    await expect(page.locator(".v-bad").first()).toBeVisible();
+  });
+});
+
+test.describe("an answer near the threshold", () => {
+  const withP = (far: number, ring: number, decides: boolean) => async (route: Route) => {
+    const u = new URL(route.request().url());
+    if (u.pathname === "/api/health") return route.fulfill({ json: { status: "ok", gemini: false, version: "t" } });
+    if (u.pathname.startsWith("/api/artifacts/")) return route.fulfill({ contentType: "image/png", body: testPng(8, 170, 120, 90) });
+    const base = evidence();
+    const n = base.neighbours as Record<string, unknown> & { placebo: Record<string, unknown>; far_placebo?: Record<string, unknown> | null };
+    const test_ = (p: number) => ({ ...n.placebo, p_value: p, plot_value: -0.3, placebo_median: -0.05, n_placebos: 200, n_at_least_as_extreme: 3, insufficient_reason: null });
+    return route.fulfill({ json: { case: { id: "c", lat: 29.5, lon: 75, active_run_id: null }, sealed: true, exhibits: {}, actions: [],
+      evidence: { ...base, neighbours: { ...n, placebo: test_(ring), far_placebo: test_(far) } },
+      rubric: { version: "v3", p_field: 0.025, near_low: 0.01, near_high: 0.075, near_line_decides: decides } } });
+  };
+
+  test("the extreme example: far is plain yes, ring is near, and the level does not turn on it", async ({ page }) => {
+    await page.route("**/api/**", withP(0.005, 0.035, false));
+    await page.goto("/case/c");
+    await expect(page.locator(".tq").nth(0).locator(".tq-a")).toHaveText("हाँ");
+    await expect(page.locator(".tq").nth(1).locator(".tq-a")).toHaveText("नहीं, पर सीमा के पास");
+    await expect(page.locator(".tq-near-note")).toHaveCount(0);
+  });
+
+  test("the typical example: far near and deciding, ring plain no", async ({ page }) => {
+    await page.route("**/api/**", withP(0.054, 0.202, true));
+    await page.goto("/case/c?lang=en");
+    await expect(page.locator(".tq").nth(0).locator(".tq-a")).toHaveText("No, but near the line");
+    await expect(page.locator(".tq").nth(1).locator(".tq-a")).toHaveText("No");
+    await expect(page.locator(".tq-near-note")).toContainText("a slightly different drawing of this field could change this result");
+  });
+
+  test("yes near the line has its own wording", async ({ page }) => {
+    await page.route("**/api/**", withP(0.02, 0.5, true));
+    await page.goto("/case/c?lang=en");
+    await expect(page.locator(".tq").nth(0).locator(".tq-a")).toContainText("Yes, but near the line");
+  });
+});

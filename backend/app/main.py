@@ -418,8 +418,18 @@ def get_case(case_id: str, lang: str | None = Query(None)) -> dict:
             "rubric": {
                 "version": rubric.RUBRIC_VERSION, "p_field": rubric.P_FIELD,
                 "strong_delta": rubric.STRONG_DELTA, "moderate_delta": rubric.MODERATE_DELTA,
+                "near_low": rubric.P_NEAR_LOW, "near_high": rubric.P_NEAR_HIGH,
+                "near_line_decides": _near_line_decides(evidence),
             },
         }
+
+
+def _near_line_decides(evidence: dict | None) -> bool:
+    """Said beside the two answers. Worked out at read time, so a record sealed earlier says it too."""
+    verdict = (evidence or {}).get("verdict")
+    if not verdict:
+        return False
+    return rubric.level_could_change(Evidence.model_validate(evidence), verdict["level"])
 
 
 def _refresh_draft(items: list[dict], info: dict, evidence: dict) -> None:

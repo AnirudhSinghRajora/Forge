@@ -214,3 +214,76 @@ def test_radar_that_is_absent_or_unusable_is_not_a_disagreement():
 def test_area_wide_result_is_consistent_with_not_proof():
     ev = good(p=placebo(p=0.4), far=placebo(p=0.01))
     assert any("consistent with the event" in c and "not proof" in c for c in rubric.decide(ev).caveats)
+
+
+def _near(far, ring, delta=-0.2):
+    ev = evidence(delta=delta)
+    ev.neighbours.far_placebo = placebo(p=far) if far is not None else None
+    ev.neighbours.placebo = placebo(p=ring) if ring is not None else None
+    return ev
+
+
+def test_near_band_boundaries():
+    assert rubric.P_NEAR_LOW == 0.01 and rubric.P_NEAR_HIGH == 0.075
+    for p, near in ((0.0099, False), (0.01, True), (0.025, True), (0.075, True), (0.0751, False), (None, False)):
+        assert rubric.near_threshold(p) is near, p
+
+
+def test_near_line_decides_at_its_boundaries():
+    decides = rubric.near_line_decides
+    assert decides(0.054, 0.5, rubric.MODERATE_DELTA) and decides(0.5, 0.054, rubric.STRONG_DELTA)
+    assert not decides(0.054, 0.5, rubric.MODERATE_DELTA + 0.0001)
+    assert not decides(0.0751, 0.5, -0.2) and decides(0.075, 0.5, -0.2)
+    assert not decides(0.0099, 0.05, -0.2) and decides(0.01, 0.05, -0.2)
+    assert not decides(None, None, -0.2) and not decides(0.05, None, None)
+    assert decides(None, 0.03, -0.2)
+
+
+def test_thresholds_are_unchanged_by_the_band():
+    assert rubric.P_FIELD == 0.025
+    assert rubric.decide(_near(0.02, 0.5)).level == "strong"
+    assert rubric.decide(_near(0.03, 0.5)).level != "strong"
+
+
+def _has_caveat(result):
+    return any("a slightly different drawing of this field could change this result" in c for c in result.caveats)
+
+
+def test_extreme_example_has_no_level_caveat():
+    assert not rubric.near_line_decides(0.005, 0.035, -0.369)
+    result = rubric.decide(_near(0.005, 0.035, delta=-0.369))
+    assert result.level == "strong" and not _has_caveat(result)
+    assert rubric.near_threshold(0.035)  # the ring card alone still says it
+
+
+def test_typical_example_has_the_caveat():
+    assert rubric.near_line_decides(0.054, 0.202, -0.126)
+    assert _has_caveat(rubric.decide(_near(0.054, 0.202, delta=-0.126)))
+
+
+def test_no_change_means_no_caveat():
+    assert not rubric.near_line_decides(0.054, 0.202, 0.0)
+    assert not _has_caveat(rubric.decide(_near(0.054, 0.202, delta=0.0)))
+
+
+def test_a_level_the_p_value_cannot_move_has_no_caveat():
+    no_corroboration = _near(0.054, 0.202, delta=-0.126)
+    no_corroboration.weather = None
+    no_corroboration.alerts, no_corroboration.news = [], []
+    assert not _has_caveat(rubric.decide(no_corroboration))
+    assert not rubric.level_could_change(_near(0.054, 0.202), "not_damage_likely_harvest")
+    assert not rubric.level_could_change(_near(0.054, 0.202), "insufficient")
+
+
+def test_the_near_line_reaches_testimony_and_explanation_in_every_language():
+    from app.agent import explain, testimony
+
+    ev = _near(0.054, 0.202, delta=-0.126)
+    result = rubric.decide(ev)
+    ev.verdict = Verdict(level=result.level, headline_hi="h", headline_en="e", reasons=result.reasons,
+                         caveats=result.caveats, falsifiers_checked=result.falsifiers_checked,
+                         rubric_version=result.version)
+    for text, line in zip(testimony.templates(ev), (explain.NEAR_LINE[0], explain.NEAR_LINE[1], explain.NEAR_LINE[2]), strict=True):
+        assert line in text
+    hi, en = explain.template_explanation(ev, result.level)
+    assert explain.NEAR_LINE[0] in hi and explain.NEAR_LINE[1] in en

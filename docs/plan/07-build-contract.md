@@ -229,3 +229,8 @@ Forty plots drawn at random from the band (rule fixed in advance; note the inten
 Demo plots: typical 28.715212 N, 76.231138 E (chosen by rule; moderate at best) and strongest 28.700911 N, 76.215719 E (labelled). Live pins from judges will mostly and correctly show little.
 
 **Wording correction to Addendum 4:** "far yes, ring no" reads "the effect does not look limited to your field", not "your whole area was hit". A ring test that misses its threshold does not show the neighbours changed as much; on the strongest plot they fell −0.12 against the field's −0.369. Exhibits other than the two answers make no claim about who was hit.
+
+## Addendum 7, 1 Nov 2026, 1:31 AM: near-threshold results
+Thirty seeds on the same data: far p moved by a factor of about 4-8 on plots near 0.025, and the verdict level flipped on up to a third of seeds there. Clear cases stayed stable (strongest plot: far p 0.005 on all 30). The seed comes from polygon + event date, so the same record reproduces exactly, but a slightly different polygon re-samples.
+
+**Decision:** rubric thresholds do not change, so the locked results stand. A deciding p-value with **0.01 ≤ p ≤ 0.075** is reported as **near the threshold**. Any level that relies on, or is denied by, such a value carries a visible caveat: "a slightly different drawing of this field could change this result". This appears in the verdict caveats, the two answers, the testimony and the PDF. Multi-seed runs at seal time are rejected: they would multiply slow far-window reads.

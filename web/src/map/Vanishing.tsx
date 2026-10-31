@@ -28,7 +28,7 @@ function sweep(t: number, stops: number): number {
 }
 
 export default function Vanishing({ ev, fade }: { ev: Evidence; fade: ScaleFade }) {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const reduced = usePrefersReducedMotion();
   const levels = useMemo(() => [...fade.levels].sort((a, b) => a.block_m - b.block_m), [fade]);
   const host = useRef<HTMLDivElement | null>(null);

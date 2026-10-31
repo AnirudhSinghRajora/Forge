@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "./Icon";
 import { useI18n } from "../i18n";
-import { ApiError } from "../api";
+import { ApiError, type SelectionNoteText } from "../api";
+
+/** How this plot was chosen, from the server. Said beside anything that could otherwise look typical. */
+export function SelectionNote({ note, className }: { note: SelectionNoteText | null; className?: string }) {
+  const { lang } = useI18n();
+  if (!note) return null;
+  return <p className={`selected-note ${className ?? ""}`} lang={lang} data-kind={note.kind}>{note[lang]}</p>;
+}
 
 /** A section whose data is null says exactly what is missing and why. Never a blank chart. */
 export function Missing({ what, why, children }: { what: string; why?: string | null; children?: React.ReactNode }) {

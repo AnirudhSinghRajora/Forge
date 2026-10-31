@@ -146,6 +146,14 @@ def tests_line(ev: Evidence) -> tuple[str, str, str] | None:
     )
 
 
+NEAR_LINE = (
+    "एक निर्णायक तुलना सीमा के पास है, इसलिए इस खेत की सीमा थोड़ी अलग बनाने पर यह नतीजा बदल सकता है।",
+    rubric.NEAR_LINE_CAVEAT,
+    # NEEDS NATIVE REVIEW
+    "ఒక నిర్ణయాత్మక పోలిక హద్దు దగ్గర ఉంది, కాబట్టి ఈ పొలం సరిహద్దును కొద్దిగా వేరుగా గీస్తే ఈ ఫలితం మారవచ్చు.",
+)
+
+
 def _weather_line(ev: Evidence) -> tuple[str, str]:
     w = ev.weather
     if w is None:
@@ -198,6 +206,8 @@ def template_explanation(ev: Evidence, level: str) -> tuple[str, str]:
     tests = tests_line(ev)
     if tests and not any(o.id == "regional_trend" for o in conceded):
         parts.append(tests[:2])  # a conceded regional_trend finding already says the same thing
+    if rubric.level_could_change(ev, level):
+        parts.append(NEAR_LINE[:2])
     parts.append(_weather_line(ev))
     if conceded:
         parts.append((conceded[0].finding_hi, conceded[0].finding_en))

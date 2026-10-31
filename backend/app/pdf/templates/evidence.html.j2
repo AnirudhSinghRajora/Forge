@@ -66,6 +66,7 @@ ul { margin: 2pt 0 6pt; padding-left: 13pt; } li { margin-bottom: 2pt; }
   <div class="level">{{ L.verdict }} · {{ level }} · rubric {{ ev.verdict.rubric_version if ev.verdict else '' }}</div>
   <div class="line">{{ headline }}</div>
 </div>
+{% if near_note %}<div class="caveat">{{ near_note }}</div>{% endif %}
 
 <div class="meta">
   <div><b>{{ L.field }}</b>{{ '%.2f'|format(ev.plot.area_ha) }} ha · {{ '%.5f'|format(ev.plot.centroid[1]) }}, {{ '%.5f'|format(ev.plot.centroid[0]) }}</div>
@@ -103,15 +104,16 @@ ul { margin: 2pt 0 6pt; padding-left: 13pt; } li { margin-bottom: 2pt; }
 </div>
 
 {% if tests_plain %}<p><b>{{ tests_plain }}</b></p>{% endif %}
+{% if near_note %}<div class="caveat">{{ near_note }}</div>{% endif %}
 {% if far_img %}
 <h2>{{ L.far }}</h2>
 <figure><img src="{{ far_img }}" alt=""></figure>
-<p class="small">{% if far_p is not none %}{{ far.n_at_least_as_extreme }} / {{ far.n_placebos }} · p = {{ '%.3f'|format(far_p) }} (threshold 0.025){% else %}{{ far.insufficient_reason or L.no_data }}{% endif %}</p>
+<p class="small">{% if far_p is not none %}{{ far.n_at_least_as_extreme }} / {{ far.n_placebos }} · p = {{ '%.3f'|format(far_p) }} (threshold 0.025){% if far_near %} · <b>{{ L.near }}</b>{% endif %}{% else %}{{ far.insufficient_reason or L.no_data }}{% endif %}</p>
 {% endif %}
 {% if placebo_img %}
 <h2>{{ L.placebo }} ({{ placebo_sensor }})</h2>
 <figure><img src="{{ placebo_img }}" alt=""></figure>
-<p class="small">{% if placebo_p is not none %}{{ placebo.n_at_least_as_extreme }} / {{ placebo.n_placebos }} · p = {{ '%.3f'|format(placebo_p) }}{% if placebo.n_non_overlapping is not none %} · non-overlapping: {{ placebo.n_non_overlapping }}{% endif %}{% else %}{{ placebo.insufficient_reason or L.no_data }}{% endif %}</p>
+<p class="small">{% if placebo_p is not none %}{{ placebo.n_at_least_as_extreme }} / {{ placebo.n_placebos }} · p = {{ '%.3f'|format(placebo_p) }}{% if placebo_near %} · <b>{{ L.near }}</b>{% endif %}{% if placebo.n_non_overlapping is not none %} · non-overlapping: {{ placebo.n_non_overlapping }}{% endif %}{% else %}{{ placebo.insufficient_reason or L.no_data }}{% endif %}</p>
 {% endif %}
 {% if twin_img %}<h2>{{ L.twin }}</h2><figure><img src="{{ twin_img }}" alt=""><figcaption>{{ ev.neighbours.counterfactual.method }}</figcaption></figure>{% endif %}
 

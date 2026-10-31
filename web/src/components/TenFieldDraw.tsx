@@ -254,7 +254,7 @@ function ShareBlock({ ev, v, applies }: { ev: Evidence; v: VillageWitness | null
 
 /** The headline exhibit: para 21.5.8's sampling run on real pixels, to show how far one draw's average can move. */
 export function TenFieldDraw({ ev }: { ev: Evidence }) {
-  const { t, lang } = useI18n();
+  const { t } = useI18n();
   const reduced = usePrefersReducedMotion();
   const v = ev.village;
   const sim = v?.lottery ?? null;

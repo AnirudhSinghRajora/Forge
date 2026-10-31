@@ -494,7 +494,8 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
                 ))}
               </ErrorBoundary>
             </div>
-            <div className="foot-answers"><SelectionNote note={selection} className="selected-note-stacked" /><TwoQuestions ev={ev} pField={env.rubric?.p_field ?? null} /></div>
+            <div className="foot-answers"><SelectionNote note={selection} className="selected-note-stacked" /><TwoQuestions ev={ev} pField={env.rubric?.p_field ?? null} nearDecides={env.rubric?.near_line_decides === true}
+              band={env.rubric?.near_low !== undefined && env.rubric?.near_high !== undefined ? { low: env.rubric.near_low, high: env.rubric.near_high } : null} /></div>
           </div>
         </section>
 

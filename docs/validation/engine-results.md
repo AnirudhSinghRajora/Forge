@@ -203,6 +203,28 @@ Rubric v3 (`app/agent/rubric.py`, `cross_exam.py`) and all engine settings were 
 
 **One restart.** The March run was stopped after 40 plots and restarted to fix a harness omission: it was re-downloading the pass between pre and post for every plot. Only placebo counts and pre-event NDVI had been looked at. All 40 rows matched the restarted run exactly. Method, plots and seeds did not change.
 
+## 7a. Seed sensitivity (`geo_seed_sensitivity.py`)
+
+The placebo draw is random. Same data, same method, 30 seeds. Plots: the two demo plots, plus the 5 in-band plots of the 40 whose far p at their own seed fell closest to 0.025, chosen by that rule. Levels assume corroboration is present, and leave out the pre-trend check, which does not depend on the seed's placements.
+
+| Plot | Change | Far p (min, median, max) | Far <=0.025 | Ring p (min, median, max) | Ring <=0.025 | Levels across seeds | Differs from majority |
+|---|---|---|---|---|---|---|---|
+| Extreme, strongest of 200 (28.700911, 76.215719) | -0.3689 | 0.0050, 0.0050, 0.0050 | 100% | 0.0249, 0.0348, 0.0498 | 13% | strong 30 | 0% |
+| Typical, median of 40 (28.715212, 76.231138) | -0.1259 | 0.0244, 0.0537, 0.0732 | 3% | 0.1585, 0.2017, 0.2284 | 0% | weak 29, moderate 1 | 3% |
+| In-band 3 (28.705132, 76.228052) | -0.1574 | 0.0149, 0.0398, 0.0597 | 23% | 0.1592, 0.1841, 0.2239 | 0% | weak 23, strong 7 | 23% |
+| In-band 7 (28.718677, 76.227288) | -0.1627 | 0.0149, 0.0348, 0.0746 | 20% | 0.0597, 0.0896, 0.1144 | 0% | weak 24, strong 6 | 20% |
+| In-band 18 (28.711909, 76.227209) | -0.2045 | 0.0050, 0.0249, 0.0448 | 67% | 0.1045, 0.1294, 0.1542 | 0% | strong 20, weak 10 | 33% |
+| In-band 25 (28.720533, 76.231610) | -0.1595 | 0.0199, 0.0448, 0.0746 | 13% | 0.0498, 0.0697, 0.0995 | 0% | weak 26, strong 4 | 13% |
+| In-band 26 (28.702952, 76.199466) | -0.1560 | 0.0050, 0.0199, 0.0398 | 93% | 0.3582, 0.3881, 0.4179 | 0% | strong 28, weak 2 | 7% |
+
+`n_placebos` is stable: far 200-204 on all plots; ring 200, except the typical plot at 157-174.
+
+**What this means.** Clear cases are stable. Near the 0.025 line the seed can decide the level: far p moves by a factor of about 4-8, because the seed picks both which far windows are read and which placements land in them. 5 of these 7 plots change level on at least 7% of seeds. These 5 were picked for being near the line, so they are the worst case, not typical. At their own seeds, 12 of the 40 in-band plots had a field signal.
+
+**The app's seed comes from the polygon and the event date** (`make_seed` in `app/agent/graph.py`). So the same record reproduces exactly, which `replay` confirms, but a slightly different polygon re-samples. The same field drawn a little differently can land on the other side of the line near it. A p-value near 0.025 should be read as "near the line", not as a pass or a fail. The method has not been changed to reduce this, because that would invalidate the locked runs.
+
+The strongest plot also differs by polygon: this 113 m square gives far 0.005 and ring 0.0348; the 2.12 ha square in the live case gave far 0.010 and ring 0.0299 (BACKEND's record).
+
 ## 7b. Punjab floods, August 2025: pre-registered independent positive test
 
 Written before any Punjab data was opened. Frozen rubric v3. Run once. Script: `tests/geo_punjab.py`.

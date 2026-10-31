@@ -1,6 +1,7 @@
 """Test helpers. Fake geo and evidence builders live here only, never in the running app."""
 from __future__ import annotations
 
+import contextlib
 import sys
 import types
 from datetime import UTC, date, datetime, timedelta
@@ -186,6 +187,7 @@ def install_fake_geo(monkeypatch, **overrides):
         "render_chips": lambda *a, **k: [],
         "flatten_numbers": lambda *a, **k: {"optical.plot_delta_ndvi": -0.25},
         "replay": lambda core: dict(core.numbers),
+        "fresh_session": contextlib.nullcontext,
     }
     defaults.update(overrides)
     module = types.ModuleType("app.tools.geo")

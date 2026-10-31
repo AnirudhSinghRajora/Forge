@@ -83,7 +83,7 @@ def test_a_full_warm_through_the_public_api(client, monkeypatch):
     fake_geo_on_real_plot(monkeypatch)
     row = warm(client, "bhiwani-strongest", verify=True)
     assert row["error"] is None and row["level"] and row["hash"]
-    assert row["url"] == f"http://host/case/{row['case_id']}/verdict"
+    assert row["url"] == f"http://host/case/{row["case_id"]}"
     assert row["verify_status"] == "verified" and row["verify_s"] is not None
     assert row["sealed_s"] is not None and row["verdict_s"] is not None
     assert warm_demo.succeeded(row, True)
@@ -148,3 +148,22 @@ def test_selection_note_stays_out_of_the_hash(client, monkeypatch):
     assert "selection" not in json.dumps(body["evidence"])
     assert evidence_hash(ReplayCore.model_validate(body["evidence"]["replay"])) == row["hash"]
     assert disclosures.selection_note(body["evidence"]["plot"]["centroid"])["kind"] == "typical"
+
+
+def test_the_api_gives_the_near_band_and_whether_it_decides(client, monkeypatch):
+    from tests.conftest import placebo
+
+    base = evidence(delta=-0.126, cross=[])
+    base.neighbours.far_placebo, base.neighbours.placebo = placebo(p=0.054), placebo(p=0.202)
+    base.optical.plot_delta_ndvi = -0.126
+    fake_geo_on_real_plot(monkeypatch, optical_compare=lambda *a, **k: (base.optical, base.neighbours))
+    row = warm(client, "bhiwani-typical")
+    body = client.get(f"/api/cases/{row['case_id']}").json()
+    assert body["rubric"]["near_low"] == 0.01 and body["rubric"]["near_high"] == 0.075
+    assert body["rubric"]["near_line_decides"] is True
+    assert any("could change this result" in c for c in body["evidence"]["verdict"]["caveats"])
+
+
+def test_the_api_says_near_does_not_decide_for_a_case_with_no_evidence(client):
+    case_id = warm_demo.create_case(client, BY_NAME["godavari-arnab"], "en")
+    assert client.get(f"/api/cases/{case_id}").json()["rubric"]["near_line_decides"] is False

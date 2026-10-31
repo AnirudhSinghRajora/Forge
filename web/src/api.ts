@@ -89,7 +89,7 @@ export interface ExhibitStatus { status: "pending" | "done" | "failed" | "not_ap
 export interface CaseEnvelope {
   case: CaseRecord; evidence: Evidence | null; actions: ActionRecord[] | null;
   sealed?: boolean; verdict_ready?: boolean; exhibits?: Record<string, ExhibitStatus>;
-  rubric?: { version?: string; p_field?: number; strong_delta?: number; moderate_delta?: number } | null;
+  rubric?: { version?: string; p_field?: number; strong_delta?: number; moderate_delta?: number; near_low?: number; near_high?: number; near_line_decides?: boolean } | null;
   /** How this plot was chosen, when it came from a scan. Never part of the evidence or its hash. */
   selection_note?: SelectionNoteText | null;
 }

@@ -1,7 +1,7 @@
 """The selection disclosure: where it applies, and that it is said without touching any number."""
-from tests.conftest import evidence
 from app import disclosures
 from app.pdf import render
+from tests.conftest import evidence
 
 STRONGEST = [76.215719, 28.700911]
 TYPICAL = [76.231138, 28.715212]
@@ -49,3 +49,20 @@ def test_the_pdf_says_it_above_the_result_in_each_language(tmp_path):
 
 def test_the_pdf_says_nothing_for_any_other_plot(tmp_path):
     assert '<div class="selection">' not in _html(tmp_path, _at([81.9, 16.45]), "en")
+
+
+def test_the_pdf_prints_near_the_threshold_only_where_it_applies(tmp_path):
+    from app.agent import explain
+    from app.evidence.schema import Verdict
+    from tests.conftest import placebo
+
+    ev = evidence(delta=-0.126, cross=[])
+    ev.neighbours.far_placebo, ev.neighbours.placebo = placebo(p=0.054), placebo(p=0.202)
+    ev.verdict = Verdict(level="weak", headline_hi="h", headline_en="e", reasons=[], caveats=[],
+                         falsifiers_checked=[], rubric_version="v")
+    for lang, index in (("hi", 0), ("en", 1), ("te", 2)):
+        assert explain.NEAR_LINE[index] in _html(tmp_path, ev, lang)
+    assert "near the threshold</b>" in _html(tmp_path, ev, "en")
+    ev.neighbours.far_placebo, ev.neighbours.placebo = placebo(p=0.005), placebo(p=0.035)
+    html = _html(tmp_path, ev, "en")
+    assert explain.NEAR_LINE[1] not in html and "near the threshold</b>" in html  # the ring line alone

@@ -551,6 +551,9 @@ html[data-lang="en"] .signature-title { font-weight: 700; }
 .tq-a { display: flex; align-items: center; gap: 8px; font: 700 clamp(1.5rem, 4.5vw, 2.1rem)/1.2 var(--serif); margin: 0 0 6px; }
 .tq-yes .tq-a { color: var(--blue); }
 .tq-no .tq-a { color: var(--ink-2); }
+.tq-near { border: 2px dashed var(--ink-2); }
+.tq-near .tq-a { color: var(--ink); font-size: clamp(1.25rem, 3.8vw, 1.7rem); }
+.tq-near-note { font-weight: 600; margin: 8px 0 0; padding: 8px 12px; border: 1.5px solid var(--ink-2); }
 .tq-unmeasured .tq-a { color: var(--ink-3); font-size: 1.25rem; font-weight: 600; }
 .tq p:last-child { margin: 0; }
 .tq-finding { font: 600 clamp(1.25rem, 3.8vw, 1.7rem)/1.4 var(--serif); margin: 16px 0 6px; padding-inline-start: 14px; border-inline-start: 5px solid var(--soil); max-width: 40em; }
@@ -563,7 +566,7 @@ html[data-lang="en"] .signature-title { font-weight: 700; }
 .computing-what { font-weight: 600; margin: 0 0 2px; }
 .still-computing { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--paper-2); margin: 6px 0 0; font-weight: 600; }
 .selected-note { padding: 8px 12px; border: 1.5px solid var(--ink-2); font-weight: 600; font-size: 0.95rem; max-width: 46em; margin: 0 0 14px; }
-.selected-note-top { font-size: 1.05rem; line-height: 1.45; border-width: 2px; border-color: var(--ink); margin: 0 0 20px; max-width: none; }
+.selected-note-top { font-size: 1.05rem; line-height: 1.45; border-width: 2px; border-color: var(--ink); margin: 16px 0 20px; max-width: none; }
 .clause-lang { margin: 0 0 4px; }
 
 /* The Vanishing */

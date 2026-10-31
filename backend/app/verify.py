@@ -73,6 +73,7 @@ SOURCE = {
     "archive": "public satellite archive recorded for each scene",
     "read": "network",
     "cache": "bypassed (fresh=True)",
+    "session": "blocks downloaded during this check are reused within it; nothing older is read",
 }
 # Generous for this link, and only for this group: when one runs out, the next one still starts.
 GROUP_BUDGET_S = {
@@ -326,7 +327,11 @@ class _Job:
 
     def run(self) -> None:
         try:
-            self._run()
+            from app.tools import geo
+
+            # Every group in this check shares what the check itself downloads, and nothing older.
+            with geo.fresh_session():
+                self._run()
         except Exception as exc:
             log.exception("verify job %s failed", self.run_id)
             self.finish("partial", ok=False, checked=0, total=len(self.core.numbers),
