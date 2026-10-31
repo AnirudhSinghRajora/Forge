@@ -133,6 +133,17 @@ def check_harvest(ev: Evidence) -> Objection:
             f"own as a crop ripens, and a change of {signed(delta)} cannot be told apart from that "
             "without a control. A later satellite pass will help. Was the crop close to harvest?",
         )
+    if bare <= BARE_MIN and delta is not None and delta <= HARVEST_MIN_DELTA and typical is not None:
+        # Past years settled it, so say that: bare soil rules out a cut, but says nothing about ripening.
+        return out(
+            "rebutted",
+            f"कटाई नहीं दिखती: खेत का {pct(bare)}% हिस्सा ही खाली मिट्टी है। यह गिरावट ({signed(delta)}) इस खेत के पिछले "
+            f"वर्षों में इसी समय की गिरावट ({typical:+.2f}) से ज़्यादा है, जो सामान्य पकाव के ख़िलाफ़ जाता है। पर पिछले साल "
+            "सिर्फ़ मोटी तुलना हैं: उनकी तारीख़ें और फ़सल की अवस्था अलग हो सकती है।",
+            f"No cut shows: only {pct(bare)}% of the plot is bare. This fall ({signed(delta)}) is also more "
+            f"than this field's past years at this time ({typical:+.2f}), which argues against ordinary "
+            "ripening. Past years are only a rough control: their dates and crop stage can differ.",
+        )
     if bare <= BARE_MIN:
         return out(
             "rebutted",
