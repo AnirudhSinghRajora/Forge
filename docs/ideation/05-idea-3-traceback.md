@@ -1,4 +1,4 @@
-# 04 — Idea #2: TraceBack: provenance-first misinformation & scheme-scam verifier
+# 05 — Idea #3: TraceBack: provenance-first misinformation & scheme-scam verifier
 
 > **Forward anything suspicious: a video, voice note, screenshot, link or APK. An investigator agent traces where it came from, checks it against official sources, and sends back a verdict with evidence and a forwardable debunk card in your language.**
 
@@ -130,14 +130,13 @@ Inputs are always real user forwards, and every verdict cites live sources, so t
 | Agentic (25) | Strongest of the three: routing, iterative search, thresholds, multi-tool investigation |
 | Impact & USP (25) | Huge reach. USP = provenance + official-source + scam focus vs. a deepfake-only classifier. |
 | Tech (20) | Multimodal pipeline, evidence graph, clustering, security analysis |
-| Audience award | **Best of the three.** Debunk cards are built to be shared, the topic is in the news this week, and the team can post "we caught X" content daily. |
 
 ## 9. Risks and mitigations
 
 | Risk | Mitigation |
 |---|---|
 | **Wrong verdict live** (credibility-destroying) | 4-level scale with "Unverified" as an honest default; evidence thresholds; always show sources; never let a detector score alone decide a verdict |
-| Crowded concept; judges have seen many | Lead the pitch with the **DAU 2% insight** and the provenance + scam focus. Don't open with "deepfake detection". |
+| **Crowded concept; judges have seen many** (the main reason it ranks #3 after the audience award was deprioritised) | Lead the pitch with the **DAU 2% insight** and the provenance + scam focus. Don't open with "deepfake detection". |
 | Paid or limited APIs (reverse search, VirusTotal, GDELT) | Budget a small paid tier; cache aggressively; pre-cluster repeated forwards |
 | Indic audio deepfake detection is immature | Present audio detection as a weak signal only; lean on provenance |
 | Political sensitivity | Neutral sourcing (official sources + IFCN-signatory fact-checkers); show evidence rather than editorialising |

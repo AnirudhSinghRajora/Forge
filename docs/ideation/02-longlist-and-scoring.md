@@ -1,86 +1,95 @@
 # 02 — Longlist & Scoring
 
+> **Revision 2 (31 Oct 2026):** the team said the **audience award is not a priority**. The goal is a strong impression on judges, real impact, and a problem that is **not fully solved yet**. Virality was removed as a criterion, weight moved to "unsolved gap" and to the rubric's heaviest pillars, and a new candidate (**L, AgniDrishti**) was added. Result: **AgniDrishti enters at #2, TraceBack moves to #3, and Nigrani drops out of the top 3** (its rank depended on virality).
+
 ## Method
 
-1. Generated 11 candidate ideas across both themes: each listed problem, plus cross-cutting variants and the team's existing ScholarFlow direction.
-2. Researched each one for demand evidence, existing solutions, and data availability. Probed the key data sources live on 31 Oct 2026 (see [07](07-sources.md#live-api-checks-31-oct-2026)).
-3. Scored each idea 1–5 on seven weighted criteria (weights in [01 §7](01-competition-analysis.md#7-selection-criteria-derived-from-the-above)). Weighted total = Σ(score × weight) / 5, out of 100.
-4. Applied one hard gate: **any idea whose core output would need non-public or fabricated data is flagged as a disqualification risk**, whatever its score.
+1. Generated 12 candidate ideas across both themes, including the team's existing ScholarFlow direction.
+2. Researched demand evidence, existing solutions (**how much of the problem is already solved**), and data availability. Probed key data sources live (see [07](07-sources.md#live-api-checks-31-oct-2026)).
+3. Scored each idea 1–5 per criterion. Weighted total = Σ(score × weight) / 5, out of 100.
+4. Hard gate: any idea whose core output would need non-public or fabricated data is flagged as a **disqualification risk**.
 
-The scores are our judgement grounded in the evidence. They are not a prediction of judges' marks.
+### Criteria and weights (revision 2)
 
-## The longlist
+| Criterion | Weight | What a 5 means |
+|---|---:|---|
+| **Unsolved gap / USP** | 25 | No existing product or government system addresses the core gap, and few competing teams will attempt it |
+| Demand evidence | 10 | Protests, court cases, official reports, or parliamentary questions show people actively want a fix |
+| Impact & reach | 15 | Crores of people affected, or severe harm (money, health, life) |
+| Agentic depth | 20 | Real multi-step planning, tool use, fallback, and self-correction (rubric: 25 pts) |
+| Technical depth | 10 | Matches the rubric's "genuine technical execution" examples |
+| Live-demo robustness & data compliance | 20 | No OTP/captcha/closed-portal dependency; all data live and official (rubric: 30 pts + disqualification rules) |
 
-| ID | Idea | Theme · Problem | Core concept |
+Scores are evidence-grounded judgement, not a prediction of judges' marks.
+
+## Longlist
+
+| ID | Idea | Theme · Problem | How solved is it today? |
 |---|---|---|---|
-| A | **FasalSaakshi** (crop-loss evidence & claim agent) | T2 · P2 (+P1) | Plot-level satellite (optical + radar) and weather evidence of crop damage. An agent files PMFBY intimation and grievance within the deadlines, with voice in the farmer's language. |
-| B | **TraceBack** (provenance-first misinformation & scam verifier) | T1 · P4 (+P1) | WhatsApp-first investigator agent: traces origin, checks official registries and fact-checks, analyses links/APKs, returns a forwardable debunk in local language |
-| C | **Nigrani** (civic accountability agent) | T1 · P2 | Multimodal civic report, then severity, de-dup, jurisdiction resolution, official filing, SLA tracking, and an escalation ladder ending in an RTI draft |
-| D | ScholarFlow (scholarship application agent) | T1 · P3 | Browser agent that fills scholarship applications from a student profile (existing team plan) |
-| E | Mandi "Sell-or-Hold" agent | T2 · P1 | Live mandi prices across nearby markets, short-term forecast, transport cost, and rain risk, producing a recommendation of where and when to sell |
-| F | Gazette-to-Citizen change explainer | T1 · P1 | Monitors eGazette/PIB notifications, diffs them against prior rules, and pushes a personalised "what changed for you" voice explainer |
-| G | Outdoor-worker heat & air-quality guardian | T2 · P3 | Hyperlocal WBGT and AQI for shift planning by contractors and gig platforms, with worker voice alerts |
-| H | Disaster relief logistics swarm | T2 · P4 | SACHET alerts, then flood-aware routing, relief dispatch |
-| I | Edge smart-grid / water controller | T2 · P3 | Edge agent reallocating micro-grid or water during heatwaves |
-| J | Generic farmer advisory voice bot | T2 · P1 | Weather + mandi + soil, served as conversational advice |
-| K | Read-only "Sarkari status" agent | T1 · P3 | Browser agent that checks status across legacy portals (PM-Kisan, eCourts, EPFO) over WhatsApp |
+| **A** | **FasalSaakshi**: farmer-side satellite crop-loss evidence + claim agent | T2 · P2 | **Unsolved for farmers.** Satellite assessment exists only on the insurer/state side, at unit level. |
+| **L** | **AgniDrishti**: live burnt-area truth + Delhi-impact + prevention agent for stubble burning | T2 (P2-adjacent) | **Unsolved operationally.** Official data still uses fire counts; burnt-area analysis exists only as an annual research report; CAQM protocol pending. |
+| **B** | **TraceBack**: provenance-first misinformation & scheme-scam verifier | T1 · P4 (+P1) | **Partly solved.** Human fact-checkers, DAU tipline, enterprise detectors exist; the long tail and regional languages are unserved. |
+| C | Nigrani: civic accountability agent | T1 · P2 | Partly solved. Many reporting channels exist; escalation and follow-through don't. |
+| D | ScholarFlow: scholarship application agent | T1 · P3 | Partly solved (myScheme, NSP, scholarship aggregators); execution unsolved but blocked by biometrics |
+| E | Mandi "Sell-or-Hold" agent | T2 · P1 | **Mostly solved for price discovery.** The eNAM app already shows prices at mandis within 100 km with route maps. Net-realisation and timing advice remain open. |
+| F | Gazette-to-Citizen change explainer | T1 · P1 | Partly solved (myScheme, Haqdarshak, Jugalbandi) |
+| G | Outdoor-worker heat & AQI guardian | T2 · P3 | Unsolved, but off-season for heat |
+| H | Disaster relief logistics swarm | T2 · P4 | Unsolved, but needs non-public data |
+| I | Edge smart-grid / water controller | T2 · P3 | Needs non-public telemetry |
+| J | Generic farmer advisory voice bot | T2 · P1 | **Solved/saturated** (Kisan e-Mitra, Farmer.Chat, many startups) |
+| K | Read-only "Sarkari status" agent | T1 · P3 | Partly solved (UMANG, DigiLocker); captcha-heavy |
 
-## Scoring matrix
+## Scoring matrix (revision 2)
 
-Scores are 1–5. Weights: Uniq 20 · Demand 15 · Impact 15 · Agentic 15 · Tech 10 · Demo/Data 15 · Viral 10.
+Weights: Unsolved 25 · Demand 10 · Impact 15 · Agentic 20 · Tech 10 · Demo/Data 20.
 
-| ID | Uniq | Demand | Impact | Agentic | Tech | Demo/Data | Viral | **Total** | Gate |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| **A** FasalSaakshi | 5 | 4 | 4 | 4 | 5 | 4 | 3 | **84** | ✅ all-open data |
-| **B** TraceBack | 3 | 5 | 5 | 5 | 4 | 3 | 5 | **84** | ✅ (inputs are real user forwards) |
-| **C** Nigrani | 2 | 5 | 4 | 4 | 3 | 4 | 5 | **75** | ✅ (needs real reports collected during the event) |
-| D ScholarFlow | 3 | 4 | 4 | 5 | 4 | 2 | 4 | **73** | ⚠ live-portal dependency |
-| E Mandi Sell-or-Hold | 3 | 4 | 5 | 4 | 3 | 4 | 2 | **73** | ⚠ data.gov.in timed out from our container; verify from an Indian network |
-| G Heat/AQI guardian | 4 | 4 | 4 | 3 | 3 | 3 | 3 | **70** | ✅ but off-season for heat |
-| F Gazette-to-Citizen | 3 | 3 | 4 | 3 | 3 | 5 | 2 | **67** | ✅ |
-| H Relief logistics swarm | 3 | 3 | 4 | 5 | 4 | 2 | 2 | **66** | ❌ supplier inventory / fleet APIs don't exist publicly → dummy-data risk |
-| K Sarkari status agent | 3 | 3 | 4 | 4 | 3 | 2 | 2 | **61** | ⚠ captchas/OTP |
-| J Generic farmer bot | 1 | 4 | 5 | 3 | 2 | 4 | 2 | **60** | ✅ but saturated |
-| I Edge grid controller | 3 | 3 | 3 | 3 | 4 | 1 | 1 | **52** | ❌ no real telemetry → dummy-data risk |
+| Rank | ID | Unsolved | Demand | Impact | Agentic | Tech | Demo/Data | **Total** | Gate |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---|
+| 1 | **A** FasalSaakshi | 5 | 4 | 4 | 4 | 5 | 4 | **87** | ✅ all-open data, verified |
+| 2 | **L** AgniDrishti | 4 | 4 | 5 | 3 | 5 | 4 | **81** | ✅ open data (FIRMS needs a free key) |
+| 3 | **B** TraceBack | 3 | 5 | 5 | 5 | 4 | 3 | **80** | ✅ |
+| 4 | E Mandi Sell-or-Hold | 3 | 4 | 5 | 4 | 3 | 3 | **72** | ⚠ agmarknet.gov.in 403 / data.gov.in timeout from non-Indian network |
+| 5 | D ScholarFlow | 3 | 4 | 4 | 5 | 4 | 2 | **71** | ⚠ live-portal dependency, NSP deadline today |
+| 5 | F Gazette-to-Citizen | 3 | 3 | 4 | 3 | 3 | 5 | **71** | ✅ |
+| 7 | C Nigrani | 2 | 5 | 4 | 4 | 3 | 4 | **70** | ✅ (needs real reports collected) |
+| 7 | G Heat/AQI guardian | 4 | 4 | 4 | 3 | 3 | 3 | **70** | ✅ |
+| — | H Relief logistics swarm | 3 | 3 | 4 | 5 | 4 | 2 | 69 | ❌ dummy-data risk |
+| 10 | K Sarkari status agent | 3 | 3 | 4 | 4 | 3 | 2 | **63** | ⚠ captchas/OTP |
+| 11 | J Generic farmer bot | 1 | 4 | 5 | 3 | 2 | 4 | **60** | ✅ but saturated |
+| — | I Edge grid controller | 3 | 3 | 3 | 3 | 4 | 1 | 54 | ❌ dummy-data risk |
 
-## Why each idea landed where it did
+**How close are the scores?** A leads clearly. L and B are effectively tied (one point apart, well within judgement error). The choice between them is a trade-off, explained in [06](06-recommendation-and-open-questions.md). Everything from #4 down is clustered at 70–72, and none of those ideas is a strong contender.
 
-### A — FasalSaakshi (84): most differentiated
-- **Demand:** Farmers have protested satellite-based claim cuts. In Haryana 2025, they say crop-cutting experiments put claims at ₹450 cr and satellite-based assessment cut that by about ₹350 cr. Rajasthan claims were pending well beyond the 2-month timeline. Nationally, ₹4,107 cr of claims were still pending as of 31 Dec 2025.
-- **Gap:** Satellites are used *on* farmers. YES-TECH runs at insurance-unit level (moderate 5–30 m inputs, a minimum 30% weightage), which suits unit aggregation but not individual small farms. No mainstream tool gives the farmer plot-level evidence.
-- **Rubric fit:** "Geospatial models" is literally named in the depth criterion, and Copernicus is named in the problem text.
-- **Lower virality (3):** farmers aren't the hackathon's social audience. A satellite before/after visual still makes a strong reel.
+## Rationale per idea
 
-### B — TraceBack (84): most viral, most timely, most crowded
-- **Demand:** A PIB debunk of a Rajnath Singh deepfake went out *today*. McAfee (Feb 2026) says 1 in 5 Indians have encountered a voice-clone scam. Fake PM-Kisan APKs have caused real losses (₹1.95 lakh in a single Hyderabad case), and police alerts are out in multiple states.
-- **Key insight from data:** the Deepfakes Analysis Unit found only **2% deepfakes** among tipline submissions; 9% were manipulated media and 55% were spam. **Most misinformation is cheapfakes and miscontext, not deepfakes.** So a *provenance and official-source* engine beats yet another deepfake classifier. That's our USP over the crowd.
-- **Uniqueness only 3:** "fake news detector" will be among the most common submissions. Live-demo robustness is also only 3, because detectors on unknown live inputs are unreliable and verdicts must be guarded carefully.
+### A — FasalSaakshi (87)
+- **Unsolved:** satellites are used *on* farmers, never *for* them. YES-TECH works at insurance-unit level (5–30 m inputs, at least 30% weightage) and "not individual small farms".
+- **Demand:** the Haryana 2025 protest says CCE estimates were cut by about ₹350 cr after satellite assessment. ₹4,107 cr pending nationally (Dec 2025). A fresh Sirsa hail event (25 Oct 2026).
+- **Judge impression:** the rubric names "geospatial models"; few teams will attempt it; a robust "drop any pin" demo.
+- Deep dive: [03](03-idea-1-fasalsaakshi.md)
 
-### C — Nigrani (75): high demand, crowded concept
-- **Demand:** In CPGRAMS feedback, 46% of citizens (Aug 2025) and 37% (Nov 2025) were dissatisfied after "resolution". State/UT pendency was 1,92,877 (Feb 2026). The Karnataka HC is monitoring Bengaluru potholes (Aug 2026), and Bengaluru tops NCRB civic-negligence deaths.
-- **Uniqueness only 2:** pothole-reporting apps are a hackathon staple. What lifts it is the **accountability agent** (jurisdiction resolution, SLA watch, escalation, RTI). The concept still reads as familiar on first impression.
+### L — AgniDrishti (81)
+- **Unsolved:** official counts miss post-overpass fires. iFOREST found counts down 90%+ while burnt area fell only 25–37%. The Supreme Court is examining evasion, and CAQM's burnt-area protocol isn't operational.
+- **Impact:** Delhi-NCR air (30M+ people), plus emissions accounting.
+- **Weaker on:** agentic depth (analysis-heavy, so the prevention layer must be real) and **theme fit** (environmental, but not an exact match to a listed problem).
+- Deep dive: [04](04-idea-2-agnidrishti.md)
 
-### Why ScholarFlow dropped to #4
-- **Demand is real.** SC Post-Matric Scholarship beneficiaries fell from 48 lakh (2024-25) to 36 lakh (2025-26), and the ministry blamed poor awareness (The Wire). Agentic depth is excellent (5).
-- **But live-demo robustness is 2/5 right now:**
-  1. **NSP 2026-27's last date for most scholarships is 31 Oct 2026, today.** Institute verification closes 15 Nov. During judging, there may be no open NSP application to demo against. *(Secondary sources; confirm on scholarships.gov.in.)*
-  2. **NSP One-Time Registration requires face authentication** (Aadhaar FaceRD). An agent cannot and should not automate that, so the "end-to-end" claim breaks at step 1.
-  3. Aadhaar OTPs, captchas, and the ethics of submitting real applications on someone's behalf during a public demo.
-  4. The playbook itself says "no suitable portal or authorized end-to-end workflow has yet been established."
-- **If the team still prefers it:** pivot to state scholarship portals with windows still open, or reframe as eligibility, documents and pre-filled review with the human doing OTP/face-auth. That turns the 25-point agentic story into "preparation", which the playbook itself warns against overselling.
+### B — TraceBack (80)
+- **Unsolved:** the long tail of regional-language misinformation and scheme scams. **But** many tools exist (human fact-checkers, the DAU tipline, Vastav AI, SynthID/C2PA checks), and "fake news detector" will be one of the **most common submissions**, which hurts first impressions.
+- **Strongest agentic story** of all candidates, and enormous reach.
+- Deep dive: [05](05-idea-3-traceback.md)
 
-### E — Mandi Sell-or-Hold (73): solid, but less differentiated
-- Real pain: May 2026 coverage says farmers received about 37% of the retail price; tomato price crashes led to highway blockades in Karnataka (Aug 2026).
-- But "crop price prediction" is a common hackathon build. The live dependency (data.gov.in mandi API) **timed out from our container**, so it needs verifying from India. **Can be folded into A** as a post-loss "salvage sale" feature if wanted.
+### E — Mandi Sell-or-Hold (72): dropped from contention
+New finding: **the eNAM app already shows prices for nearby eNAM and non-eNAM mandis within 100 km, with route maps** (Lok Sabha reply). eNAM has 1.80 crore farmers registered (Mar 2026). The open gap (net realisation after transport and commission, and sell-vs-store timing) is real. Farmers get only **33% / 36% / 37%** of the consumer rupee for tomato / onion / potato (RBI WP 08/2024). But the core is "partly solved", forecasts carry about 20% error (SARIMA onion MAPE 21% in one study), and the price sources were unreachable from our container.
 
-### G — Heat/AQI guardian (70)
-High impact (around 380M heat-exposed workers; 40,000+ heatstroke cases and 700+ deaths in 2024). But in November the live heat signal is weak, and AQI is a stretch for Theme 2's wording. Strong idea for a summer hackathon.
+### D — ScholarFlow (71)
+NSP's 2026-27 deadline for most scholarships is **today**, and OTR requires **Aadhaar face authentication**, so the live end-to-end demo breaks at step 1. Details in [06](06-recommendation-and-open-questions.md#on-scholarflow-the-existing-plan).
 
-### F, K (67, 61)
-F is robust but low on agentic depth and virality. K has the same captcha/OTP problem as D, with a weaker story.
+### C — Nigrani (70): out of the top 3
+Without the virality criterion, its weakness on "unsolved" (many reporting apps; a crowded hackathon concept) decides it. Its deep dive is kept as a runner-up reference: [08](08-runner-up-nigrani.md).
+
+### F, G, K, J
+F is robust but low on agentic depth. G is strong but off-season for heat, and AQI is a stretch for the theme. K has the same captcha/OTP problem as D. J is saturated.
 
 ### H, I: gated out
-Both need data (supplier inventories, fleet telemetry, grid/sensor feeds) that is not publicly available. Building them would mean simulated data, which is a **zero-tolerance disqualification** under the rules.
-
-### J (60)
-Saturated: Kisan e-Mitra has handled 8.2M+ queries, Digital Green's Farmer.Chat has reached 460k users, and many startups do the same. No clear USP is available in a 30-hour window.
+Both need non-public data (supplier inventories, fleet or grid telemetry). Building them would require simulated data, which the rules disqualify with zero tolerance.

@@ -1,8 +1,10 @@
-# 05 — Idea #3: Nigrani (निगरानी, "oversight"): the civic accountability agent
+# 08 — Runner-up (was #3): Nigrani (निगरानी, "oversight"): the civic accountability agent
 
 > **A reporting app sends your complaint off and that's the end of it. Nigrani works out who is responsible, files the complaint through the official channel, watches the deadline, and escalates when it's missed, all the way to an RTI request.**
 
 **Theme 1 · Problem 2** (Transparent Civic Grievance & Infrastructure Triage System).
+
+> Dropped out of the top 3 in revision 2, once the audience award was deprioritised. Its rank depended on virality, and the concept is crowded. Kept for reference.
 
 ---
 

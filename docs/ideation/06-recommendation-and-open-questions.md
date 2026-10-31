@@ -1,54 +1,61 @@
 # 06 — Recommendation & Open Questions
 
+> **Revision 2 (31 Oct 2026):** the team's priorities are **judge impression, impact, and a problem that's not fully solved yet**. The audience award is not a goal.
+
 ## Head-to-head: the top 3
 
-| | **#1 FasalSaakshi** | **#2 TraceBack** | **#3 Nigrani** |
+| | **#1 FasalSaakshi** | **#2 AgniDrishti** | **#3 TraceBack** |
 |---|---|---|---|
-| Theme / problem | T2 · P2 | T1 · P4 (+P1) | T1 · P2 |
-| Score | 84 | 84 | 75 |
-| Likely competitor overlap | **Low.** Few student teams attempt satellite work. | **High.** "Fake news detectors" will be everywhere. | **High.** Pothole apps are a staple. |
-| Demand evidence | Protests, ₹ crore pending claims, fresh Sirsa hail (25 Oct 2026) | Rajnath deepfake debunked today; APK scams; IT Rules 2026 | CPGRAMS dissatisfaction 37–46%; HC monitoring |
-| Live-demo risk | **Low.** Archives are stable; "drop any pin" works | **Medium.** A wrong verdict on an unknown input is fatal | Medium. Portal filing is fragile; escalation needs time |
-| Agentic showcase | Optical → radar fallback, baselines, deadline actions | Claim routing, iterative search, evidence thresholds | Stateful escalation over days |
-| Named-in-rubric depth | **Geospatial models** ✓ | Custom RAG / complex graph ✓ | Browser automation ✓ |
-| Audience-award potential | Medium-high (satellite before/after reels) | **Highest** | High |
-| Data compliance | All open official data, verified live | Real user forwards + live sources | Real reports must be collected |
+| Theme | T2 · P2 (exact fit) | T2 (environmental; P2-adjacent) | T1 · P4 (+P1) (exact fit) |
+| Score | **87** | 81 | 80 |
+| How unsolved? | **Unsolved for farmers.** Satellites only work for insurers/states, at unit level. | **Unsolved operationally.** Official data still counts fires; burnt-area work exists only as an annual research report. | Partly solved. Many fact-checkers and detectors exist; the long tail is unserved. |
+| Likely competitor overlap | Low | Very low | **High** ("fake news detector") |
+| Impact | Crore-scale PMFBY enrolment; ₹ thousands of crores in disputed or pending claims | 30M+ people in Delhi-NCR; national emissions accounting; Supreme Court-level issue | Hundreds of millions of WhatsApp users; scam losses |
+| Agentic showcase | **Strong:** optical → radar fallback, baselines, deadline-driven filing | **Medium:** analysis-heavy; prevention actions must be real | **Strongest:** claim routing, iterative search, evidence thresholds |
+| Live-demo risk | Low | Low | Medium (a wrong verdict live is fatal) |
+| Rubric-named depth | Geospatial ✓ | Geospatial ✓ | RAG / state graph ✓ |
+| Main weakness | Satellite signal ≠ yield, so it must be presented as evidence with confidence | Theme fit; can read as "policing farmers" | Crowded first impression |
 
 ## Recommendation: build #1, FasalSaakshi
 
-1. **Differentiation is the biggest lever we control.** In a pool of IIT/NIT/BITS teams, the obvious ideas will appear many times. FasalSaakshi is unlikely to have a near-duplicate, and its core idea (*"put the satellite on the farmer's side"*) is easy to remember.
-2. **It's the safest of the three on the biggest pillar (Live Demo, 30 points).** Satellite archives don't have captchas, OTPs or closing deadlines, and judges can pick any location in India.
-3. **The rubric names it.** "Geospatial models" is listed as an example of genuine depth, and the problem statement names Copernicus.
-4. **The timing works.** There's a real hail event (Sirsa/Fatehabad, 25 Oct 2026), with cloud-free before (18 Oct) and after (28 Oct) imagery already verified.
-5. **It has a visual story** for the audience award: before/after imagery of a destroyed field from space.
+It is the best match for all three of your criteria:
 
-### When to pick #2 instead
-Choose TraceBack if **any two** of these are true:
-- The team rates the **audience award** as highly as the judges' prizes, and has real social reach (big LinkedIn/Instagram followings, college pages willing to reshare).
-- Someone on the team is strong in **multimodal / audio / CV pipelines** and nobody has any appetite for geospatial work.
-- The team is confident it can make the "Unverified" path feel trustworthy and avoid a wrong verdict live.
+1. **Not solved yet, and clearly so.** The government's own satellite systems (YES-TECH, CROPIC) serve insurers and states at insurance-unit level. No farmer-side, plot-level evidence tool exists. Farmers protested in Haryana and Rajasthan in 2025 precisely because they couldn't contest the satellite numbers.
+2. **Judge impression.**
+   - It matches Theme 2 Problem 2 almost word for word (satellite + weather → micro-location risk → mitigation and action).
+   - It uses the rubric's own example of depth ("geospatial models").
+   - It has a real agentic story: the agent switches from optical to radar when it's cloudy, checks baselines, self-checks, and acts on deadlines.
+   - Few or no other teams will have built anything like it.
+3. **Impact.** Crore-scale enrolment, a 72-hour rule that silently kills valid claims, ₹4,107 cr pending (Dec 2025), and a real hail event in Sirsa this week to demo on. Cloud-free before (18 Oct) and after (28 Oct) imagery is already verified.
+4. **Safest live demo:** no OTP, captcha, closing portals, or rate-limited single source.
 
-### When to pick #3
-Only if the team has strong **city-specific access**: real reports from a ward or city, contacts at a civic body, or a campus community willing to file 50+ real reports in the next few hours.
+### Choose #2 (AgniDrishti) instead if…
+- The team is most energised by **air pollution and climate accountability**, and is comfortable pitching the theme fit (Theme 2's "environmental challenges" plus Problem 2's satellite risk and mitigation framing).
+- You want the **highest "nobody has done this live" factor**. The iFOREST report and the Supreme Court hearings give judges instant context.
+- You commit to making the **prevention/action layer real** (officer briefs, farmer outreach with official incentive rules). Otherwise the agentic score suffers.
+
+**Useful fact:** #1 and #2 share the same core engine (Sentinel-2 STAC search + per-field index time series). **The first 3–4 hours of work are identical**, so you can start now and make the final call after the engine runs on real fields.
+
+### Choose #3 (TraceBack) instead if…
+- Nobody on the team wants to touch raster/geospatial data, and you have strong multimodal/audio skills.
+- You are confident in making "Unverified" an honest, well-designed outcome. A wrong verdict in front of judges is the main risk.
+- You can lead the pitch with the *provenance + official-source + scam* angle (the DAU "only 2% are deepfakes" insight), not "deepfake detection".
 
 ### On ScholarFlow (the existing plan)
-It ranked #4. The deciding issue is timing: **NSP's 2026-27 deadline for most scholarships is today, and OTR needs Aadhaar face authentication**, so a live end-to-end application demo is unlikely to hold up during judging. If the team still wants Theme 1 P3, it needs to retarget to a portal with an open window and no biometric step, and that has to be confirmed in the next hour. `HACKATHON_PLAYBOOK.md` contains a lot of process material that isn't specific to ScholarFlow (phases, checkpoints, handoffs). It can be reused for any of these ideas by swapping the project-specific sections.
+It's now **#5 (71)**. NSP's 2026-27 deadline for most scholarships is **today**, and One-Time Registration requires **Aadhaar face authentication**, so a live end-to-end application demo is unlikely to survive judging. The process parts of `HACKATHON_PLAYBOOK.md` (phases, checkpoints, handoffs) can be reused for any idea above.
 
 ## Open questions for the team
 
-These are the questions that could change the recommendation. We didn't want to guess the answers:
-
-1. **Are you open to dropping ScholarFlow?** The playbook was committed yesterday. Has anything been built or validated since, e.g. a working portal flow?
-2. **Exact submission deadline and time zone?** The screenshot says ~31 h left. Is there a separate deadline for the video, deck and form?
-3. **Skills:** has anyone worked with geospatial/raster data (GDAL, rasterio, xarray, Earth Engine), or with audio/vision ML? This decides between #1 and #2.
-4. **Languages:** which Indian languages do team members speak fluently? The demo voice notes should be in a language you can check yourselves (Hindi/Punjabi fits the Sirsa demo).
-5. **Audience award:** roughly what social reach does the team have across X/Instagram/LinkedIn? Is the audience award a goal or a bonus?
-6. **API budget:** are you willing to spend a small amount on paid tiers (an LLM API, reverse-image search, a higher Open-Meteo quota)? #2 needs this more than #1.
-7. **Field contacts:** does anyone know a farmer, FPO or KVK (for #1), or a city ward/community (for #3)? Even one real user quote in the pitch helps the impact score a lot.
+1. **Are you OK dropping ScholarFlow?** Has anything been built or validated for it since the playbook was written?
+2. **Exact submission deadline (and time zone)?** Is there a separate deadline for the video, deck and form?
+3. **Skills:** has anyone worked with raster/geospatial data (rasterio, xarray, GDAL, Earth Engine), or with audio/vision ML? This is the main tie-breaker between #1/#2 and #3.
+4. **Languages:** which Indian languages can the team verify? Hindi/Punjabi suits both Sirsa (#1) and Punjab (#2).
+5. **Paid API budget:** a small amount for an LLM API and a higher weather-API quota helps #1/#2. #3 also needs reverse-image search.
+6. **Field contacts:** any farmer, FPO, KVK or agriculture officer you could get one real quote from? A single real user voice makes the impact pillar much stronger.
 
 ## Next steps once the idea is locked
 
 1. Freeze scope to the "MVP cut" section of the chosen idea's doc.
-2. Assign owners. For #1: geospatial engine / agent + RAG + channel / UX + evidence PDF + demo.
-3. Prove the hardest real-data path first. For #1: plot polygon → S2 before/after NDVI on Sirsa within the first 3–4 hours.
-4. Start the audience-award content pipeline on day 1, not at the end.
+2. Assign owners. For #1: geospatial engine / agent + policy RAG + filing actions / channel + voice + evidence PDF + demo.
+3. **Hours 0–4:** prove the real-data core first. STAC search → per-plot NDVI before/after on Sirsa (#1) or burn index on Sangrur (#2).
+4. Integrate continuously, keep a deployed build from early on, and protect the last few hours for the video, deck and rehearsal.

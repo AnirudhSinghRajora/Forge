@@ -19,6 +19,10 @@ Run from our cloud build container (not an Indian network):
 | `api.data.gov.in/resource/9ef84268-…` (mandi prices) | timeout | Unreachable from container; test from India |
 | `factchecktools.googleapis.com/v1alpha1/claims:search` | 403 | Requires API key (free) |
 | `api.gdeltproject.org/api/v2/doc/doc` | 429 | Rate limit: 1 req / 5 s |
+| STAC search `sentinel-2-l2a` @ Sangrur, Punjab (75.84, 30.24), 15–31 Oct 2026 | 200 | Clear (0%) scenes 18, 20, 22, 25, 28 Oct |
+| `firms.modaps.eosdis.nasa.gov/api/area/csv/…` | 400 | Reachable; "Invalid MAP_KEY" with DEMO_KEY, so register a free key |
+| `agmarknet.gov.in`, `api.agmarknet.gov.in` | 403 | Blocked from non-Indian network |
+| `enam.gov.in/web/` | 200 | Reachable |
 
 ## Competition
 - Event page and rules: user-supplied screenshots and text (Forge '26, NxtWave Launchpad)
@@ -50,7 +54,23 @@ Run from our cloud build container (not an Indian network):
 - [World Bank blog: AI advice for small-scale producers](https://blogs.worldbank.org/en/agfood/can-ai-give-small-scale-producers-the-right-advice-)
 - [IndiaAI: Farmer.Chat use case](https://aikosh.indiaai.gov.in/home/use-cases/details/farmerchat_ai_powered_agricultural_advisory_at_scale.html)
 
-## Idea #2: misinformation, deepfakes, scams
+## Idea #2: AgniDrishti (stubble burning)
+- [The Week/PTI: satellites missing most farm fires (iFOREST 2025)](https://www.theweek.in/wire-updates/national/2025/12/08/del43-env-stubble-burning-report.html)
+- [The Wire: govt data on farm fires doesn't paint the entire picture](https://thewire.in/environment/govt-data-on-farm-fires-does-not-paint-entire-picture-says-new-report)
+- [Tribune: satellites miss majority of stubble fires](https://www.tribuneindia.com/news/delhi/satellites-miss-majority-of-stubble-fires-delhi-air-pollution-underestimated-report)
+- [Daily Pioneer: over 90% of large farm fires go undetected](https://dailypioneer.com/news/over-90-of-large-farm-fires-in-punjab-haryana-now-go-undetected)
+- [ThePrint: CAQM assessing intensity instead of counts](https://theprint.in/india/caqm-assessing-intensity-of-stubble-fires-instead-of-relying-on-fire-counts-in-haryana-punjab/3034123/)
+- [Scroll: SC to examine satellite evasion (Nov 2025)](https://scroll.in/latest/1088511/sc-to-examine-if-punjab-haryana-farmers-are-evading-satellite-surveillance-to-burn-crop-stubble)
+- [Scroll: satellite tracking underreports stubble burning](https://scroll.in/latest/1089140/scroll_in)
+- [LiveLaw: SC seeks 24/7 monitoring](https://www.livelaw.in/amp/top-stories/supreme-court-seeks-247-monitoring-of-stubble-burning-says-state-officials-cannot-help-farmers-avoid-satellite-detection-276663)
+- [Drishti: discrepancies in satellite data on farm fires](https://www.drishtiias.com/daily-updates/daily-news-analysis/discrepancies-in-satellite-data-on-farm-fires) *(secondary)*
+- [CivilsDaily: CAQM–Punjab–ISRO talks on tracking](https://www.civilsdaily.com/news/air-quality-panel-holding-talks-with-punjab-govt-and-isro-over-tracking-of-stubble-fires/) *(secondary)*
+- [Tribune: Haryana ₹1,200/acre residue incentive explainer](https://www.tribuneindia.com/news/haryana/explainer-haryana-targets-further-drop-in-stubble-burning-after-39-per-cent-decline)
+- [UNI: Jhajjar administration on stubble (Oct 2026)](https://www.uniindia.com/north-india/admin-jhajjar-farmers-stubble/220083)
+- [Tribune: delays in CRM incentives](https://www.tribuneindia.com/news/haryana/delays-in-crop-residue-management-incentives-may-discourage-farmers/amp)
+- [Lok Sabha AU1592 (CRM / custom hiring centres)](https://eparlib.sansad.in/bitstream/123456789/2998167/1/AU1592_zf34Ss.pdf)
+
+## Idea #3: TraceBack (misinformation, deepfakes, scams)
 - [IANS: deepfake videos on China/Arunachal, 27 Oct 2026](https://ianslive.in/nalin-kohli-slams-congress-over-sharing-deepfake-videos-on-china-arunachal-pradesh--20261027180703)
 - [Newsmobile: Rajnath Singh did not make this statement](https://www.newsmobile.in/nm-fact-checker/verified-rajnath-singh-did-not-make-this-statement-on-india-china-border-dispute/)
 - [Newschecker: Western Command chief claim](https://newschecker.in/fact-check/fact-check/did-former-western-command-chief-allege-chinese-incursion-in-arunachal-pradesh)
@@ -73,7 +93,7 @@ Run from our cloud build container (not an Indian network):
 - [OpenAI: advancing content provenance (May 2026)](https://openai.com/index/advancing-content-provenance)
 - [C2PA viewer: verifying AI images with C2PA/SynthID](https://c2paviewer.com/articles/verify-ai-generated-image-c2pa-synthid) *(secondary)*
 
-## Idea #3: civic grievances
+## Runner-up: Nigrani (civic grievances)
 - [PIB/DARPG CPGRAMS report, Sep 2025](https://static.pib.gov.in/WriteReadData/specificdocs/documents/2025/sep/doc2025915637301.pdf)
 - [PIB/DARPG CPGRAMS report, Nov 2025](https://static.pib.gov.in/WriteReadData/specificdocs/documents/2025/nov/doc20251110688501.pdf)
 - [PIB/DARPG report, Feb 2026](https://static.pib.gov.in/WriteReadData/specificdocs/documents/2026/feb/doc2026216792801.pdf)
@@ -94,6 +114,11 @@ Run from our cloud build container (not an Indian network):
 - [CareerIndia: NSP deadlines before 31 Oct](https://www.careerindia.com/news/nsp-2026-27-scholarship-portal-deadlines-verification-guide-011-66633.html) *(secondary)*
 
 ## Other longlist ideas
+- [PIB: eNAM factsheet (Apr 2026)](https://static.pib.gov.in/WriteReadData/specificdocs/documents/2026/apr/doc2026413845801.pdf)
+- [Lok Sabha AU2721 (eNAM app: mandis within 100 km)](https://eparlib.nic.in/bitstream/123456789/1056260/1/AU2721.pdf)
+- [RBI WP 08/2024: TOP vegetables value chain (farmer share 33/36/37%)](https://website.rbi.org.in/documents/87730/30842423/WPS+No.+8%2C+2024+-+Vegetables+Inflation+in+India.pdf)
+- [Business Standard: RBI study on farmer share](https://www.business-standard.com/amp/markets/capital-market-news/rbi-study-shows-tomato-onion-and-potato-farmers-get-only-a-third-of-retail-price-that-consumer-pays-124100400307_1.html)
+- [ICAR: onion price forecasting (Varanasi)](https://epubs.icar.org.in/index.php/IJAgS/article/view/111603)
 - [Outlook Business: why farmers dump crops (May 2026)](https://www.outlookbusiness.com/amp/story/industry/why-farmers-dump-crops-despite-rising-food-prices)
 - [UNI: Karnataka tomato price crash protests (Aug 2026)](https://test.uniindia.com/news/business-economy/tomoto-price-crash-karnataka/3939873.html)
 - [data.gov.in: current daily mandi prices](https://data.gov.in/resource/current-daily-price-various-commodities-various-markets-mandi)

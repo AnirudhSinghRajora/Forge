@@ -28,7 +28,7 @@
 | Every member must explain the codebase | One-person "black box" ML | Keep the architecture explainable. Each member owns a layer but walks through the whole flow. |
 | No pre-recorded demos disguised as live | — | The demo video must be a screen recording of the live app. Judges will also run it themselves. |
 
-## 4. The Audience Favourite Award: a separate, winnable prize
+## 4. The Audience Favourite Award (deprioritised by the team)
 
 Scoring: **reshare/repost = 5, comment = 3, like = 1**, summed across **X + Instagram + LinkedIn**.
 
@@ -60,14 +60,13 @@ Few teams will attempt real **geospatial / satellite** work (Theme 2 P2), becaus
 
 ## 7. Selection criteria derived from the above
 
-Used for scoring in [02](02-longlist-and-scoring.md):
+**Revision 2:** the team deprioritised the audience award. Virality is no longer scored, and the emphasis is on judge impression, impact, and a problem that is **not fully solved yet**.
 
 | Criterion | Weight | Why |
 |---|---:|---|
-| Uniqueness / USP vs existing products **and** likely competitor builds | 20 | Rubric pillar 3, plus differentiation from the crowd |
-| Evidence of real demand (people actively asking or protesting) | 15 | "Real problem people are asking solutions for" |
+| Unsolved gap / USP: not addressed by existing products or government systems, and unlikely to be built by competing teams | 25 | Rubric pillar 3 + "not fully solved yet" + standing out to judges |
+| Evidence of real demand (protests, court cases, official reports) | 10 | "Real problem people are asking solutions for" |
 | Impact & reach (number of people, severity) | 15 | Rubric pillar 3 |
-| Agentic depth (genuine multi-step tool use, self-correction) | 15 | Rubric pillar 2 |
+| Agentic depth (genuine multi-step tool use, self-correction) | 20 | Rubric pillar 2 (25 pts) |
 | Technical depth | 10 | Rubric pillar 1 |
-| Live-demo robustness & data compliance | 15 | Rubric pillar 4 plus the disqualification rules |
-| Audience-award virality | 10 | Separate prize |
+| Live-demo robustness & data compliance | 20 | Rubric pillar 4 (30 pts) + disqualification rules |

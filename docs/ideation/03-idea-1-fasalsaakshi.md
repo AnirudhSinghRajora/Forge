@@ -111,7 +111,7 @@ What judges will see: **self-correction** (cloudy, so switch to radar; the drop 
 | Policy RAG | PMFBY operational guidelines + state notifications, chunked with clause IDs | Citation-first answers |
 | Storage | Postgres + PostGIS (plots, cases, evidence), object storage for PNG/PDF | Case history for re-checks |
 | Scheduler | Cron/worker that re-checks new passes and deadlines | Shows autonomy over time |
-| Output | Evidence-pack PDF (before/after chips, charts, citations), voice note | This is the visual asset for the audience award |
+| Output | Evidence-pack PDF (before/after chips, charts, citations), voice note | The strongest visual moment for judges |
 
 ---
 
@@ -148,7 +148,6 @@ All official, open data. **No dummy data anywhere** in the pipeline.
 | AI Reasoning & Agentic (25) | Real branching (optical → SAR), baselines, contradiction checks, cited outputs, deadline-driven actions, scheduled re-checks |
 | Impact & USP (25) | Crore-scale enrolment; live protests; the farmer-side evidence flip is novel |
 | Tech Depth (20) | Geospatial time-series, SAR, segmentation, RAG, state graph: all named-in-rubric categories |
-| Audience award | Before/after satellite reels of real hail damage, with the line "the satellite is on the farmer's side now" |
 
 ---
 
