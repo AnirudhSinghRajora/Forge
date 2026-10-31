@@ -149,6 +149,28 @@ class EvidenceRow(Base):
     )
 
 
+class VerifyRun(Base):
+    """One public recomputation of a sealed record. Independent of any client watching it."""
+
+    __tablename__ = "verify_runs"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    evidence_hash: Mapped[str] = mapped_column(String(64), index=True)
+    status: Mapped[str] = mapped_column(String(32), default="running")
+    started_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    checked: Mapped[int | None] = mapped_column(Integer)
+    total: Mapped[int | None] = mapped_column(Integer)
+
+
+class VerifyEvent(Base):
+    __tablename__ = "verify_events"
+    __table_args__ = (UniqueConstraint("run_id", "seq", name="uq_verify_events_run_seq"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    run_id: Mapped[str] = mapped_column(ForeignKey("verify_runs.id"), index=True)
+    seq: Mapped[int] = mapped_column(Integer)
+    payload: Mapped[dict] = mapped_column(JSON)
+
+
 class Action(Base):
     __tablename__ = "actions"
     id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)

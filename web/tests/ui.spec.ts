@@ -408,11 +408,11 @@ test.describe("verdict first, exhibits later", () => {
     const fadeWith = (vals: number[]) => ({ ...base.scale_fade, levels: [10, 100, 500, 1000, 3000].map((b, i) => ({ block_m: b, plot_cell_value: vals[i], context_min: null, chip_path: `test/fade_${b}.png` })) });
     await page.route("**/api/**", shell({ scale_fade: fadeWith([-0.1275, -0.1233, -0.1196, -0.13, -0.0811]) }, {}));
     await page.goto("/case/c?lang=en");
-    await expect(page.getByText("Your whole area changed together", { exact: false })).toBeAttached();
+    await expect(page.getByText("of this field's change remains, so a coarse average still shows most of it", { exact: false })).toBeAttached();
     await page.unroute("**/api/**");
     await page.route("**/api/**", shell({ scale_fade: fadeWith([-0.4372, -0.3518, -0.2667, -0.1635, -0.0983]) }, {}));
     await page.goto("/case/c?lang=en");
-    await expect(page.getByText("only 22% of the change remains", { exact: false })).toBeAttached();
+    await expect(page.getByText("only 22% of this field's change remains", { exact: false })).toBeAttached();
     await page.unroute("**/api/**");
     await page.route("**/api/**", shell({ scale_fade: fadeWith([0.0087, 0.0205, 0.0199, 0.0167, 0.0088]) }, {}));
     await page.goto("/case/c?lang=en");

@@ -15,6 +15,7 @@ from .optical import (
     timeline,
 )
 from .replay import flatten_numbers, replay
+from .replay_field import FieldReplay, replay_sar_field
 from .sar import sar_compare, search_sar
 from .scale import scale_fade
 from .stac import scene_archive

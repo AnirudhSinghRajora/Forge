@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sse_starlette.sse import EventSourceResponse
 
 from app.agent import parse as report_parse
-from app.agent import runner
+from app.agent import rubric, runner
 from app.agent.plot import PlotRejected, check_pin, validate_polygon
 from app.config import VERSION, get_settings
 from app.db import Action, Case, EvidenceRow, Plot, Run, RunEvent, init_db, session_scope
@@ -60,6 +60,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     closed = runner.recover_interrupted()
     if closed:
         log.warning("closed %d runs interrupted by the last restart", closed)
+    from app import verify
+
+    verify.recover_interrupted()
     stop_scheduler = None
     try:
         from app import jobs
@@ -408,6 +411,10 @@ def get_case(case_id: str, lang: str | None = Query(None)) -> dict:
             "sealed": bool(row is not None and row.evidence_hash),
             "verdict_ready": bool(row is not None and row.verdict_level),
             "exhibits": (row.exhibits or {}) if row is not None else {},
+            "rubric": {
+                "version": rubric.RUBRIC_VERSION, "p_field": rubric.P_FIELD,
+                "strong_delta": rubric.STRONG_DELTA, "moderate_delta": rubric.MODERATE_DELTA,
+            },
         }
 
 
@@ -610,10 +617,17 @@ def ask(case_id: str, body: AskBody) -> dict:
 
 
 @app.get("/api/verify/{evidence_hash}")
-async def verify_hash(evidence_hash: str) -> EventSourceResponse:
+async def verify_hash(
+    evidence_hash: str,
+    after: int = Query(0, ge=0),
+    rerun: bool = Query(False),
+    last_event_id: str | None = Header(None),
+) -> EventSourceResponse:
     from app import verify
 
-    return EventSourceResponse(verify.stream(evidence_hash), ping=15)
+    if last_event_id and last_event_id.isdigit():
+        after = max(after, int(last_event_id))
+    return EventSourceResponse(verify.stream(evidence_hash, after, rerun), ping=15)
 
 
 @app.get("/api/artifacts/{path:path}")
