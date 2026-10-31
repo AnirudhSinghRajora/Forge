@@ -490,7 +490,7 @@ export default function VerdictScreen({ caseId }: { caseId: string }) {
                 ))}
               </ErrorBoundary>
             </div>
-            <div className="foot-answers"><TwoQuestions ev={ev} /></div>
+            <div className="foot-answers"><TwoQuestions ev={ev} pField={env.rubric?.p_field ?? null} /></div>
           </div>
         </section>
 

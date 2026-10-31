@@ -522,8 +522,8 @@ def check_regional_trend(ev: Evidence) -> Objection:
     if far_yes:
         return out(
             "rebutted",
-            f"आपका पूरा इलाक़ा प्रभावित हुआ, सिर्फ़ आपका खेत नहीं: {far_hi}; {ring_hi}।",
-            f"Your whole area was hit, not only your field: {far_en}; {ring_en}.",
+            f"असर सिर्फ़ आपके खेत तक सीमित नहीं दिखता: {far_hi}; {ring_hi}।",
+            f"The effect does not look limited to your field: {far_en}; {ring_en}.",
         )
     if ring_yes:
         return out(

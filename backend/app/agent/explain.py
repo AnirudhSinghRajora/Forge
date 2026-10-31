@@ -125,11 +125,12 @@ def tests_line(ev: Evidence) -> tuple[str, str, str] | None:
         )
     if far:
         return (
-            ("आपका खेत तूफ़ान के इलाक़े से बाहर के खेतों से ज़्यादा बदला, पर आसपास के खेतों जितना ही: आपका पूरा इलाक़ा प्रभावित हुआ, "
-            "सिर्फ़ आपका खेत नहीं।"),
-            ("Your field changed more than fields outside the storm area, and about as much as the "
-            "fields around it: your whole area was hit, not only your field."),
-            "మీ పొలం తుఫాను ప్రాంతం వెలుపలి పొలాల కంటే ఎక్కువగా, చుట్టుపక్కల పొలాలంత మారింది: మీ పొలం మాత్రమే కాదు, మీ ప్రాంతమంతా దెబ్బతింది.",
+            ("आपका खेत तूफ़ान के इलाक़े से बाहर के खेतों से ज़्यादा बदला। आसपास के खेतों से फ़र्क़ इतना साफ़ नहीं कि पक्का कहा जाए, "
+            "और हो सकता है वे भी प्रभावित हुए हों, इसलिए असर सिर्फ़ आपके खेत तक सीमित नहीं दिखता।"),
+            ("Your field changed more than fields outside the storm area. The difference from the "
+            "fields around it is not clear enough to call, and they may have been affected too, so "
+            "the effect does not look limited to your field."),
+            "మీ పొలం తుఫాను ప్రాంతం వెలుపలి పొలాల కంటే ఎక్కువగా మారింది. చుట్టుపక్కల పొలాలతో తేడా ఖచ్చితంగా చెప్పేంత స్పష్టంగా లేదు, అవి కూడా ప్రభావితమై ఉండవచ్చు, కాబట్టి ప్రభావం మీ పొలానికే పరిమితమైనట్లు కనిపించడం లేదు.",
         )
     if ring:
         return (

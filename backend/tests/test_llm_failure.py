@@ -128,7 +128,7 @@ def test_testimony_states_both_answers_in_plain_words():
     from tests.conftest import placebo
 
     area = with_verdict(evidence(p=placebo(p=0.4), far=placebo(p=0.01)))
-    assert "whole area was hit, not only your field" in testimony.templates(area)[1]
+    assert "does not look limited to your field" in testimony.templates(area)[1]
     local = with_verdict(evidence(p=placebo(p=0.02), far=placebo(p=0.4)))
     assert "looks local to your field" in testimony.templates(local)[1]
     neither = with_verdict(evidence(p=placebo(p=0.4), far=placebo(p=0.4)))

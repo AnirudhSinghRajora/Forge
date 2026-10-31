@@ -115,11 +115,11 @@ def test_regional_trend_both_significant():
     assert get(ev, "regional_trend").outcome == "rebutted"
 
 
-def test_regional_trend_far_yes_ring_no_is_the_whole_area_and_not_a_weakness():
+def test_regional_trend_far_yes_ring_no_is_not_limited_to_the_field_and_not_a_weakness():
     o = get(evidence(p=placebo(p=0.4), far=placebo(p=0.01)), "regional_trend")
     assert o.outcome == "rebutted"
-    assert "whole area was hit, not only your field" in o.finding_en
-    assert "पूरा इलाक़ा प्रभावित हुआ" in o.finding_hi
+    assert "does not look limited to your field" in o.finding_en
+    assert "सीमित नहीं दिखता" in o.finding_hi
 
 
 def test_regional_trend_ring_yes_far_no_is_a_local_loss():

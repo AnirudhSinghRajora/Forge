@@ -66,8 +66,10 @@ def main() -> None:
     t0 = time.time()
     prefetch_region([pre.id, post.id], ["B04", "B08", "SCL"], wide)
     print(f"far region read in {time.time() - t0:.0f} s", flush=True)
+    # Every other pass the twin may read: before pre, and between pre and post.
     others = sorted((s for s in listed if s.date < pre.date), key=lambda s: s.datetime, reverse=True)
     others = [s for s in others if s.cloud_pct is None or s.cloud_pct <= optical_module.TWIN_MAX_TILE_CLOUD][:6]
+    others += [s for s in listed if pre.date < s.date < post.date]
     prefetch_region([pre.id, post.id], [b for b in QA_BANDS + RED_EDGE_BANDS if b not in ("B04", "B08", "SCL")], near)
     prefetch_region([s.id for s in others], ["B04", "B08", "SCL"], near)
     cover = worldcover(near)

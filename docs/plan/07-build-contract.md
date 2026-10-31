@@ -227,3 +227,5 @@ Forty plots drawn at random from the band (rule fixed in advance; note the inten
 3. **The Ten-Field Draw.** All cropland averages −0.07, fields that visibly dropped −0.245, luck of the draw about ±0.035. **The second scenario is partly mechanical:** those parcels are below −0.15 by definition, so these two are bounds, not an estimate. Allowed claim: "the average depends heavily on who is on the list, and nobody outside the insurer can see that list". Not allowed: "who is on the list matters more than luck" as a measured finding, or anything implying the rule is unfair.
 
 Demo plots: typical 28.715212 N, 76.231138 E (chosen by rule; moderate at best) and strongest 28.700911 N, 76.215719 E (labelled). Live pins from judges will mostly and correctly show little.
+
+**Wording correction to Addendum 4:** "far yes, ring no" reads "the effect does not look limited to your field", not "your whole area was hit". A ring test that misses its threshold does not show the neighbours changed as much; on the strongest plot they fell −0.12 against the field's −0.369. Exhibits other than the two answers make no claim about who was hit.

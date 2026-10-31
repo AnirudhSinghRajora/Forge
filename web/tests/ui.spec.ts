@@ -48,6 +48,7 @@ async function mock(page: Page, ev: ReturnType<typeof evidence>) {
     }
     if (p.match(/^\/api\/cases\/[^/]+$/)) {
       return route.fulfill({ json: {
+        rubric: { version: "v3", p_field: 0.025, strong_delta: -0.15, moderate_delta: -0.1 },
         case: { id: "testcase0001", lat: 29.53, lon: 75.03, event_date: "2026-10-25", plot: { geometry: ev.plot.geometry, area_ha: 4.31, centroid: ev.plot.centroid, crs: "x", warnings: [] }, active_run_id: null, latest_run: { id: "testrun0001", status: "done" } },
         evidence: ev,
         actions: [{ id: "a1", type: "intimation_draft", status: "open", payload: { available: true, text_hi: "विषय: फ़सल नुकसान की सूचना\nफ़सल: धान\nनाम / मोबाइल: [कृपया भरें]", text_en: "Subject: Intimation of crop loss\nCrop: paddy\nName / mobile: [please fill in]", channels: ["Crop Insurance App", "Krishi Rakshak Portal & Helpline 14447"], time_assumed: true } }],
@@ -353,7 +354,7 @@ test.describe("verdict first, exhibits later", () => {
     if (u.pathname === "/api/health") return route.fulfill({ json: { status: "ok", gemini: false, version: "t" } });
     if (u.pathname.match(/^\/api\/cases\/[^/]+$/)) {
       const e = evidence(over);
-      return route.fulfill({ json: { case: { id: "c", lat: 29.5, lon: 75, active_run_id: null, latest_run: { id: "r", status: "done", started_at: new Date(Date.now() - 200000).toISOString() } }, evidence: e, actions: [], sealed: true, verdict_ready: true, exhibits: {}, ...env } });
+      return route.fulfill({ json: { case: { id: "c", lat: 29.5, lon: 75, active_run_id: null, latest_run: { id: "r", status: "done", started_at: new Date(Date.now() - 200000).toISOString() } }, evidence: e, actions: [], sealed: true, verdict_ready: true, exhibits: {}, rubric: { version: "v3", p_field: 0.025, strong_delta: -0.15, moderate_delta: -0.1 }, ...env } });
     }
     if (u.pathname.includes("/retry")) return route.fulfill({ json: { run_id: "r2", exhibit: "village", status: "pending" } });
     if (u.pathname.startsWith("/api/artifacts/")) return route.fulfill({ contentType: "image/png", body: testPng(8, 170, 120, 90) });
@@ -417,5 +418,98 @@ test.describe("verdict first, exhibits later", () => {
     await page.route("**/api/**", shell({ scale_fade: fadeWith([0.0087, 0.0205, 0.0199, 0.0167, 0.0088]) }, {}));
     await page.goto("/case/c?lang=en");
     await expect(page.getByText("This field shows no real fall", { exact: false })).toBeAttached();
+  });
+});
+
+test.describe("staged verify", () => {
+  test.use({ viewport: { width: 360, height: 780 } });
+  const hash = "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90";
+  const sseSeq = (events: object[]) => events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");
+  const R = "run1";
+  const numbers = { "optical.pre.ndvi_median": 0.75, "optical.post.ndvi_median": 0.39, "village.lottery.average_median": -0.08 };
+  const startEv = { type: "start", seq: 1, run_id: R, hash, hash_verified: true, engine_version: "t", event_date: "2024-03-02", seed: 1, n_numbers: 3, tolerance: 0.001, numbers, started_at: new Date().toISOString(), cached: false };
+  const head = [
+    startEv,
+    { type: "group_started", seq: 2, run_id: R, group: "field_pre", n_numbers: 1, budget_s: 180 },
+    { type: "number", seq: 3, run_id: R, group: "field_pre", field: "optical.pre.ndvi_median", label: "optical.pre.ndvi_median", stored: 0.75, recomputed: 0.75, match: true },
+    { type: "group_done", seq: 4, run_id: R, group: "field_pre", n_numbers: 1, elapsed_s: 8 },
+    { type: "group_started", seq: 5, run_id: R, group: "field_post", n_numbers: 1, budget_s: 180 },
+    { type: "number", seq: 6, run_id: R, group: "field_post", field: "optical.post.ndvi_median", label: "optical.post.ndvi_median", stored: 0.39, recomputed: 0.39, match: true },
+    { type: "group_done", seq: 7, run_id: R, group: "field_post", n_numbers: 1, elapsed_s: 4 },
+    { type: "stage_result", seq: 8, run_id: R, stage: "field", status: "field_verified", matched: 2, total: 2, remaining: 1, message_en: "x", message_hi: "x" },
+    { type: "group_started", seq: 9, run_id: R, group: "far_twin", n_numbers: 1, budget_s: 600 },
+  ];
+  const health = (route: Route) => route.fulfill({ json: { status: "ok", gemini: true, version: "t" } });
+
+  test("the field stage never reads as verified, and resumes with after", async ({ page }) => {
+    const urls: string[] = [];
+    let n = 0;
+    await page.route("**/api/health", health);
+    await page.route("**/api/verify/**", (route) => {
+      urls.push(route.request().url());
+      n += 1;
+      if (n === 1) return route.fulfill({ status: 200, contentType: "text/event-stream", body: sseSeq(head) });
+      if (n === 2) return route.fulfill({ status: 200, contentType: "text/event-stream", body: "" });
+      return route.fulfill({ status: 200, contentType: "text/event-stream", body: sseSeq([
+        { type: "group_failed", seq: 10, run_id: R, group: "far_twin", n_numbers: 1, reason: "time limit reached", fields: ["village.lottery.average_median"] },
+        { type: "result", seq: 11, run_id: R, status: "field_verified", ok: false, field_verified: true, checked: 2, matched: 2, total: 3, unchecked: ["village.lottery.average_median"], errors: { far_twin: "time limit" } },
+      ]) });
+    });
+    await page.goto(`/verify/${hash}`);
+    await expect(page.getByText("आपके खेत की 2 में से 2 संख्याएँ मेल खाती हैं")).toBeVisible();
+    await expect(page.getByText("आस-पास की बाकी 1 संख्याओं की जाँच अभी चल रही है")).toBeVisible();
+    await expect(page.getByText("आप यह पन्ना बंद कर सकते हैं।")).toBeVisible();
+    await expect(page.getByText("सत्यापित")).toHaveCount(0);
+    await page.screenshot({ path: `${SHOTS}/verify-stage-m.png`, fullPage: true });
+    await expect(page.locator(".verify-line")).toBeVisible({ timeout: 20000 });
+    expect(urls[1]).toContain("after=9");
+    await expect(page.getByText("सत्यापित")).toHaveCount(0);
+    await expect(page.locator(".verify-line")).toContainText("यह पूरी जाँच नहीं है");
+    const body = (await page.locator("body").innerText()).toLowerCase();
+    expect(body).not.toContain("lottery");
+    await page.screenshot({ path: `${SHOTS}/verify-field-final-m.png`, fullPage: true });
+    // A check that ended short is remembered, so coming back does not start a download.
+    const before = urls.length;
+    await page.reload();
+    await expect(page.locator(".verify-line")).toBeVisible();
+    await page.waitForTimeout(300);
+    expect(urls.slice(before).every((u) => u.includes("after=") && !u.includes("rerun"))).toBe(true);
+  });
+
+  test("a stored check is labelled as one, and only the button reruns", async ({ page }) => {
+    const urls: string[] = [];
+    const stamp = { cached: true, checked_at: "2026-10-31T19:13:47Z", rerun: "?rerun=1" };
+    await page.route("**/api/health", health);
+    await page.route("**/api/verify/**", (route) => {
+      urls.push(route.request().url());
+      if (route.request().url().includes("rerun=1")) return route.fulfill({ status: 200, contentType: "text/event-stream", body: sseSeq(head) });
+      return route.fulfill({ status: 200, contentType: "text/event-stream", body: sseSeq([
+        { ...startEv, ...stamp },
+        { type: "number", seq: 3, run_id: R, field: "optical.pre.ndvi_median", label: "optical.pre.ndvi_median", stored: 0.75, recomputed: 0.75, match: true },
+        { type: "result", seq: 4, run_id: R, status: "verified", ok: true, checked: 1, matched: 1, total: 1, ...stamp },
+      ]) });
+    });
+    await page.goto(`/verify/${hash}`);
+    await expect(page.locator(".stored-check")).toContainText("2026");
+    await expect(page.getByText("पिछली पूरी जाँच का रिकॉर्ड")).toBeVisible();
+    await expect(page.locator(".verify-line")).toBeVisible();
+    expect(urls.length).toBe(1);
+    expect(urls[0]).not.toContain("rerun");
+    await page.getByRole("button", { name: /संग्रह से अभी दोबारा जाँचें/ }).click();
+    await expect(page.getByText("आपके खेत की 2 में से 2 संख्याएँ मेल खाती हैं")).toBeVisible();
+    expect(urls[1]).toContain("rerun=1");
+    await expect(page.locator(".stored-check")).toHaveCount(0);
+  });
+
+  test("without a rubric threshold the two answers are not guessed", async ({ page }) => {
+    await page.route("**/api/**", (route) => {
+      const u = new URL(route.request().url());
+      if (u.pathname === "/api/health") return health(route);
+      if (u.pathname.startsWith("/api/artifacts/")) return route.fulfill({ contentType: "image/png", body: testPng(8, 170, 120, 90) });
+      return route.fulfill({ json: { case: { id: "c", lat: 1, lon: 1, active_run_id: null }, evidence: evidence(), actions: [], sealed: true, exhibits: {} } });
+    });
+    await page.goto("/case/c?lang=en");
+    await expect(page.locator(".two-q").getByText("did not arrive from the server", { exact: false })).toBeVisible();
+    await expect(page.locator(".tq-a")).toHaveCount(0);
   });
 });
