@@ -1,5 +1,7 @@
 # 04 — Build Timeline (≈46 hours, 3 owners)
 
+> **Superseded in part.** This file is an early working draft and some claims here were later corrected against the official guidelines and real data. For current facts see [`docs/submission/facts.md`](../submission/facts.md), and for the current design see [`docs/plan/07-build-contract.md`](07-build-contract.md).
+
 `H0` = kickoff. The confirmed deadline is "~2 days left", so **set H46 = the exact submission cutoff minus 1 hour** and shift the table if needed. The plan protects the last **8 hours** for packaging and buffer.
 
 ## Gates (non-negotiable)

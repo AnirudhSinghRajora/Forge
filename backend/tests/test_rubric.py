@@ -2,7 +2,7 @@
 from datetime import timedelta
 
 from app.agent import rubric
-from app.evidence.schema import Objection
+from app.evidence.schema import Objection, Verdict
 from tests.conftest import (
     EVENT,
     an_alert,

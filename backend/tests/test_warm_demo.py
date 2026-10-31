@@ -151,12 +151,17 @@ def test_selection_note_stays_out_of_the_hash(client, monkeypatch):
 
 
 def test_the_api_gives_the_near_band_and_whether_it_decides(client, monkeypatch):
-    from tests.conftest import placebo
+    from datetime import date
+
+    from tests.conftest import POST_ID, PRE_ID, placebo, scene
 
     base = evidence(delta=-0.126, cross=[])
     base.neighbours.far_placebo, base.neighbours.placebo = placebo(p=0.054), placebo(p=0.202)
     base.optical.plot_delta_ndvi = -0.126
-    fake_geo_on_real_plot(monkeypatch, optical_compare=lambda *a, **k: (base.optical, base.neighbours))
+    fake_geo_on_real_plot(
+        monkeypatch, optical_compare=lambda *a, **k: (base.optical, base.neighbours),
+        search_optical=lambda *a, **k: [scene(PRE_ID, date(2024, 2, 28)), scene(POST_ID, date(2024, 3, 9))],
+    )
     row = warm(client, "bhiwani-typical")
     body = client.get(f"/api/cases/{row['case_id']}").json()
     assert body["rubric"]["near_low"] == 0.01 and body["rubric"]["near_high"] == 0.075

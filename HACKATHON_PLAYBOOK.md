@@ -1,5 +1,7 @@
 # ScholarFlow — Hackathon Playbook and Cross-Chat Execution Guide
 
+> **Superseded.** This describes an earlier idea (ScholarFlow) that was dropped before any code was written. The team built FasalSaakshi; see [README.md](README.md).
+
 ## 1. Purpose and current status
 
 This is the standalone operating guide for planning, building, validating, submitting, and presenting ScholarFlow. A new chat should be able to use this document without access to the original conversation.

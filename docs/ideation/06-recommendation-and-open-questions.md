@@ -1,5 +1,7 @@
 # 06 — Recommendation & Open Questions
 
+> **Superseded in part.** This file is an early working draft and some claims here were later corrected against the official guidelines and real data. For current facts see [`docs/submission/facts.md`](../submission/facts.md), and for the current design see [`docs/plan/07-build-contract.md`](../plan/07-build-contract.md).
+
 > **Revision 2 (31 Oct 2026):** the team's priorities are **judge impression, impact, and a problem that's not fully solved yet**. The audience award is not a goal.
 
 ## Head-to-head: the top 3

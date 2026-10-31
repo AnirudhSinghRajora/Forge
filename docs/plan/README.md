@@ -1,5 +1,7 @@
 # FasalSaakshi — Build Plan
 
+> **Superseded in part.** This file is an early working draft and some claims here were later corrected against the official guidelines and real data. For current facts see [`docs/submission/facts.md`](../submission/facts.md), and for the current design see [`docs/plan/07-build-contract.md`](07-build-contract.md).
+
 **Status:** idea locked on 31 Oct 2026 (see [../ideation](../ideation/README.md)). About 2 days remain to submission. The team is 3 devs with paid Gemini API access.
 
 > **FasalSaakshi (फसल साक्षी, "crop witness"):** a farmer reports crop damage by voice. An agent pulls satellite and weather evidence for *that farmer's plot*, judges whether it really looks like calamity damage (as opposed to normal harvest), explains the verdict in Hindi with every number cited, and makes sure the PMFBY loss intimation goes in before the 72-hour deadline. It then keeps watching the plot and follows up.

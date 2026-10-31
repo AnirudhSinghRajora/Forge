@@ -1,5 +1,7 @@
 # 04 — Idea #2: AgniDrishti (अग्नि दृष्टि, "fire sight"): the stubble-burning truth & prevention agent
 
+> **Superseded in part.** This file is an early working draft and some claims here were later corrected against the official guidelines and real data. For current facts see [`docs/submission/facts.md`](../submission/facts.md), and for the current design see [`docs/plan/07-build-contract.md`](../plan/07-build-contract.md).
+
 > **India's official farm-fire numbers come from satellites that pass overhead before most fires are lit. AgniDrishti measures what actually burned, field by field and every day, works out which fires are reaching Delhi today, and acts on the fields that haven't burned yet.**
 
 **Theme 2** (Climate, Resource Infrastructure & Global Supply Resilience). The track concept covers "systemic operational and environmental challenges", and Problem 2 asks for satellite (Copernicus/ISRO) pipelines that forecast micro-climate risks and output mitigation plans. This idea is a **looser fit to the listed problem spectrum** than #1, so the pitch has to make the climate and resource link explicit: emissions, air-quality forecasting, soil carbon, and residue as a resource.

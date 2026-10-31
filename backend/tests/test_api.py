@@ -802,4 +802,5 @@ def test_case_exposes_the_rubric_constants(client, monkeypatch):
     assert client.get(f"/api/cases/{case_id}").json()["rubric"] == {
         "version": rubric.RUBRIC_VERSION, "p_field": rubric.P_FIELD,
         "strong_delta": rubric.STRONG_DELTA, "moderate_delta": rubric.MODERATE_DELTA,
+        "near_low": rubric.P_NEAR_LOW, "near_high": rubric.P_NEAR_HIGH, "near_line_decides": False,
     }

@@ -1,5 +1,7 @@
 # 08 — Runner-up (was #3): Nigrani (निगरानी, "oversight"): the civic accountability agent
 
+> **Superseded in part.** This file is an early working draft and some claims here were later corrected against the official guidelines and real data. For current facts see [`docs/submission/facts.md`](../submission/facts.md), and for the current design see [`docs/plan/07-build-contract.md`](../plan/07-build-contract.md).
+
 > **A reporting app sends your complaint off and that's the end of it. Nigrani works out who is responsible, files the complaint through the official channel, watches the deadline, and escalates when it's missed, all the way to an RTI request.**
 
 **Theme 1 · Problem 2** (Transparent Civic Grievance & Infrastructure Triage System).

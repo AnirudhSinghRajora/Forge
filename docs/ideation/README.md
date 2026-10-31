@@ -1,5 +1,7 @@
 # Forge '26 — Idea Research & Selection
 
+> **Superseded in part.** This file is an early working draft and some claims here were later corrected against the official guidelines and real data. For current facts see [`docs/submission/facts.md`](../submission/facts.md), and for the current design see [`docs/plan/07-build-contract.md`](../plan/07-build-contract.md).
+
 > ✅ **Decision (31 Oct 2026): building #1, FasalSaakshi.** The build plan is in [`docs/plan`](../plan/README.md).
 
 Research date: **31 Oct 2026**. About 31 hours of the build window were left when this was written.

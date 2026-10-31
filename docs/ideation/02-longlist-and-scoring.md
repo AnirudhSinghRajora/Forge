@@ -1,5 +1,7 @@
 # 02 — Longlist & Scoring
 
+> **Superseded in part.** This file is an early working draft and some claims here were later corrected against the official guidelines and real data. For current facts see [`docs/submission/facts.md`](../submission/facts.md), and for the current design see [`docs/plan/07-build-contract.md`](../plan/07-build-contract.md).
+
 > **Revision 2 (31 Oct 2026):** the team said the **audience award is not a priority**. The goal is a strong impression on judges, real impact, and a problem that is **not fully solved yet**. Virality was removed as a criterion, weight moved to "unsolved gap" and to the rubric's heaviest pillars, and a new candidate (**L, AgniDrishti**) was added. Result: **AgniDrishti enters at #2, TraceBack moves to #3, and Nigrani drops out of the top 3** (its rank depended on virality).
 
 ## Method

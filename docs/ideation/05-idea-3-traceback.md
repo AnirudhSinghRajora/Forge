@@ -1,5 +1,7 @@
 # 05 — Idea #3: TraceBack: provenance-first misinformation & scheme-scam verifier
 
+> **Superseded in part.** This file is an early working draft and some claims here were later corrected against the official guidelines and real data. For current facts see [`docs/submission/facts.md`](../submission/facts.md), and for the current design see [`docs/plan/07-build-contract.md`](../plan/07-build-contract.md).
+
 > **Forward anything suspicious: a video, voice note, screenshot, link or APK. An investigator agent traces where it came from, checks it against official sources, and sends back a verdict with evidence and a forwardable debunk card in your language.**
 
 **Theme 1 · Problem 4** (Real-Time Fact-Verification & Deepfake Audit Engine). Also covers **Problem 1** by explaining the *real* scheme when a fake one is caught.

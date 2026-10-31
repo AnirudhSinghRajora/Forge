@@ -33,6 +33,7 @@ def main() -> None:
     ap.add_argument("--s1-post")
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--replay", action="store_true")
+    ap.add_argument("--auto-sar", action="store_true", help="pick the same-orbit pair around the event by rule")
     args = ap.parse_args()
 
     out = var_dir() / "geo_validation" / args.name
@@ -49,6 +50,23 @@ def main() -> None:
         timings[name] = round(time.time() - t0, 1)
         print(f"[{name}] {timings[name]} s", flush=True)
         return value
+
+    if args.auto_sar:
+        passes = step("search_sar", lambda: geo.search_sar(polygon, start, end))
+        orbits: dict = {}
+        for scene in passes:
+            orbits.setdefault((scene.relative_orbit, scene.orbit_state), []).append(scene)
+        pairs = []
+        for group in orbits.values():
+            before = [x for x in group if x.date <= args.event]
+            after = [x for x in group if x.date > args.event]
+            if before and after:
+                a, b = max(before, key=lambda x: x.datetime), min(after, key=lambda x: x.datetime)
+                pairs.append(((b.date, a.relative_orbit), a, b))
+        if pairs:
+            _, a, b = min(pairs, key=lambda p: p[0])
+            args.s1_pre, args.s1_post = a.id, b.id
+            print("radar pair:", a.id, b.id, flush=True)
 
     scenes = step("search_and_qa", lambda: geo.search_and_qa(polygon, start, end))
     result["scenes"] = [

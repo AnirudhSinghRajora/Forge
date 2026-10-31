@@ -1,5 +1,7 @@
 # 03 — Idea #1: FasalSaakshi (फसल साक्षी, "crop witness")
 
+> **Superseded in part.** This file is an early working draft and some claims here were later corrected against the official guidelines and real data. For current facts see [`docs/submission/facts.md`](../submission/facts.md), and for the current design see [`docs/plan/07-build-contract.md`](../plan/07-build-contract.md).
+
 > **Insurers and states already use satellites to judge a farmer's claim. FasalSaakshi gives the farmer the same satellite evidence for their own plot, then an agent makes sure the claim is filed correctly and on time.**
 
 **Theme 2 · Problem 2** (Predictive Climate & Micro-Location Yield Engine). It also covers Problem 1 (multilingual advisory) through the voice layer.
