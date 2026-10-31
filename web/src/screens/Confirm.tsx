@@ -18,7 +18,8 @@ const EVENTS: { id: EventType; icon: string }[] = [
   { id: "other", icon: "other" },
 ];
 
-const CROPS: Key[] = ["crop.paddy", "crop.cotton", "crop.wheat", "crop.sugarcane", "crop.maize", "crop.mustard", "crop.soybean", "crop.groundnut"];
+// Chips send the canonical name: the server's routing compares crop names in English.
+const CROPS = ["paddy", "cotton", "wheat", "sugarcane", "maize", "mustard", "soybean", "groundnut"] as const;
 
 function daysAgo(n: number) {
   const d = new Date();
@@ -44,10 +45,16 @@ export default function Confirm({ caseId }: { caseId: string }) {
   const [transcript, setTranscript] = useState<string | null>(null);
   const [confidence, setConfidence] = useState<number | null>(null);
   const [needs, setNeeds] = useState<string[]>([]);
+  const [questions, setQuestions] = useState<Record<string, Record<string, string>>>({});
+  const [dateNote, setDateNote] = useState<string | null>(null);
+  const [dateFromPlace, setDateFromPlace] = useState(false);
   const [crop, setCrop] = useState("");
   const [eventType, setEventType] = useState<string>("");
   const [eventDate, setEventDate] = useState("");
   const [eventTime, setEventTime] = useState("");
+
+  const [insured, setInsured] = useState<"" | "yes" | "no" | "unknown">("");
+  const [stage, setStage] = useState<"" | "standing" | "cut_and_spread" | "harvested_stored" | "unknown">("");
 
   const [saving, setSaving] = useState(false);
   const [saveErr, setSaveErr] = useState<unknown>(null);
@@ -63,19 +70,31 @@ export default function Confirm({ caseId }: { caseId: string }) {
       setNeeds(created.needs ?? []);
       setCrop(created.parsed?.crop ?? "");
       setEventType(created.parsed?.event_type && created.parsed.event_type !== "unknown" ? created.parsed.event_type : "");
-      setEventDate(created.parsed?.event_date ?? "");
+      const parsedDate = created.parsed?.event_date ?? "";
+      let shortcutDate = "";
+      try { shortcutDate = sessionStorage.getItem(`fs.placeDate.${caseId}`) ?? ""; } catch { /* a convenience only */ }
+      setEventDate(parsedDate || shortcutDate);
+      setDateFromPlace(!parsedDate && !!shortcutDate);
+      setEventTime(created.parsed?.event_time ?? "");
+      setQuestions(created.questions ?? {});
+      setDateNote(created.parsed?.date_note ?? null);
       setLoaded(true);
     }
     getCase(caseId, ctl.signal)
       .then((env) => {
-        const c: CaseRecord = env.case ?? {};
+        const c: CaseRecord = env.case;
         if (!created) {
+          setQuestions(c.questions ?? {});
+          setConfidence(c.parsed?.confidence ?? null);
+          setDateNote(c.parsed?.date_note ?? null);
           setTranscript(c.transcript ?? null);
           setNeeds(Array.isArray(c.needs) ? c.needs : []);
           setCrop(c.crop ?? "");
           setEventType(c.event_type && c.event_type !== "unknown" ? c.event_type : "");
           setEventDate(c.event_date ?? "");
           setEventTime(c.event_time ?? "");
+          if (c.insured === "yes" || c.insured === "no" || c.insured === "unknown") setInsured(c.insured);
+          if (c.crop_stage === "standing" || c.crop_stage === "cut_and_spread" || c.crop_stage === "harvested_stored" || c.crop_stage === "unknown") setStage(c.crop_stage);
         }
         setLoaded(true);
       })
@@ -85,10 +104,12 @@ export default function Confirm({ caseId }: { caseId: string }) {
     return () => ctl.abort();
   }, [caseId, attempt]);
 
-  const needed = (f: string) => needs.includes(f) || needs.includes(`event_${f}`);
+  const needed = (f: string) => needs.includes(f);
+  const ask = (f: string) => questions[f]?.[lang] ?? questions[f]?.en ?? t("confirm.please_tell");
   const missingDate = !eventDate;
   const futureDate = !!eventDate && eventDate > todayInput();
-  const known = new Set(["crop", "event_type", "event_date", "event_time", "date", "type", "time", "transcript", "audio", "text"]);
+  // The plot is the next screen, and the three fields below ask for themselves.
+  const known = new Set(["crop", "event_type", "event_date", "plot", "insured", "crop_stage"]);
   const otherNeeds = needs.filter((n) => !known.has(n));
 
   const save = async () => {
@@ -101,6 +122,8 @@ export default function Confirm({ caseId }: { caseId: string }) {
       if (crop.trim()) patch.crop = crop.trim();
       if (eventType) patch.event_type = eventType;
       if (eventTime) patch.event_time = eventTime;
+      if (insured) patch.insured = insured;
+      if (stage) patch.crop_stage = stage;
       await patchCase(caseId, patch);
       navigate(`/case/${encodeURIComponent(caseId)}/plot`);
     } catch (e) {
@@ -138,12 +161,13 @@ export default function Confirm({ caseId }: { caseId: string }) {
       {otherNeeds.length > 0 && (
         <div className="ask-list">
           <p><strong>{t("confirm.needs")}</strong></p>
-          <ul>{otherNeeds.map((n) => <li key={n}>{n}</li>)}</ul>
+          <ul>{otherNeeds.map((n) => <li key={n}>{questions[n]?.[lang] ?? questions[n]?.en ?? n}</li>)}</ul>
         </div>
       )}
 
-      <fieldset className={`q ${needed("type") ? "q-need" : ""}`}>
-        <legend>{t("confirm.q_event")}{needed("type") && <em>{t("confirm.please_tell")}</em>}</legend>
+      <fieldset className={`q ${needed("event_type") ? "q-need" : ""}`}>
+        <legend>{t("confirm.q_event")}</legend>
+        {needed("event_type") && <p className="q-ask">{ask("event_type")}</p>}
         <div className="event-grid" role="radiogroup">
           {EVENTS.map((e) => (
             <button
@@ -160,11 +184,14 @@ export default function Confirm({ caseId }: { caseId: string }) {
         </div>
       </fieldset>
 
-      <fieldset className={`q ${needed("date") ? "q-need" : ""}`}>
-        <legend>{t("confirm.q_date")}{needed("date") && <em>{t("confirm.please_tell")}</em>}</legend>
+      <fieldset className={`q ${needed("event_date") ? "q-need" : ""}`}>
+        <legend>{t("confirm.q_date")}</legend>
+        {needed("event_date") && <p className="q-ask">{ask("event_date")}</p>}
+        {dateNote && <p className="small">{dateNote}</p>}
+        {dateFromPlace && <p className="q-ask">{t("confirm.date_from_place")}</p>}
         <div className="btn-row wrap">
           {([["confirm.today", 0], ["confirm.yesterday", 1], ["confirm.before_yesterday", 2]] as [Key, number][]).map(([k, n]) => (
-            <button key={k} className={`chip chip-big ${eventDate === daysAgo(n) ? "chip-on" : ""}`} onClick={() => setEventDate(daysAgo(n))}>
+            <button key={k} className={`chip chip-big ${eventDate === daysAgo(n) ? "chip-on" : ""}`} onClick={() => { setEventDate(daysAgo(n)); setDateFromPlace(false); }}>
               {t(k)}
             </button>
           ))}
@@ -172,7 +199,7 @@ export default function Confirm({ caseId }: { caseId: string }) {
         <div className="input-row">
           <label className="field">
             <span className="field-label">{t("confirm.date")}</span>
-            <input type="date" value={eventDate} max={todayInput()} onChange={(e) => setEventDate(e.target.value)} />
+            <input type="date" value={eventDate} max={todayInput()} onChange={(e) => { setEventDate(e.target.value); setDateFromPlace(false); }} />
           </label>
           <label className="field">
             <span className="field-label">{t("confirm.time")}</span>
@@ -184,22 +211,44 @@ export default function Confirm({ caseId }: { caseId: string }) {
         {futureDate && <p className="notice small" role="alert">{t("confirm.date_future")}</p>}
       </fieldset>
 
-      <fieldset className={`q ${needed("crop") || needs.includes("crop") ? "q-need" : ""}`}>
-        <legend>{t("confirm.q_crop")}{needs.includes("crop") && <em>{t("confirm.please_tell")}</em>}</legend>
+      <fieldset className={`q ${needed("crop") ? "q-need" : ""}`}>
+        <legend>{t("confirm.q_crop")}</legend>
+        {needed("crop") && <p className="q-ask">{ask("crop")}</p>}
         <div className="btn-row wrap">
-          {CROPS.map((k) => {
-            const name = t(k);
-            return (
-              <button key={k} className={`chip chip-big ${crop === name ? "chip-on" : ""}`} onClick={() => setCrop(name)}>
-                {name}
-              </button>
-            );
-          })}
+          {CROPS.map((id) => (
+            <button key={id} className={`chip chip-big ${crop.trim().toLowerCase() === id ? "chip-on" : ""}`} onClick={() => setCrop(id)}>
+              {t(`crop.${id}` as Key)}
+            </button>
+          ))}
         </div>
         <label className="field">
           <span className="field-label">{t("confirm.crop_other")}</span>
-          <input value={crop} onChange={(e) => setCrop(e.target.value)} lang={lang} />
+          <input value={(CROPS as readonly string[]).includes(crop.trim().toLowerCase()) ? "" : crop} onChange={(e) => setCrop(e.target.value)} lang={lang} />
         </label>
+      </fieldset>
+
+      <fieldset className="q">
+        <legend>{t("confirm.q_insured")}</legend>
+        <p className="small faint">{t("confirm.optional")}</p>
+        <div className="btn-row wrap" role="radiogroup">
+          {(["yes", "no", "unknown"] as const).map((v) => (
+            <button key={v} role="radio" aria-checked={insured === v} className={`chip chip-big ${insured === v ? "chip-on" : ""}`} onClick={() => setInsured(insured === v ? "" : v)}>
+              {t(`insured.${v}` as Key)}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset className="q">
+        <legend>{t("confirm.q_stage")}</legend>
+        <p className="small faint">{t("confirm.optional")}</p>
+        <div className="btn-row wrap" role="radiogroup">
+          {(["standing", "cut_and_spread", "harvested_stored", "unknown"] as const).map((v) => (
+            <button key={v} role="radio" aria-checked={stage === v} className={`chip chip-big ${stage === v ? "chip-on" : ""}`} onClick={() => setStage(stage === v ? "" : v)}>
+              {t(`stage.${v}` as Key)}
+            </button>
+          ))}
+        </div>
       </fieldset>
 
       {saveErr !== null && <ErrorNote error={saveErr} onRetry={save} />}

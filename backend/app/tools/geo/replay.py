@@ -9,11 +9,15 @@ from app.evidence.schema import (
     PlotStats,
     ReplayCore,
     SarEvidence,
+    ScaleFade,
+    VillageWitness,
 )
 
 from .base import r4
 from .optical import _optical_compare, history_from_ids
 from .sar import _sar_compare
+from .scale import _scale_fade
+from .village import _village_witness
 
 
 def _stats(prefix: str, s: PlotStats | None, out: dict) -> None:
@@ -36,6 +40,8 @@ def flatten_numbers(
     neighbours: NeighbourEvidence | None = None,
     sar: SarEvidence | None = None,
     history: HistoryEvidence | None = None,
+    village: VillageWitness | None = None,
+    scale_fade: ScaleFade | None = None,
 ) -> dict[str, float | None]:
     """The flat "field.path" -> value dict for ReplayCore.numbers, rounded to 4 dp, sorted by key."""
     out: dict[str, float | None] = {}
@@ -66,6 +72,22 @@ def flatten_numbers(
         for row in history.years:
             out[f"history.{row.year}.pre_ndvi"] = r4(row.pre_ndvi)
             out[f"history.{row.year}.delta_ndvi"] = r4(row.delta_ndvi)
+    if village is not None:
+        # Sensor is recorded as a number because replay has to know which pair to recompute from.
+        out["village.sensor_is_s1"] = 1.0 if village.sensor == "s1" else 0.0
+        out["village.radius_m"] = r4(village.radius_m)
+        out["village.n_cropland_pixels"] = r4(village.n_cropland_pixels)
+        out["village.affected_share"] = r4(village.affected_share)
+        lottery = village.lottery
+        if lottery is not None:
+            for name in ("n_simulations", "plot_value", "n_candidate_parcels", "average_median", "average_p05",
+                         "average_p95", "share_below_half_of_plot"):
+                out[f"village.lottery.{name}"] = r4(getattr(lottery, name))
+    if scale_fade is not None:
+        out["scale_fade.sensor_is_s1"] = 1.0 if scale_fade.sensor == "s1" else 0.0
+        for level in scale_fade.levels:
+            out[f"scale_fade.{level.block_m}.plot_cell_value"] = r4(level.plot_cell_value)
+            out[f"scale_fade.{level.block_m}.context_min"] = r4(level.context_min)
     return dict(sorted(out.items()))
 
 
@@ -88,4 +110,19 @@ def replay(core: ReplayCore) -> dict[str, float | None]:
             current_pre_ndvi=optical.pre.ndvi_median if with_current and optical.pre else None,
             fresh=True,
         )
-    return flatten_numbers(optical, neighbours, sar, hist)
+    def pair(flag_key: str) -> tuple[str, str, str] | None:
+        """(pre id, post id, sensor) for a signature that is part of this record, else None."""
+        flag = core.numbers.get(flag_key)
+        if flag is None:
+            return None
+        if flag == 1.0:
+            return (core.sar_pre_id, core.sar_post_id, "s1") if core.sar_pre_id and core.sar_post_id else None
+        return (core.optical_pre_id, core.optical_post_id, "s2") if core.optical_pre_id and core.optical_post_id else None
+
+    village = None
+    if (ids := pair("village.sensor_is_s1")) is not None:
+        village = _village_witness(core.polygon, ids[0], ids[1], core.seed, ids[2], fresh=True)
+    fade = None
+    if (ids := pair("scale_fade.sensor_is_s1")) is not None:
+        fade = _scale_fade(core.polygon, ids[0], ids[1], None, ids[2], fresh=True)
+    return flatten_numbers(optical, neighbours, sar, hist, village, fade)

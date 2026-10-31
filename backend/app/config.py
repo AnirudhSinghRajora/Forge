@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     @property
     def db_url(self) -> str:
         if self.database_url:
+            for prefix in ("postgresql://", "postgres://"):
+                if self.database_url.startswith(prefix):  # psycopg 3 is the installed driver
+                    return "postgresql+psycopg://" + self.database_url[len(prefix):]
             return self.database_url
         return f"sqlite:///{self.var_dir / 'fasalsaakshi.db'}"
 

@@ -103,7 +103,7 @@ def validate_polygon(raw: dict | None) -> PlotResult:
         geom = shape(raw)
     except Exception as exc:  # shapely raises several types on malformed coordinates
         raise bad from exc
-    if geom.is_empty or len(geom.exterior.coords) < 4 or not geom.is_simple and not geom.is_valid:
+    if geom.is_empty or len(geom.exterior.coords) < 4:
         raise bad
     if not geom.is_valid:
         raise PlotRejected(

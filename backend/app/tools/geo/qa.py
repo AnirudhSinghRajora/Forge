@@ -23,6 +23,8 @@ from .raster import read_assets
 log = logging.getLogger(__name__)
 
 QA_BANDS = ["B02", "B03", "B04", "B08", "B11", "SCL"]
+# For scenes that only feed the NDVI series of the field twin: those three bands are all it uses.
+LITE_BANDS = ["B04", "B08", "SCL"]
 BAND_NAMES = {"B02": "blue", "B03": "green", "B04": "red", "B08": "infrared", "B11": "shortwave-infrared", "SCL": "scene classification"}
 PLOT_VALID_MIN = 0.80
 B08_RANGE = (0.05, 0.60)
@@ -51,13 +53,23 @@ def _median_or_none(values: np.ndarray) -> float | None:
     return float(np.median(values)) if values.size else None
 
 
-def evaluate_optical(bands: dict[str, np.ndarray | None], offset: int | None, plot_mask: np.ndarray) -> RawQA:
+def plot_clear_share(scl: np.ndarray, plot_mask: np.ndarray) -> float:
+    """Q2's number. Water counts as observed, because a flooded plot is a real observation."""
+    return float(np.mean(np.isin(scl[plot_mask], [ix.SCL_VEGETATION, ix.SCL_BARE, ix.SCL_WATER])))
+
+
+def evaluate_optical(
+    bands: dict[str, np.ndarray | None],
+    offset: int | None,
+    plot_mask: np.ndarray,
+    required: list[str] = QA_BANDS,
+) -> RawQA:
     """Q1-Q4 on arrays. Pure, so the regression logic is testable without any network."""
     rejected: list[str] = []
     notes: list[str] = []
 
     # Q1: every asset present, readable, and not empty.
-    for band in QA_BANDS:
+    for band in required:
         if bands.get(band) is None:
             rejected.append(f"Q1: {BAND_NAMES[band]} band ({band}) is missing or unreadable")
     if offset is None:
@@ -73,7 +85,7 @@ def evaluate_optical(bands: dict[str, np.ndarray | None], offset: int | None, pl
 
     # Empty or zero-filled where SCL says there is an image means the band is corrupt. Zero outside
     # the swath (SCL 0) is normal at a tile edge and is not a defect.
-    for band in QA_BANDS[:-1]:
+    for band in [b for b in required if b != "SCL"]:
         arr = bands.get(band)
         if arr is None:
             continue
@@ -82,10 +94,9 @@ def evaluate_optical(bands: dict[str, np.ndarray | None], offset: int | None, pl
             label = "empty" if bad > 0.99 else f"{bad:.0%} zero-filled"
             rejected.append(f"Q3: {BAND_NAMES[band]} band ({band}) is {label} where the scene claims data")
 
-    # Q2: plot validity. Water counts as observed, because a flooded plot is a real observation.
+    # Q2: plot validity.
     plot_scl = scl[plot_mask]
-    clear = np.isin(plot_scl, [ix.SCL_VEGETATION, ix.SCL_BARE, ix.SCL_WATER])
-    plot_valid = float(np.mean(clear))
+    plot_valid = plot_clear_share(scl, plot_mask)
     if plot_valid < PLOT_VALID_MIN:
         counts = {
             "cloud": int(np.isin(plot_scl, [8, 9]).sum()),
@@ -175,8 +186,8 @@ def evaluate_sar(vv: np.ndarray | None, vh: np.ndarray | None, plot_mask: np.nda
     return RawQA("rejected" if reasons else "accepted", reasons, r4(valid), None)
 
 
-def _cache_path(scene_id: str, plot: Plot) -> Path:
-    digest = hashlib.sha256(f"{ENGINE_VERSION}|{scene_id}|{plot.key}".encode()).hexdigest()[:32]
+def _cache_path(scene_id: str, plot: Plot, mode: str) -> Path:
+    digest = hashlib.sha256(f"{ENGINE_VERSION}|{mode}|{scene_id}|{plot.key}".encode()).hexdigest()[:32]
     return var_dir() / "qa_cache" / f"{digest}.json"
 
 
@@ -198,9 +209,13 @@ def _cache_store(path: Path, raw: RawQA) -> None:
         log.warning("could not write the QA cache: %s", exc)
 
 
-def raw_qa(scene: SceneRef, plot: Plot, *, fresh: bool = False) -> RawQA:
-    """Q1-Q4 for a scene on this polygon. Cached on disk unless `fresh`; outages are never cached."""
-    path = _cache_path(scene.id, plot)
+def raw_qa(scene: SceneRef, plot: Plot, *, fresh: bool = False, lite: bool = False) -> RawQA:
+    """Q1-Q4 for a scene on this polygon. Cached on disk unless `fresh`; outages are never cached.
+
+    SCL is read first because it is the smallest band: a cloudy plot is rejected on Q2 without
+    paying for the rest. `lite` checks only the bands the field twin's NDVI series uses.
+    """
+    path = _cache_path(scene.id, plot, "lite" if lite else "full")
     if not fresh:
         cached = _cache_load(path)
         if cached is not None:
@@ -212,12 +227,20 @@ def raw_qa(scene: SceneRef, plot: Plot, *, fresh: bool = False) -> RawQA:
         bands = read_assets(scene.id, ["vv", "vh"], grid, is_float=True, fresh=fresh)
         raw = evaluate_sar(bands["vv"], bands["vh"], mask)
     else:
-        bands = read_assets(scene.id, QA_BANDS, grid, fresh=fresh)
+        required = LITE_BANDS if lite else QA_BANDS
+        scl = read_assets(scene.id, ["SCL"], grid, fresh=fresh)["SCL"]
         try:
             offset: int | None = ix.boa_offset(scene.processing_baseline)
         except ValueError:
             offset = None
-        raw = evaluate_optical(bands, offset, mask)
+        if scl is not None and plot_clear_share(scl, mask) < PLOT_VALID_MIN:
+            # Every other check would only add reasons to a scene already rejected over this plot.
+            raw = evaluate_optical({"SCL": scl}, offset, mask, ["SCL"])
+        else:
+            others = [b for b in required if b != "SCL"]
+            bands = read_assets(scene.id, others, grid, fresh=fresh) if scl is not None else {}
+            bands["SCL"] = scl
+            raw = evaluate_optical(bands, offset, mask, required)
     _cache_store(path, raw)
     return raw
 
@@ -239,13 +262,13 @@ def qa_one(scene: SceneRef, plot: Plot, previous: SceneQA | None = None, *, fres
     return to_scene_qa(scene, apply_q5(raw_qa(scene, plot, fresh=fresh), scene.date, previous))
 
 
-def qa_chain(scenes: list[SceneRef], plot: Plot, *, fresh: bool = False) -> list[SceneQA]:
+def qa_chain(scenes: list[SceneRef], plot: Plot, *, fresh: bool = False, lite: bool = False) -> list[SceneQA]:
     """QA scenes in date order with Q5 against the last accepted one. Reads run concurrently."""
     ordered = sorted(scenes, key=lambda s: (s.datetime, s.id))
     if not ordered:
         return []
     with ThreadPoolExecutor(max_workers=6, thread_name_prefix="geo-qa") as pool:
-        raws = list(pool.map(lambda s: raw_qa(s, plot, fresh=fresh), ordered))
+        raws = list(pool.map(lambda s: raw_qa(s, plot, fresh=fresh, lite=lite), ordered))
     out: list[SceneQA] = []
     prev: SceneQA | None = None
     for scene, raw in zip(ordered, raws):

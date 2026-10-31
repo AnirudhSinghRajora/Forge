@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import time
 from datetime import date, timedelta
 
@@ -12,7 +13,7 @@ from .replay import flatten_numbers
 
 def square(lat: float, lon: float, side_m: float = 120.0) -> dict:
     dlat = side_m / 2 / 111_320
-    dlon = dlat / max(0.1, __import__("math").cos(__import__("math").radians(lat)))
+    dlon = dlat / max(0.1, math.cos(math.radians(lat)))
     ring = [[lon - dlon, lat - dlat], [lon + dlon, lat - dlat], [lon + dlon, lat + dlat], [lon - dlon, lat + dlat], [lon - dlon, lat - dlat]]
     return {"type": "Polygon", "coordinates": [ring]}
 

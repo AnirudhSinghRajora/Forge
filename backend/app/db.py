@@ -19,10 +19,13 @@ from sqlalchemy import (
     UniqueConstraint,
     create_engine,
     event,
+    inspect,
+    text,
 )
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker
 from sqlalchemy.pool import StaticPool
+from sqlalchemy.types import TypeDecorator
 
 from app.config import get_settings
 
@@ -35,6 +38,23 @@ def new_id() -> str:
     return uuid.uuid4().hex
 
 
+class UtcDateTime(TypeDecorator):
+    """Always aware UTC in Python. SQLite would otherwise drop the offset without converting it."""
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value: datetime | None, dialect):
+        if value is None:
+            return None
+        return (value if value.tzinfo else value.replace(tzinfo=UTC)).astimezone(UTC)
+
+    def process_result_value(self, value: datetime | None, dialect):
+        if value is None:
+            return None
+        return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
 class Base(DeclarativeBase):
     pass
 
@@ -45,7 +65,7 @@ class User(Base):
     name: Mapped[str | None] = mapped_column(String(200))
     phone: Mapped[str | None] = mapped_column(String(32))
     lang: Mapped[str] = mapped_column(String(8), default="hi")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
 
 
 class Case(Base):
@@ -60,6 +80,8 @@ class Case(Base):
     event_type: Mapped[str] = mapped_column(String(32), default="unknown")
     event_date: Mapped[date | None] = mapped_column(Date)
     event_time: Mapped[str | None] = mapped_column(String(8))  # HH:MM IST, as the farmer gave it
+    insured: Mapped[str | None] = mapped_column(String(8))  # yes | no | unknown
+    crop_stage: Mapped[str | None] = mapped_column(String(20))
     date_source: Mapped[str] = mapped_column(String(32), default="farmer")
     proposed_event_date: Mapped[date | None] = mapped_column(Date)
     parsed: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -67,9 +89,9 @@ class Case(Base):
     status: Mapped[str] = mapped_column(String(32), default="open")
     district: Mapped[str | None] = mapped_column(String(128))
     state: Mapped[str | None] = mapped_column(String(128))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+        UtcDateTime, default=utcnow, onupdate=utcnow
     )
 
 
@@ -84,7 +106,7 @@ class Plot(Base):
     crs: Mapped[str] = mapped_column(String(32))
     warnings: Mapped[list] = mapped_column(JSON, default=list)
     source: Mapped[str] = mapped_column(String(16), default="drawn")
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
 
 
 class Run(Base):
@@ -94,8 +116,8 @@ class Run(Base):
     trigger: Mapped[str] = mapped_column(String(16), default="user")
     # queued | running | done | failed | interrupted | needs_input
     status: Mapped[str] = mapped_column(String(16), default="queued", index=True)
-    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
+    finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
     error: Mapped[str | None] = mapped_column(Text)
 
 
@@ -107,7 +129,7 @@ class RunEvent(Base):
     seq: Mapped[int] = mapped_column(Integer)
     type: Mapped[str] = mapped_column(String(32))
     payload: Mapped[dict] = mapped_column(JSON)  # the TraceEvent as JSON
-    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    ts: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
 
 
 class EvidenceRow(Base):
@@ -120,9 +142,9 @@ class EvidenceRow(Base):
     verdict_level: Mapped[str | None] = mapped_column(String(32))
     evidence_hash: Mapped[str | None] = mapped_column(String(64))
     replay_core: Mapped[dict | None] = mapped_column(JSON)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+        UtcDateTime, default=utcnow, onupdate=utcnow
     )
 
 
@@ -134,8 +156,8 @@ class Action(Base):
     type: Mapped[str] = mapped_column(String(32))
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
     status: Mapped[str] = mapped_column(String(16), default="open")
-    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    due_at: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
 
 
 class SceneCache(Base):
@@ -143,15 +165,15 @@ class SceneCache(Base):
     key: Mapped[str] = mapped_column(String(128), primary_key=True)  # scene + plot + previous scene
     scene_id: Mapped[str] = mapped_column(String(128), index=True)
     qa: Mapped[dict] = mapped_column(JSON)
-    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    checked_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
 
 
 class AlertArchive(Base):
     __tablename__ = "alerts_archive"
     identifier: Mapped[str] = mapped_column(String(128), primary_key=True)
-    sent: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
-    effective: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    expires: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    sent: Mapped[datetime | None] = mapped_column(UtcDateTime, index=True)
+    effective: Mapped[datetime | None] = mapped_column(UtcDateTime)
+    expires: Mapped[datetime | None] = mapped_column(UtcDateTime)
     sender: Mapped[str | None] = mapped_column(String(200))
     event: Mapped[str | None] = mapped_column(String(200))
     severity: Mapped[str | None] = mapped_column(String(32))
@@ -160,7 +182,7 @@ class AlertArchive(Base):
     geocode: Mapped[dict | None] = mapped_column(JSON)
     url: Mapped[str | None] = mapped_column(Text)
     raw_xml: Mapped[str | None] = mapped_column(Text)
-    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    fetched_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
 
 
 class PolicyEmbedding(Base):
@@ -177,7 +199,7 @@ class ApiCache(Base):
     source: Mapped[str] = mapped_column(String(64))
     url: Mapped[str | None] = mapped_column(Text)
     payload: Mapped[dict | list] = mapped_column(JSON)
-    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    fetched_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
 
 
 _engine: Engine | None = None
@@ -192,7 +214,7 @@ def _build_engine(url: str) -> Engine:
         engine = create_engine(url, **kwargs)
 
         @event.listens_for(engine, "connect")
-        def _set_sqlite_pragmas(dbapi_conn, _record):  # noqa: ANN001
+        def _set_sqlite_pragmas(dbapi_conn, _record):
             cursor = dbapi_conn.cursor()
             cursor.execute("PRAGMA journal_mode=WAL")
             cursor.execute("PRAGMA synchronous=NORMAL")
@@ -213,7 +235,20 @@ def init_db(url: str | None = None) -> Engine:
         _engine = _build_engine(target)
         _session_factory = sessionmaker(_engine, expire_on_commit=False)
     Base.metadata.create_all(_engine)
+    _add_missing_columns(_engine)
     return _engine
+
+
+def _add_missing_columns(engine: Engine) -> None:
+    """create_all never alters a table. New nullable columns are added so a dev DB keeps working."""
+    inspector = inspect(engine)
+    with engine.begin() as conn:
+        for table in Base.metadata.sorted_tables:
+            existing = {c["name"] for c in inspector.get_columns(table.name)}
+            for column in table.columns:
+                if column.name not in existing and column.nullable:
+                    kind = column.type.compile(engine.dialect)
+                    conn.execute(text(f'ALTER TABLE {table.name} ADD COLUMN "{column.name}" {kind}'))
 
 
 @contextmanager

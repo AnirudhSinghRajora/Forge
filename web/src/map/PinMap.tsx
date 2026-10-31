@@ -4,9 +4,11 @@ import { useI18n } from "../i18n";
 import { PLACES } from "../places";
 import { Icon } from "../components/Icon";
 
-export default function PinMap({ start, onPick }: {
+export default function PinMap({ start, onPick, onPlace }: {
   start: { lat: number; lon: number; zoom?: number } | null;
   onPick: (lat: number, lon: number) => void;
+  /** A shortcut's date, offered later for the reader to confirm. Moving the map creates no data. */
+  onPlace?: (eventDate: string) => void;
 }) {
   const { t, lang } = useI18n();
   const host = useRef<HTMLDivElement | null>(null);
@@ -48,7 +50,7 @@ export default function PinMap({ start, onPick }: {
     <div className="pinmap">
       <div className="places" role="group" aria-label={t("map.places")}>
         {PLACES.map((p) => (
-          <button key={p.id} className="chip" onClick={() => mapRef.current?.jumpTo({ center: [p.lon, p.lat], zoom: p.zoom })}>
+          <button key={p.id} className="chip" onClick={() => { mapRef.current?.jumpTo({ center: [p.lon, p.lat], zoom: p.zoom }); onPlace?.(p.eventDate); }}>
             <Icon name="pin" size={16} /> {p.label[lang]}
           </button>
         ))}

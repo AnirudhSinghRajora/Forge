@@ -30,14 +30,17 @@ from .base import (
 )
 from .grid import Grid, Plot, parse_plot
 from .placebo import MIN_PLACEBOS, build_placebo_fields, sample_placements
-from .qa import apply_q5, qa_chain, qa_one, raw_qa, to_scene_qa
+from .qa import PLOT_VALID_MIN, apply_q5, plot_clear_share, qa_chain, qa_one, raw_qa, to_scene_qa
 from .raster import read_assets, read_many
 from .stac import get_scene, search_scenes
 from .twin import field_twin
 
 PRE_NDVI_TOLERANCE = 0.15
-RING_OUTERS_M = (RING_M[1], 3000, 5000)  # widen only when a smaller ring has too few placements
+PRE_SPREAD_TOLERANCE = 0.05  # placebos must match the plot's pre-event NDVI IQR within this
+RING_OUTERS_M = (RING_M[1], 3000)  # widen only when the 1.5 km ring has too few placements
 TWIN_PRE_DAYS = 30
+TWIN_MAX_PRE_SCENES = 4
+TWIN_MAX_TILE_CLOUD = 60.0
 PRE_WINDOW_DAYS = 25
 POST_WINDOW_DAYS = 20
 HISTORY_DOWNWEIGHT = 0.2
@@ -151,8 +154,10 @@ def _neighbour_stats(
     neighbour_median = _median(delta[comparable])
     bare = ix.bare_fraction(post.ndvi[comparable], post.bsi[comparable]) if n_comparable else None
 
+    q25, q75 = np.percentile(pre.ndvi[mask & both], [25, 75])
     placements = sample_placements(
-        mask, ring, both, pre.ndvi, delta, plot_pre_median, seed, PRE_NDVI_TOLERANCE
+        mask, ring, both, pre.ndvi, delta, plot_pre_median, seed, PRE_NDVI_TOLERANCE,
+        plot_pre_iqr=float(q75 - q25), spread_tolerance=PRE_SPREAD_TOLERANCE,
     )
     placebo = PlaceboTest(**build_placebo_fields(placements, plot_delta, "median_delta_ndvi", seed))
     evidence = NeighbourEvidence(
@@ -166,22 +171,39 @@ def _neighbour_stats(
     return evidence, ring
 
 
-def _twin(plot: Plot, grid: Grid, mask: np.ndarray, ring: np.ndarray, pre: SceneRef, post: SceneRef, fresh: bool):
+def _twin_scenes(plot: Plot, grid: Grid, mask: np.ndarray, pre: SceneRef, post: SceneRef, fresh: bool) -> list[SceneRef]:
+    """Pre and post, plus clear passes in the window, keeping the newest few pre-event ones.
+
+    Selection uses only tile-level cloud metadata and the SCL over the plot, never NDVI, so it
+    cannot select on the outcome being tested.
+    """
+    found = search_scenes(S2_COLLECTION, plot, pre.date - timedelta(days=TWIN_PRE_DAYS), post.date)
+    others = [
+        s for s in found
+        if s.date not in (pre.date, post.date) and (s.cloud_pct is None or s.cloud_pct <= TWIN_MAX_TILE_CLOUD)
+    ]
+    # Newest first, stopping once enough clear scenes are found: each SCL read costs real time.
+    before = sorted((s for s in others if s.date < pre.date), key=lambda s: s.datetime, reverse=True)
+    between = [s for s in others if pre.date < s.date < post.date]
+    chosen = list(between)
+    wanted = TWIN_MAX_PRE_SCENES - 1
+    kept = 0
+    for scene in before:
+        if kept >= wanted:
+            break
+        scl = read_assets(scene.id, ["SCL"], grid, fresh=fresh)["SCL"]
+        if scl is not None and plot_clear_share(scl, mask) >= PLOT_VALID_MIN:
+            chosen.append(scene)
+            kept += 1
+    return sorted(chosen, key=lambda s: (s.datetime, s.id))
+
+
+def _twin(plot: Plot, grid: Grid, mask: np.ndarray, ring: np.ndarray, pre: SceneRef, post: SceneRef, pre_qa: SceneQA, post_qa: SceneQA, fresh: bool):
     """Build the field twin and return it with the QA of every scene in its window."""
-    candidates = search_scenes(S2_COLLECTION, plot, pre.date - timedelta(days=TWIN_PRE_DAYS), post.date)
-    by_id = {s.id: s for s in candidates}
-    by_id[pre.id] = pre
-    by_id[post.id] = post
-    # A pass the agent did not pick may share a date with the chosen scene; keep the chosen one.
-    chosen_dates = {pre.date: pre.id, post.date: post.id}
-    scenes = [s for s in by_id.values() if chosen_dates.get(s.date, s.id) == s.id]
-    qas = qa_chain(scenes, plot, fresh=fresh)
-    status = {q.id: q.status for q in qas}
-    used = sorted(
-        (s for s in scenes if status[s.id] == "accepted" or s.id in (pre.id, post.id)),
-        key=lambda s: (s.datetime, s.id),
-    )
-    used = [s for s in used if s.date <= post.date]
+    extra = _twin_scenes(plot, grid, mask, pre, post, fresh)
+    extra_qa = qa_chain(extra, plot, fresh=fresh, lite=True)
+    status = {q.id: q.status for q in extra_qa}
+    used = sorted([s for s in extra if status[s.id] == "accepted"] + [pre, post], key=lambda s: (s.datetime, s.id))
     bands = read_many([(s.id, b) for s in used for b in ("B04", "B08", "SCL")], grid, fresh=fresh)
     layers = []
     for s in used:
@@ -192,15 +214,15 @@ def _twin(plot: Plot, grid: Grid, mask: np.ndarray, ring: np.ndarray, pre: Scene
         vi = ix.ndvi(ix.to_reflectance(b["B08"], offset), ix.to_reflectance(b["B04"], offset))
         vi[~ix.clear_mask(b["SCL"], allow_water=s.date > pre.date)] = np.nan
         layers.append(vi)
-    stack = np.stack(layers)
     dates = [s.date for s in used]
     n_pre = sum(1 for s in used if s.date <= pre.date)
-    twin = field_twin(stack, dates, n_pre, dates.index(post.date), mask, ring)
-    return twin, qas
+    twin = field_twin(np.stack(layers), dates, n_pre, dates.index(post.date), mask, ring)
+    chain = sorted(extra_qa + [pre_qa, post_qa], key=lambda q: (q.date, q.id))
+    return twin, chain
 
 
 def _optical_compare(
-    polygon: dict, pre_id: str, post_id: str, seed: int, *, fresh: bool = False
+    polygon: dict, pre_id: str, post_id: str, seed: int, *, fresh: bool = False, with_twin: bool = True
 ) -> tuple[OpticalEvidence, NeighbourEvidence]:
     plot = parse_plot(polygon)
     pre = get_scene(pre_id, plot)
@@ -242,8 +264,10 @@ def _optical_compare(
     twin_mask = plot.stats_mask(twin_grid)
     dist = plot.distance_m(twin_grid)
     twin_ring = (dist >= RING_M[0]) & (dist <= RING_M[1])
-    twin, chain = _twin(plot, twin_grid, twin_mask, twin_ring, pre, post, fresh)
-    neighbours.counterfactual = twin
+    chain = [pre_qa, post_qa]
+    if with_twin:
+        twin, chain = _twin(plot, twin_grid, twin_mask, twin_ring, pre, post, pre_qa, post_qa, fresh)
+        neighbours.counterfactual = twin
 
     optical = OpticalEvidence(
         scenes_considered=chain,
@@ -273,20 +297,33 @@ def _shift_year(d: Date, year: int) -> Date:
 def _pair_delta(
     plot: Plot, pre: SceneRef, post: SceneRef, *, fresh: bool = False
 ) -> tuple[float | None, float | None]:
-    """Plot pre NDVI and median delta on the plot grid. (None, None) if the pair has no pixels."""
+    """Plot pre NDVI and median delta on the plot grid. (None, None) if the pair has no pixels.
+
+    History needs only NDVI, so it reads only the three bands NDVI needs.
+    """
     grid = plot.grid()
     mask = plot.stats_mask(grid)
-    a = _load_scene(pre, grid, post=False, red_edge=False, fresh=fresh)
-    b = _load_scene(post, grid, post=True, red_edge=False, fresh=fresh)
-    pair = mask & a.valid & b.valid
+    bands = read_many([(s.id, b) for s in (pre, post) for b in ("B04", "B08", "SCL")], grid, fresh=fresh)
+
+    def layer(scene: SceneRef, allow_water: bool) -> np.ndarray:
+        got = bands[scene.id]
+        if got["B04"] is None or got["B08"] is None or got["SCL"] is None:
+            raise SceneUnusable(f"{scene.id}: bands needed for history are missing")
+        offset = _offset(scene)
+        vi = ix.ndvi(ix.to_reflectance(got["B08"], offset), ix.to_reflectance(got["B04"], offset))
+        vi[~ix.clear_mask(got["SCL"], allow_water=allow_water)] = np.nan
+        return vi
+
+    a, b = layer(pre, False), layer(post, True)
+    pair = mask & np.isfinite(a) & np.isfinite(b)
     if not pair.any():
         return None, None
-    return float(np.median(a.ndvi[mask & a.valid])), float(np.median((b.ndvi - a.ndvi)[pair]))
+    return float(np.median(a[mask & np.isfinite(a)])), float(np.median((b - a)[pair]))
 
 
 def _first_accepted(scenes: list[SceneRef], plot: Plot) -> SceneRef | None:
     for scene in scenes:
-        if qa_one(scene, plot).status == "accepted":
+        if to_scene_qa(scene, raw_qa(scene, plot, lite=True)).status == "accepted":
             return scene
     return None
 

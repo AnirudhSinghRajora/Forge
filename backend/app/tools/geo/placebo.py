@@ -14,7 +14,7 @@ from .base import r4
 TARGET_PLACEBOS = 200
 MIN_PLACEBOS = 30
 MIN_VALID_SHARE = 0.8
-MAX_EVALUATIONS = 8000
+MAX_EVALUATIONS = 30000
 HIST_BINS = 20
 
 
@@ -48,11 +48,17 @@ def sample_placements(
     seed: int,
     pre_tolerance: float,
     target: int = TARGET_PLACEBOS,
+    allow_overlap: bool = True,
+    plot_pre_iqr: float | None = None,
+    spread_tolerance: float | None = None,
 ) -> PlacementResult:
     """Translate `mask` to random feasible positions and compute the median delta at each.
 
     A placement counts only if all its pixels lie in `ring`, at least 80% of them are valid in
-    both scenes, and its pre-event median is within `pre_tolerance` of the plot's. The first pass
+    both scenes, and its pre-event median is within `pre_tolerance` of the plot's. If
+    `spread_tolerance` is given, its pre-event IQR must also be that close to the plot's: on real
+    data a uniform field and a half-bare mix with the same median behave differently, and matching
+    on the median alone made p-values too small for uniform plots. The first pass
     takes placements whose bounding boxes do not overlap. If that falls short of `target`, a second
     pass fills up with overlapping ones, which are correlated with each other.
     """
@@ -86,8 +92,13 @@ def sample_placements(
         ok = valid[pr, pc]
         if not ok.any():
             return False
-        if abs(float(np.median(pre[pr[ok], pc[ok]])) - plot_pre_median) > pre_tolerance:
+        pre_values = pre[pr[ok], pc[ok]]
+        if abs(float(np.median(pre_values)) - plot_pre_median) > pre_tolerance:
             return False
+        if spread_tolerance is not None:
+            q25, q75 = np.percentile(pre_values, [25, 75])
+            if abs(float(q75 - q25) - plot_pre_iqr) > spread_tolerance:
+                return False
         values.append(float(np.median(delta[pr[ok], pc[ok]])))
         offsets.append((y, x))
         return True
@@ -107,7 +118,7 @@ def sample_placements(
     n_non_overlapping = len(values)
 
     # Second pass: fill up from the overlapping offsets, which are correlated with their neighbours.
-    for y, x in skipped:
+    for y, x in skipped if allow_overlap else []:
         if len(values) >= target or n_evaluated >= MAX_EVALUATIONS:
             break
         evaluate(y, x)

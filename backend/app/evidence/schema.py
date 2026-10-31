@@ -274,7 +274,81 @@ class ReplayCore(BaseModel):
     numbers: dict[str, float | None]  # flat "field.path" -> value, rounded to 4 dp
 
 
+class ScaleLevel(BaseModel):
+    block_m: int  # 10, 100, 500, 1000, 3000
+    plot_cell_value: float | None  # change at the block containing the plot centroid
+    context_min: float | None = None
+    chip_path: str | None = None  # served by GET /api/artifacts/{path}
+
+
+class ScaleFade(BaseModel):
+    """The same change map block-averaged to coarser cells. Our illustration, not YES-TECH output."""
+    sensor: Literal["s2", "s1"]
+    statistic: str  # e.g. "delta_ndvi" or "vh_change_db"
+    bounds: tuple[float, float, float, float]  # lon/lat west, south, east, north
+    levels: list[ScaleLevel]
+
+
+class SurveyDraw(BaseModel):
+    parcels: list[tuple[float, float]]  # lon/lat centres of the 10 parcels in this draw
+    average: float
+
+
+class SurveyLottery(BaseModel):
+    """Para 21.5.8 simulated: 10 random parcels, averaged, repeated with a fixed seed."""
+    n_simulations: int
+    parcels_per_survey: int = 10
+    statistic: str
+    plot_value: float | None
+    n_candidate_parcels: int
+    average_median: float | None
+    average_p05: float | None
+    average_p95: float | None
+    share_below_half_of_plot: float | None  # share of surveys whose average change is under half of this plot's
+    histogram_edges: list[float] = []
+    histogram_counts: list[int] = []
+    sample_draws: list[SurveyDraw] = []  # a few real draws, for the map animation
+    seed: int
+    insufficient_reason: str | None = None
+    # Set by the backend from the claim path. Para 21.5.8 only governs localized/post-harvest claims.
+    rule_applicability: Literal["may_apply", "illustration_only"] = "illustration_only"
+
+
+class VillageWitness(BaseModel):
+    radius_m: int
+    sensor: Literal["s2", "s1"]
+    n_cropland_pixels: int
+    affected_share: float | None  # indicator only, not the legal 25%-of-insured-area test
+    affected_definition: str
+    nearby_real_cases: int | None = None  # filled by the backend from real cases only
+    lottery: SurveyLottery | None = None
+
+
+ClaimRoute = Literal[
+    "not_insured", "localized_addon", "post_harvest_addon", "area_yield_basic", "undetermined",
+]
+
+
+class ClaimPath(BaseModel):
+    route: ClaimRoute
+    insured: Literal["yes", "no", "unknown"] = "unknown"
+    crop_stage: Literal["standing", "cut_and_spread", "harvested_stored", "unknown"] = "unknown"
+    intimation: Literal["essential", "not_essential", "unknown"] = "unknown"
+    countdown_applies: bool = False
+    reasons: list[str] = []
+    next_steps: list[str] = []
+    evidence_use: str | None = None  # what this evidence is honestly useful for on this route
+    unknowns: list[str] = []
+    clause_ids: list[str] = []
+
+
 class Evidence(BaseModel):
+    scale_fade: ScaleFade | None = None
+    village: VillageWitness | None = None
+    claim_path: ClaimPath | None = None
+    testimony_hi: str | None = None
+    testimony_en: str | None = None
+    testimony_te: str | None = None
     case_id: str
     run_id: str
     created_at: datetime

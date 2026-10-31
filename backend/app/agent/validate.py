@@ -26,8 +26,18 @@ _SKIP_KEYS = {
 # Rupee or payout talk and promises. No evidence field ever supports these.
 _BANNED = re.compile(
     r"(?i)₹|\brs\.?\s*\d|\brupees?\b|\blakh\b|\bcrore\b|लाख|करोड़|रुपय|रुपये|రూపాయ|లక్ష|కోటి"
-    r"|you will (?:get|receive|be paid)|will be paid|guarantee|मुआवज़ा मिलेगा|मुआवजा मिलेगा"
+    r"|you will (?:get|receive|be paid)|will be paid|(?<!not )(?<!no )guarantee|मुआवज़ा मिलेगा|मुआवजा मिलेगा"
     r"|पैसा मिलेगा|क्लेम मिलेगा|పరిహారం వస్తుంది|డబ్బు వస్తుంది"
+    # do_not_say entries from key_rules.json
+    r"|late means reject|will be rejected|claim is lost|must accept|has to accept|\bCSC\b"
+    r"|everyone gets paid|no longer need to intimate|रद्द हो जाएगा|ख़ारिज हो जाएगा|खारिज हो जाएगा"
+    r"|मानना ही होगा|తిరస్కరిస్తారు"
+    r"|\blottery\b|लॉटरी|లాటరీ|unfair|अनुचित"
+    r"|paddy inundation is covered|can'?t contest|cannot contest"
+    # No AP insurer is verified, so LLM text may name no insurer at all.
+    r"|agriculture insurance company|\bAIC\b|icici lombard|bajaj allianz|hdfc ergo|reliance general"
+    r"|sbi general|universal sompo|future generali|chola ?ms|tata aig|kshema|iffco.tokio"
+    r"|oriental insurance|united india|national insurance|new india assurance"
 )
 
 

@@ -40,8 +40,8 @@ def to_db(linear: np.ndarray) -> np.ndarray:
 
 
 def nan_median_filter(arr: np.ndarray, size: int) -> np.ndarray:
-    """Median filter that ignores NaNs in the window by using +inf/-inf balancing is overkill here;
-    missing pixels are rare in RTC, so they are filled with the image median and masked afterwards."""
+    """Median filter. Missing pixels are rare in RTC: they are filled with the image median for the
+    filter, then masked again afterwards."""
     good = np.isfinite(arr)
     if not good.any():
         return arr.copy()

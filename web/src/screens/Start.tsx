@@ -51,7 +51,13 @@ export function Start() {
   const [loc, setLoc] = useState<{ lat: number; lon: number; source: "gps" | "pin"; accuracy?: number } | null>(null);
   const [geoBusy, setGeoBusy] = useState(false);
   const [geoProblem, setGeoProblem] = useState<GeoProblem>(null);
-  const [pinOpen, setPinOpen] = useState(false);
+  const [near] = useState(() => {
+    const m = new URLSearchParams(location.search).get("near")?.match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/);
+    return m ? { lat: Number(m[1]), lon: Number(m[2]), zoom: 13 } : null;
+  });
+  const [pinOpen, setPinOpen] = useState(!!near);
+
+  const [placeDate, setPlaceDate] = useState<string | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<unknown>(null);
@@ -238,6 +244,7 @@ export function Start() {
         localStorage.setItem("fs.lastCase", res.case_id);
         sessionStorage.setItem(`fs.created.${res.case_id}`, JSON.stringify(res));
         sessionStorage.setItem(`fs.loc.${res.case_id}`, JSON.stringify({ lat: loc.lat, lon: loc.lon }));
+        if (placeDate && loc.source === "pin") sessionStorage.setItem(`fs.placeDate.${res.case_id}`, placeDate);
       } catch { /* storage is only a convenience */ }
       navigate(`/case/${encodeURIComponent(res.case_id)}/confirm`);
     } catch (e) {
@@ -254,6 +261,7 @@ export function Start() {
       <div className="start-grid">
         <section className="start-main" aria-labelledby="start-title">
           <p className="eyebrow">{t("start.eyebrow")}</p>
+          {near && <p className="notice small">{t("start.neighbour")}</p>}
           <h1 id="start-title" className="display">{t("start.title")}</h1>
           <p className="lede">{t("start.lede")}</p>
 
@@ -325,7 +333,8 @@ export function Start() {
               <ErrorBoundary>
                 <Suspense fallback={<Loading what={t("loading.map")} />}>
                   <PinMap
-                    start={loc}
+                    start={loc ?? near}
+                    onPlace={setPlaceDate}
                     onPick={(lat, lon) => {
                       setLoc({ lat, lon, source: "pin" });
                       setPinOpen(false);

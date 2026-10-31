@@ -115,3 +115,61 @@ SAR alone never exceeds moderate. Thresholds are frozen after calibration; recor
 ## Model IDs (checked 31 Oct 2026 at ai.google.dev/gemini-api/docs/models; all overridable by env)
 
 `GEMINI_MODEL_PRO=gemini-3.1-pro-preview`, `GEMINI_MODEL_FLASH=gemini-3.8-flash`, `GEMINI_MODEL_TTS=gemini-3.8-flash-tts`, `GEMINI_MODEL_EMBED=gemini-embedding-2`. Hindi TTS support was not stated on that page; verify at first key use.
+
+## Addendum, 31 Oct 2026, 9:15 PM: the claim path and the three new signatures
+
+Priority order: finish the core path first (plot → investigation → verdict → PDF → verify). Then these, in the order listed. Do not start a signature until the core path runs end to end.
+
+### Corrections from the guidelines (mandatory, `backend/data/policy/key_rules.json` is the source of truth)
+Current document: PMFBY Operational Guidelines 2023. Honour every `do_not_say` in that file.
+- **The 72-hour countdown is not universal.** It applies to the localized and post-harvest add-ons, only where the State notified them (21.5.x). For widespread losses under basic cover, intimation "is not essential" (5.5). Route first, then show a countdown only if it applies.
+- **Never say or imply "late means rejected" or "silently kills claims".** 21.5.9.2 calls intimation a pre-condition but adds that intimations received during the survey would be considered.
+- **Cyclone is not a localized peril for standing crop.** A Godavari farmer with standing paddy is on area-yield cover (crop cutting + technology, no individual intimation). Post-harvest cover needs cut-and-spread crop and a State notification we have not found.
+- **Arnab's 72 hours have passed** if counted from the landfall window IMD gives (02:00-08:00 IST, 28 Oct). No live countdown on that case.
+- **Ask "are you insured?" first.** Andhra Pradesh enrolment is voluntary now. Name no AP insurer; none is verified.
+- YES-TECH is **Gram Panchayat level**, not insurance-unit level (2.17). CSC is not a listed channel. CROPIC damage assessment is still at pilot initiation.
+- The 25% rule does not make everyone eligible; it pays those who gave intimation (21.5.8, 21.5.9.3).
+- No clause provides for farmer-submitted satellite evidence. The honest hook is that the insurer collects "any other available evidence". Never say an insurer must accept ours.
+
+### Claim path (`Evidence.claim_path`, deterministic, BACKEND + WEB)
+Ask: insured? crop stage (standing / cut and spread / harvested and stored)? Combine with peril and event date. Output one route with cited clauses, whether intimation is essential, whether a countdown applies, what the evidence is useful for on that route, and everything still unknown. State-notification status is `unknown` unless verified: say "confirm with your bank or 14447". This correctness is a differentiator: other teams will just say "72 hours".
+
+### Signature 1: The Ten-Field Lottery (`Evidence.village.lottery`, GEO + BACKEND + WEB). Our headline.
+Para 21.5.8: above 25% of insured area under intimation, "the sample loss survey will be conducted at 10 different randomly selected crop-land parcels" and the average "shall be applicable to all intimations". Damage from hail and floods is patchy, so this average depends heavily on where 10 parcels land.
+We run that rule on real pixels: draw 10 random farmer-shaped parcels from comparable cropland around the plot, average the change, repeat 1000 times with a fixed seed. Show the spread, how often the average falls below half of this field's change, and animate real draws landing on the map.
+Honesty, printed beside the result every time: this draws from cropland, not the real intimation list; it uses a satellite change index, not assessed crop loss; we don't know insured area, so the affected share is an indicator and not the legal 25% test. Never say the survey is unfair as fact. Say "here is how much the average can move for this event".
+
+### Signature 2: The Vanishing (`Evidence.scale_fade`, GEO + WEB)
+The same real change map, block-averaged at 10 m, 100 m, 500 m, 1 km and 3 km, on a slider. The farmer's loss visibly dissolves as cells grow to Gram Panchayat scale. Report the plot cell's value at each scale. Label: "our illustration from public satellite data, not output of YES-TECH". If the field shows no local signal, show that honestly.
+
+### Signature 3: The Field Testifies (`Evidence.testimony_*`, BACKEND + WEB)
+The evidence read in the first person, by the field, in Hindi, Telugu, or English: "मैं आपका खेत हूँ। 18 अक्टूबर को उपग्रह ने मुझे देखा, तब मैं हरा था…". Built from a deterministic template over real values; Gemini may polish only through the digit validator. Played over a flipbook of every satellite pass of this plot with dates. It must carry the verdict's caveats and must also work for "no damage visible". Never claim the field "knows" the cause: "consistent with".
+
+### Village witness (`Evidence.village`)
+Share of comparable cropland around the plot showing change consistent with damage, excluding harvest-like bare soil, as an indicator beside the 25% line. `nearby_real_cases` counts only real cases in our DB. Add a share link so a neighbour can add a field. Under this rule only those who intimated are paid, so the message is "tell your neighbours to report", backed by 21.5.8.
+
+### Machine safety (all owners)
+Run anything memory-heavy (batch validation, large rasters, Playwright) in its own capped scope, so it can't take VS Code down with it:
+`systemd-run --user --scope --quiet -p MemoryMax=6G -p MemorySwapMax=0 -- <command>`
+Run at most one heavy batch job at a time. VS Code closing stops all builders.
+
+## Addendum 2, 31 Oct 2026, 9:45 PM: research corrections (overrides Addendum 1 where they differ)
+Full detail: `docs/submission/facts.md` and `docs/validation/events.md`.
+
+**The name is "The Ten-Field Draw" (दस खेतों का ड्रॉ), not "lottery"** in everything users or judges see. "Lottery" is our word, not the guidelines', and it implies unfairness. Random sampling is unbiased on average. We show how far one draw's average can move, never that the rule is unfair. No rupee payout figures anywhere: the formula's "X 25%" and the p.111 illustration do not agree, and pixels are not the survey's loss %.
+
+**Para 21.5.8 does not govern standing Godavari paddy.** It covers localized and post-harvest claims in a unit over 25% under intimation, where the State notified the cover. Cyclone is not a localized peril, and Note 2 excludes paddy from localized inundation. `SurveyLottery.rule_applicability` is `may_apply` only on those routes; otherwise it is `illustration_only` and the UI says "what this rule would do if it applied here".
+
+**Paddy inundation for Kharif 2026 is officially contradicted** (PIB 18 Nov 2025 vs. Lok Sabha 4 Aug 2026). The app never says it is covered.
+
+**Demo cases, in order:**
+1. **Hail, 2-3 March 2024, Bhiwani and Hisar** (events.md C1): standing wheat and mustard, official damage bins from under 25% to over 76%. Lead case for the Ten-Field Draw and the Vanishing. A signal case, not a PMFBY claim case: a Congress leader said no insurer covered Hisar that season. Say so.
+2. **Cyclone Arnab, this week:** claim path, radar and sensor fallback. Landfall 02:00-08:00 IST on 28 Oct near 16.45 N, 81.90 E. Best crop figure: about 3.51 lakh ha, preliminary (Agriculture Minister, 29 Oct).
+3. **Sirsa/Fatehabad:** the hard case. The storm was **Saturday evening 24 Oct**; 25 Oct is only UNI's dateline. The named villages appear to sit in Ratia tehsil, Fatehabad, about 50 km from our old point. Check whether the 24 Oct Sentinel-1 pass preceded the storm.
+
+**The pitch, corrected:**
+- Not "no farmer-side tool exists": Proof of Loss, CropSnap and Farmonaut are nearby. Say "we found no farmer-owned, placebo-tested, recomputable record of a specific loss".
+- Not "first simulation of the rule": say "we did not find a published simulation of it".
+- Not "farmers can't contest": written notice and grievance routes exist. Say "they have no evidence of their own".
+- Keep the two systems separate. YES-TECH sets area yield under basic cover, and that is the Vanishing's context. A localized claim goes to a joint survey, or the 10-parcel sample above 25%. The 70/30 satellite weighting (21.5.9.4) is run by the State committee in a dispute; a farmer's PDF does not trigger it and the result binds the farmer too. Do not use 70/30 as a selling point.
+- Rajasthan pending claims in old docs are wrong (official table: ₹1,525.2 cr). Use `facts.md` for every number. Haryana's ₹450 cr and ₹350 cr are farmers' claims in one report and must be attributed as such.

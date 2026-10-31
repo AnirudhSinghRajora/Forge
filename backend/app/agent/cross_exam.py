@@ -52,11 +52,27 @@ def pct(x: float) -> str:
     return f"{x * 100:.0f}"
 
 
+def signed(x: float) -> str:
+    """Two decimals with a sign, without the misleading "-0.00" of a change that rounds to nothing."""
+    return "0.00" if abs(x) < 0.005 else f"{x:+.2f}"
+
+
 def _obj(oid, challenge_hi, challenge_en, test, measured, outcome, finding_hi, finding_en):
     return Objection(
         id=oid, challenge_hi=challenge_hi, challenge_en=challenge_en, test=test,
         measured=measured, outcome=outcome, finding_hi=finding_hi, finding_en=finding_en,
     )
+
+
+def _no_post(ev: Evidence, hi: str, en: str) -> tuple[str, str]:
+    if rubric.comparison_incomplete(ev):
+        return (
+            ("घटना के बाद की तस्वीर मिली है, पर सैटेलाइट संग्रह धीमा होने से तुलना पूरी नहीं हुई, इसलिए यह जाँच अभी नहीं "
+            "हो सकी। यह दोबारा चलेगी।"),
+            ("An image from after the event exists, but the satellite archive was too slow to finish "
+            "the comparison, so this could not be tested yet. It will be retried."),
+        )
+    return hi, en
 
 
 def check_harvest(ev: Evidence) -> Objection:
@@ -83,20 +99,31 @@ def check_harvest(ev: Evidence) -> Objection:
         return _obj("harvest", challenge_hi, challenge_en, test, measured, outcome, hi, en)
 
     if ev.optical.post is None or bare is None:
-        return out(
-            "unresolved",
+        return out("unresolved", *_no_post(
+            ev,
             "घटना के बाद की कोई साफ़ तस्वीर नहीं मिली, इसलिए कटाई की जाँच अभी नहीं हो सकी। क्या आपने "
             "घटना के बाद फ़सल काटी थी?",
             "There is no clear image after the event, so harvest could not be tested yet. Did you "
             "harvest after the event?",
-        )
+        ))
+    delta = ev.optical.plot_delta_ndvi
     if not (bare > BARE_MIN and pattern == "uniform"):
+        if bare <= BARE_MIN:
+            return out(
+                "rebutted",
+                f"कटाई जैसा नहीं दिखता: घटना के बाद खेत का {pct(bare)}% हिस्सा ही खाली मिट्टी है (कटाई में 60% से "
+                f"ज़्यादा होता है), और गिरावट का पैटर्न '{_PATTERN_HI.get(pattern or 'none')}' है।",
+                f"This does not look like harvest: only {pct(bare)}% of the plot is bare after the "
+                f"event (harvest leaves over 60%), and the pattern of decline is '{pattern or 'none'}'.",
+            )
+        change = signed(delta) if delta is not None else "-"
         return out(
             "rebutted",
-            f"कटाई जैसा नहीं दिखता: घटना के बाद खेत का {pct(bare)}% हिस्सा ही खाली मिट्टी है और गिरावट "
-            f"का पैटर्न '{_PATTERN_HI.get(pattern or 'none')}' है।",
-            f"This does not look like harvest: only {pct(bare)}% of the plot is bare after the "
-            f"event, and the pattern of decline is '{pattern or 'none'}'.",
+            f"खेत का {pct(bare)}% हिस्सा खाली मिट्टी है, पर इन तस्वीरों के बीच बदलाव {change} ही है और पैटर्न "
+            f"'{_PATTERN_HI.get(pattern or 'none')}' है। इनके बीच कटाई नहीं दिखती; हो सकता है ज़मीन पहले से खाली हो।",
+            f"{pct(bare)}% of the plot is bare, but it changed by only {change} between these images, "
+            f"with pattern '{pattern or 'none'}'. No harvest shows between them; the land may already "
+            "have been bare.",
         )
 
     neighbours_support = None if neighbour_bare is None else neighbour_bare >= NEIGHBOUR_BARE_MIN
@@ -265,11 +292,11 @@ def check_cloud_shadow(ev: Evidence) -> tuple[Objection, list[str]]:
                 "यहाँ रडार का इस्तेमाल हुआ है, जो बादलों के पार देख सकता है, इसलिए बादल का असर नहीं है।",
                 "This rests on radar, which sees through cloud, so cloud cannot explain it.",
             ), []
-        return out(
-            "unresolved",
+        return out("unresolved", *_no_post(
+            ev,
             "घटना के बाद की कोई साफ़ तस्वीर नहीं मिली, इसलिए यह जाँच नहीं हो सकी।",
             "There is no clear image after the event, so this could not be tested.",
-        ), []
+        )), []
     bad = [s for s in (pre, post) if s is not None and s.valid_frac < VALID_FRAC_MIN]
     if bad:
         worst = min(bad, key=lambda s: s.valid_frac)
@@ -324,12 +351,12 @@ def check_corrupt_scene(ev: Evidence) -> tuple[Objection, list[str]]:
                 f"{rej_hi}। यह नतीजा उन पर नहीं, रडार की जोड़ी पर टिका है।",
                 f"{rej_en.capitalize()}. This result rests on a radar pair, not on those.",
             ), []
-        return out(
-            "unresolved",
+        return out("unresolved", *_no_post(
+            ev,
             f"{rej_hi}, और घटना के बाद की कोई भरोसेमंद तस्वीर नहीं बची। इसलिए अगली तस्वीर का इंतज़ार है।",
             f"{rej_en.capitalize()}, and no trustworthy image remains after the event. The next "
             "pass is needed.",
-        ), []
+        )), []
     if post_st == "suspect" or pre_st == "suspect":
         suspects = [
             s.scene_id for s, st in ((ev.optical.pre, pre_st), (post, post_st)) if s and st == "suspect"
@@ -491,7 +518,7 @@ def run(
     followups.extend(FollowUp("exclude_scene", "cloud_shadow", scene_id=i) for i in cloudy_ids)
     corrupt, suspect_ids = check_corrupt_scene(ev)
     followups.extend(FollowUp("exclude_scene", "corrupt_scene", scene_id=i) for i in suspect_ids)
-    if ev.optical.post is None:
+    if ev.optical.post is None and not rubric.comparison_incomplete(ev):
         followups.append(FollowUp("widen_post", "corrupt_scene", note="no accepted post scene"))
     if ev.optical.pre is None:
         followups.append(FollowUp("widen_pre", "wrong_plot", note="no accepted pre scene"))

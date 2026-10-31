@@ -57,11 +57,3 @@ export function bboxOfRing(ring: number[][]): [number, number, number, number] {
   }
   return [w, s, e, n];
 }
-
-export function polygonOutlineOnChip(ring: number[][], bounds: [number, number, number, number]): string {
-  // Chips are north-up at small extents, so linear lon/lat scaling lands within a pixel of the image.
-  const [w, s, e, n] = bounds;
-  return ring
-    .map(([x, y]) => `${(((x - w) / (e - w)) * 100).toFixed(3)},${(((n - y) / (n - s)) * 100).toFixed(3)}`)
-    .join(" ");
-}

@@ -1,0 +1,880 @@
+{
+  "as_of": "2026-10-31",
+  "primary_document": {
+    "title": "Pradhan Mantri Fasal Bima Yojana (PMFBY) Operational Guidelines 2023, Effective from Kharif 2023",
+    "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+    "url_provenance": "The pmfby.gov.in guidelines table links to this exact URL, labelled \"2023 Operational Guidelines of Pradhan Mantri Fasal Bima Yojana - (PMFBY)\", dated 07/11/2024, 3.60 MB (read from the site bundle on 31 Oct 2026). The site loads all its assets from pmfby.amnex.co.in.",
+    "pdf_metadata": "213 pages; title \"Final PMFBY Operational Guidelines 2023--120125\"; created 19 Jan 2025; sha256 starts 5252ce3a62b66a44",
+    "circular": "DA&FW letter No. 11019/01/2022-Cr. II (Part-I), 6 Nov 2024, signed Muktanand Agrawal, Joint Secretary & CEO (PMFBY), issuing the guidelines to all States",
+    "cross_check_copy": "https://krishi.maharashtra.gov.in/Site/Upload/GR/OG%20titled%20as%20Operational%20Guidelines%20Kharif%2023%20for%20the%20implementation%20of%20PMFBY%20and%20RWBCIS%20From%20Kharif%202023%20onwards-reg%20(2).pdf",
+    "supersedes_note": "The \"Revamped Operational Guidelines\" of 17 Aug 2020 (https://pmfby.gov.in/pdf/Revamped%20Operational%20Guidelines_17th%20August%202020.pdf, kept in raw/) is the older version. OG 2023 states it is effective from Kharif 2023 and overrides non-conforming provisions (clause Preamble)."
+  },
+  "text_handling": "Quotes are verbatim from the PDF text layer, except Unicode NFKC normalisation (ligatures such as fi), whitespace collapse, and re-joining of words hyphenated at line breaks. Original typos are kept (\"lightening\", \"intimationfor\"). Every quote was checked programmatically as an exact substring of its clause record.",
+  "rules": {
+    "intimation_deadline": {
+      "status": "verified",
+      "statement": "For the localized calamity and post-harvest add-on covers, the guidelines say intimation may be given within 72 hours, and the schedule column counts those hours from the occurrence of the peril. The text does not count from when the farmer discovers the loss.",
+      "hours": 72,
+      "clock_starts": "occurrence of the peril",
+      "applies_to": [
+        "localized_calamity",
+        "post_harvest"
+      ],
+      "does_not_apply_to": [
+        "basic_cover_area_yield_loss (see no_individual_intimation_for_widespread)"
+      ],
+      "app_note": "Show the countdown only after the case is routed to localized or post-harvest. Label the start time as the farmer-entered time of the peril. For a multi-day peril, count from the earliest reported time, and say that the guidelines do not settle when the clock starts (see unverified).",
+      "citations": [
+        {
+          "clause_id": "21.5.5.1",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 103,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Immediate intimation (within 72 hours) by the insured farmer as detailed in Para 21.5.5.4 below.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.10/Table-10/row-1/schedule",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 107,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Within 72 hours` from the occurrence of a peril.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.6.6.1",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 112,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Immediate intimation (within 72 hours) by the insured farmer to Insurance Company through \"Crop Insurance App\" or any available channel of reporting as detailed in Para 21.6.6.4 below.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.6.11/Table-11/row-1/schedule",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 116,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Within 72 hours from the occurrence of peril.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "LS-S25-2026-07-21/a-individual",
+          "doc": "Lok Sabha Starred Question 25, answered 21 Jul 2026: Pending Claims of PMFBY",
+          "page": 1,
+          "url": "https://sansad.in/getFile/lsapps/loksabhaquestions/annex/188/AS25_tpFUNy.pdf",
+          "quote": "In this case, farmers have to intimate the loss within 72 hours of the loss by calling on the toll-free number i.e. 14447. In addition to the same, intimation can also be given on crop insurance app, to the State Government, insurance company, concerned bank/financial institutions, etc."
+        }
+      ]
+    },
+    "when_individual_cover_is_available": {
+      "status": "verified",
+      "statement": "Localized and post-harvest cover exist only if the State/UT notified the cover, the crop is notified for it, and premium was debited before the peril. The event must also fall inside the State-notified crop period. The app cannot assume any of this for a given farmer.",
+      "app_note": "Ask whether the farmer is insured this season before showing a deadline. Say \"if your crop is notified for this cover\".",
+      "citations": [
+        {
+          "clause_id": "21.5.4.1",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 102,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "This add-on cover will only be available if this cover is notified by the State/UT Government.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.6.4.1",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 111,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "This Add-on cover will only be available if this cover is notified by the State/UT Government.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.4.4",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 102,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Only those farmers would be eligible for financial support under this cover who have paid the premium i.e. the premium has been debited from their account before the occurrence of the insured peril.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.5.1",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 103,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "In the case of any event occurring beyond the defined period, this provision shall not be applicable under any circumstances.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.9.8",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 107,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Farmers getting enrolled or whose premium is debited after the occurrence of insurance peril or data has not been uploaded on NCIP would not be eligible for financial support under this cover.",
+          "also_in_circular_copy": true
+        }
+      ]
+    },
+    "channels": {
+      "status": "verified",
+      "statement": "Accepted channels are the Crop Insurance App, Krishi Rakshak Portal & Helpline (14447), the insurer through its dedicated toll-free number, the concerned bank, and local agriculture department or district officials. The app or KRPH should be the first mode. Banks and officials are to forward within 48 hours. The guidelines say other channels will be phased out subsequently.",
+      "helpline": "14447",
+      "krph_portal": "https://pmfby.gov.in/krph/",
+      "whatsapp_chatbot": "7065514447",
+      "crop_insurance_app_android_id": "in.farmguide.farmerapp.central",
+      "site_verified": "14447, 7065514447, https://pmfby.gov.in/krph/ and the Android app id were read from the pmfby.gov.in front-end bundle on 31 Oct 2026 (header strip: \"WhatsApp ChatBot - 7065514447\", \"Krishi Rakshak Portal Helpline - 14447\"). 14447 is also in the guidelines. The WhatsApp number, portal URL and app id are not in the guidelines and were not test-called.",
+      "not_listed": "CSC is not named as a loss-intimation channel in paras 21.5.5.4 or 21.6.6.4, or in Tables 10 and 11. Our ideation doc 03 lists it; remove it.",
+      "citations": [
+        {
+          "clause_id": "21.5.5.4",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 103,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Intimation may be given within 72 hours by the farmer either directly through the \"Crop Insurance App\" or on dedicated centralized toll-free number of Krishi Rakshak Portal & Helpline (14447). The intimation may also be forwarded through the concerned bank branch, local agriculture department Government/district officials. The first mode of intimation should be the \"Crop Insurance App\" and the centralized Toll-Free Number (KRPH) for this purpose.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.10/Table-10/row-1/action",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 107,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Intimation may be given within 72 hours by the farmer either through Crop Insurance App, Krishi Rakshak Portal & Helpline, directly to the Insurance Company through its dedicated toll-free number or through the concerned bank, local agriculture department Government/ district officials.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.5.5",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 104,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Reporting of losses will be done through the Crop Insurance App and the Centralized Toll-Free Number (KRPH), along with other channels. Other Channels will be phased out subsequently.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.5.6",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 104,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "In case the intimation has been given through the concerned bank branch or State/UT Government officials, the same shall be forwarded by the Bank Branches or Govt. officials of the concerned Insurance Company within the next 48 hours through available channels or Krishi Rakshak Portal & Helpline.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.10/Table-10/row-1/by",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 107,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Affected farmer(s) may intimate through KRPH or Mobile App or Chat Bot Platform of GoI.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.6.11/Table-11/row-1/by",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 116,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Affected farmer(s) may intimate using mobile, landline or social media.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "39.4.14",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 162,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "The KRPH has a short code Toll-Free number 14447 for farmers to call and raise their concerns, queries and grievances.",
+          "also_in_circular_copy": true
+        }
+      ]
+    },
+    "intimation_contents": {
+      "status": "verified",
+      "statement": "Required details are farmer name, affected survey number-wise insured crop and acreage affected, NCIP application number, mobile number, and KCC account (loanee) or savings account (non-loanee). If not all details are ready, partial information may be sent, with complete details within 7 days of the loss. The app may be used to report latitude/longitude and pictures.",
+      "fields": [
+        "farmer_name",
+        "survey_number",
+        "insured_crop",
+        "acreage_affected",
+        "ncip_application_no",
+        "mobile_number",
+        "kcc_account_no_if_loanee_or_savings_account_if_non_loanee"
+      ],
+      "optional_per_text": [
+        "latitude_longitude",
+        "pictures"
+      ],
+      "citations": [
+        {
+          "clause_id": "21.5.5.1",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 103,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Intimation must contain details of insured farmer's name, affected survey number-wise insured crop and acreage affected, Farmer's Application No as on NCIP, his/her Mobile Number etc. KCC A/c No. (In case of loanee farmer) or saving bank Account (in case of non-Loanee farmer as declared at the time of applying for crop insurance) for identification and verification purpose.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.6.6.1",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 112,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Intimation must contain details of insured farmer's name, affected land parcel/ survey no. wise insured crop and acreage affected, Farmer's Application No as on NCIP, his/her Mobile Number, etc.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.6.1",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 104,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "However, if information on all the columns is not readily available, partial information may be sent to the Insurance Company and later within 7 days of the loss, the form with complete details may be submitted.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.5.1",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 103,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Mobile application may be used for reporting incidence of localized calamities for intimation of events including longitude/latitude details and pictures using Mobile App developed by DA&FW.",
+          "also_in_circular_copy": true
+        }
+      ]
+    },
+    "perils": {
+      "status": "verified",
+      "statement": "Three lists apply. Basic area-yield cover (standing crop): drought, dry spells, flood, inundation, widespread pest and disease, landslides, natural fire due to lightening, storm, hailstorm, cyclone. Localized add-on: hailstorm, landslide, inundation, cloud burst, natural fire due to lightening. Post-harvest add-on: hailstorm, cyclone, cyclonic rains, unseasonal rains. Cyclone and cyclonic rain are not on the localized list.",
+      "basic": [
+        "drought",
+        "dry_spell",
+        "flood",
+        "inundation",
+        "widespread_pest_disease",
+        "landslide",
+        "natural_fire_lightning",
+        "storm",
+        "hailstorm",
+        "cyclone"
+      ],
+      "localized_add_on": [
+        "hailstorm",
+        "landslide",
+        "inundation",
+        "cloud_burst",
+        "natural_fire_lightning"
+      ],
+      "post_harvest_add_on": [
+        "hailstorm",
+        "cyclone",
+        "cyclonic_rain",
+        "unseasonal_rain"
+      ],
+      "paddy_inundation_warning": "The guidelines exclude paddy from the inundation peril under localized cover. PIB announced reintroduction from Kharif 2026 (18 Nov 2025), but a written reply to Lok Sabha on 4 Aug 2026 still says hydrophilic crops are covered \"except in case of localized claims\". Treat paddy localized inundation as NOT confirmed for Kharif 2026. See unverified.",
+      "citations": [
+        {
+          "clause_id": "5.1",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 17,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "This comprehensive risk insurance is provided to cover yield losses on an area-based approach basis, against non-preventable risks like drought, dry spells, flood, inundation, wide-spread pest and disease attack, landslides, natural fire due to lightening, storm, hailstorm, and cyclone.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.1",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 102,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "The Scheme provides for insurance cover at the individual farm level to crop losses due to occurrence of localized perils/ calamities viz. hailstorm, landslide, inundation, cloud burst and natural fire due to lightening affecting part of a notified unit or a specific land parcel.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.2",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 102,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Inundation is a situation where insured field is covered or submerged by water due to the rise in water level by natural rainfall or from an artesian well or flood water from local water bodies and where water stays for a prolonged period and causes visible damage to the crop.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.10/Note-1",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 110,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "*Note1: Crop damage should have occurred on account of inundation, mere water logging without corresponding crop loss will not be eligible.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.10/Note-2",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 111,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "*Note2: Inundation peril is not applicable in the case of hydrophilic crops like Paddy, Sugarcane, Jute and Mesta.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "PIB-2191224/para-2",
+          "doc": "PIB release 2191224: Another major relief for farmers (18 Nov 2025)",
+          "page": 1,
+          "url": "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2191224&reg=48&lang=2",
+          "quote": "Under the revised framework, crop loss due to wild animal attack will now be recognised as the fifth Add-on Cover under the Localised Risk category."
+        },
+        {
+          "clause_id": "PIB-2294455/para-2",
+          "doc": "PIB release 2294455: Risks and Calamities Covered under PMFBY (4 Aug 2026)",
+          "page": 1,
+          "url": "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2294455&reg=6&lang=1",
+          "quote": "Inundation as a risk cover is available to all notified crops under (PMFBY). However, for hydrophilic crops like paddy, jute, mesta, sugarcane, such cover is available except in case of localized claims."
+        },
+        {
+          "clause_id": "5.4",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 18,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "General Exclusions: Losses arising out of war and nuclear risks, malicious damage and other preventable risks shall be excluded.",
+          "also_in_circular_copy": true
+        }
+      ]
+    },
+    "post_harvest_14_day": {
+      "status": "verified_with_internal_inconsistency",
+      "statement": "Post-harvest cover is for crops that must be dried in the field in cut-and-spread or small bundled condition, for up to two weeks (14 days) from harvesting, against hailstorm, cyclone, cyclonic rains and unseasonal rains. It is assessed per plot, is subject to a joint survey, and applies only to crops the State notified. For unseasonal rain, the trigger is rainfall more than 20% over the long period average for the month.",
+      "max_days_from_harvest": 14,
+      "inconsistency": "Table 11 row 1 also says \"within 15 days of onset of harvest\". The body text says 14 days from harvesting. Use the 14-day wording and do not state a 15-day window.",
+      "citations": [
+        {
+          "clause_id": "5.2.3",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 17,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Post-Harvest Losses: Coverage is available only up to a maximum period of two weeks from harvesting, for those crops which are required to be dried in cut and spread / small, bundled condition depending on requirement of the crops in that area and left in the field after harvesting, against specific perils of hailstorm, cyclone, cyclonic rains and unseasonal rains.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.6.1",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 111,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Provision has been made for assessment of loss on individual plot basis in the case of occurrence of hailstorm, cyclone, cyclonic rains and unseasonal rains resulting in damage to harvested crop lying in the field in 'cut and spread' or small bundled condition depending on nature of the crop in that area kept solely to dry up to a maximum period of two weeks (14 days) from harvesting.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.6.2",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 111,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "the provision of damage of harvested crops due to unseasonal rains shall trigger when the unseasonal rainfall is more than 20% over long period average for the month for that sub-district/district.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.6.3",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 111,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "However, this is subject to confirmation of the damage in the joint survey to be conducted by concerned State/UT Government and Insurance Company.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.6.11/Table-11/row-1/action",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 116,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "The individual crop losses due to occurrence of localized perils within 15 days of onset of harvest will be treated as Post-harvest Losses provided that the said crop has been notified for Post-harvest Loss cover.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.10/Table-10/row-1/action",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 107,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "The individual crop losses due to occurrence of localized perils will be treated as localized calamity if the crop is standing on the field provided that the said crop has been notified for localized calamity cover.",
+          "also_in_circular_copy": true
+        }
+      ]
+    },
+    "twenty_five_percent_rule": {
+      "status": "verified",
+      "statement": "The 25% rule exists, but it does not make all farmers in a unit eligible. If insured area under loss intimation (elsewhere worded \"affected area\") exceeds 25% of insured area in the insurance unit for one weather event, the event is treated as widespread localized: 10 randomly selected parcels from the intimation list are surveyed and the average loss applies to all intimations. Claims go to eligible insured farmers who gave intimation or for whom intimation was received or accepted. Below 25%, every intimation is surveyed individually.",
+      "threshold_pct": 25,
+      "do_not_say": "Do not say \"if 25% of the village is affected, everyone gets paid\" or \"you no longer need to intimate\". Paras 21.5.8 and 21.5.9.3 limit this to farmers who intimated. Table 10 Note 3 says only \"all eligible insured farmers\", which does not override the narrower wording elsewhere.",
+      "payout_formula_in_text": "(Average Area Affected %age X Average Crop Loss %) X Sum Insured X 25%",
+      "all_farmers_rule_that_does_exist": "Only under basic area-yield cover (21.2.1): if IU actual yield falls short of threshold yield, all insured farmers growing that crop in that IU are deemed to have suffered a similar shortfall.",
+      "citations": [
+        {
+          "clause_id": "21.5.8",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 105,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "If the insured area in an IU with loss intimations as compared to the total insured area for that particular crop in the IU is less than 25%, then an individual survey of all the farmers shall have to necessarily be done.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.8",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 105,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Wide-spread Localized Calamity: If the Insured area under loss intimation under localized calamity claims in an IU is more than 25% of the total Insured area in the IU during a specific weather event having a single/similar peril, then the event shall be considered as Wide-spread Localized calamity and the sample loss survey will be conducted at 10 different randomly selected crop-land parcels using the loss intimation list across the affected Insurance Unit and average loss %age basis the sample survey shall be applicable to all intimations for the given IU during the specific weather event.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.8",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 105,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Therefore, the claims shall be disbursed to all eligible insured farmers (who have given intimation/for whom intimation has been received/accepted) in accordance with the crop loss assessment arrived at following the below tabular grid.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.8",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 105,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "(Average Area Affected %age X Average Crop Loss %) X Sum Insured X 25%",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.9.3",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 106,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "If the affected area under a notified crop is more than 25% of the total insured area in a notified insurance unit, all the eligible farmers who have taken insurance for the notified crop, which has been damaged, and informed about the occurrence of a calamity in the individual insured farm/land parcel within the stipulated time in the notified Insurance Unit (IU), would be deemed to have suffered localized loss and would be eligible for financial support under localized calamity loss.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.10/Note-3",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 111,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "*Note3: If affected area is more than 25% of the insured area of notified crop in notified insurance unit then the losses are not considered as individual and are presumed to be widespread, therefore claim to all eligible insured farmers would be paid as per the modalities adopted for On-Account Payment of Claims due to Mid-Season Adversity claims.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.6.11/Note-3",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 119,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "*Note3: If affected area is more than 25% of the insured area of notified crop in notified insurance unit then the losses are not eligible as individual and are presumed to be widespread, therefore claim to all eligible insured farmers (who have given intimation/for whom intimation has been received) would be paid ad-hoc.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.2.1",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 88,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "all insured farmers growing that crop in that IU are deemed to have suffered a shortfall of similar magnitude in yield.",
+          "also_in_circular_copy": true
+        }
+      ]
+    },
+    "late_intimation": {
+      "status": "verified_text_and_verified_absence",
+      "statement": "Intimation is a stated pre-condition and is compulsory for localized and post-harvest claims. The guidelines also say intimations received during the survey would be considered. No clause says in terms that a late intimation is rejected, and none sets out a condonation process. A full-text search of OG 2023 for late, delayed, and missing intimation found no such wording.",
+      "do_not_say": "Do not say \"late means rejected\" or \"your claim is lost\". Do not say \"late is fine\" either. Suggested wording: \"The rule asks for intimation within 72 hours. If that time has passed, still report it now and keep the reference number; the guidelines say intimations received during the survey would also be considered.\"",
+      "absent": [
+        "explicit rejection clause for late intimation",
+        "condonation procedure"
+      ],
+      "evidence_note": "A consumer-commission order surfaced in search (https://cdj.library.keralalawacademy.in/aifulltext.php?id=1015962) describes an insurer denying a claim on the 72-hour rule. We saw only the search excerpt, not the full order. Insurers contesting on this ground is practice, not guideline text.",
+      "citations": [
+        {
+          "clause_id": "21.5.9.2",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 106,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "The intimation is a pre-condition to get benefit for the localized claim. Intimations received during the survey would also be considered.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.6.10.2",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 115,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Intimation is a pre-condition to get the benefit for localized claim. Intimations received during the time of survey would also be considered.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.8",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 105,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Intimation of crop losses is compulsory for individual insured farmers through various channels in case of losses due to specified localized calamities.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.9.3",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 106,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "informed about the occurrence of a calamity in the individual insured farm/land parcel within the stipulated time",
+          "also_in_circular_copy": true
+        }
+      ]
+    },
+    "no_individual_intimation_for_widespread": {
+      "status": "verified",
+      "statement": "For losses from widespread calamities under basic area cover, lodging an intimation is not essential. Claims are calculated from the District Level Joint Committee report and/or actual yield submitted by the State. Yield loss is computed at insurance-unit level from crop cutting experiments and technology estimates. A State or agency can also supply intimations: where a State receives them, it enters the data for upload to KRPH. No clause says a government calamity notification by itself replaces individual intimation for localized or post-harvest claims.",
+      "mid_season_adversity": "A separate add-on, invoked by DLMC/State, not by the farmer. Its window ends 15 days before the onset of harvest and it needs expected yield below 50% of normal. It may not apply to paddy that was days from harvest.",
+      "citations": [
+        {
+          "clause_id": "5.5",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 18,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Loss/damage for localized calamities and post-harvest losses will be assessed at the level of the individual insured farm and hence intimation of loss by the farmer/designated agencies or nodal departments is essential.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "5.5",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 18,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "For remaining risks i.e. losses due to wide-spread calamities, lodging of intimationfor claims by insured farmers / designated agencies or nodal departments for such wide-spread calamities is not essential.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "5.5",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 18,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Claims of wide-spread calamity shall be calculated based on the loss assessment report submitted by the District Level Joint Committee (DLJC) and/or actual yield submitted by concerned State Governments/UT Administrations.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "LS-S25-2026-07-21/a-area",
+          "doc": "Lok Sabha Starred Question 25, answered 21 Jul 2026: Pending Claims of PMFBY",
+          "page": 1,
+          "url": "https://sansad.in/getFile/lsapps/loksabhaquestions/annex/188/AS25_tpFUNy.pdf",
+          "quote": "Enrolled farmer has no need to file the claims. Claims of enrolled and eligible farmers are automatically worked out based on the shortfall in yield as reported by the State Government concerned."
+        },
+        {
+          "clause_id": "21.5.8",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 105,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "If the intimation of crop losses due to specified localized calamities is received by the State Governments/UT Administrations, then they will enter the data of intimations of crop losses in a form that can be uploaded in the KRPH and provide the same to Insurance Company along with copies of the intimations received.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.4.1",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 95,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "between the period from 30 days from start of onset of sowing and up to 15 days before the onset of harvest time, (as per the crop calendar notified by the States/UT Governments) wherein the expected yield during the season is likely to be less than 50% of Normal Yield.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.4.2.3",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 96,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "The provision could be invoked for a specific crop or a group of crops in the notified IU, by the DLMC/State Governments/UT Administrations on the basis of proxy weather indicators supported by the joint loss assessment survey",
+          "also_in_circular_copy": true
+        }
+      ]
+    },
+    "assessment_timeline": {
+      "status": "verified",
+      "statement": "After intimation: loss assessor appointed within 48 hours, assessment within the next 10 days, settlement in the next 15 days (subject to premium and subsidy conditions). The assessment is a joint survey at field level through the GoI mobile app, with the farmer present. Admissible claims paid after the stipulated date carry penal interest of 12% per annum payable to farmers, subject to subsidy release.",
+      "citations": [
+        {
+          "clause_id": "21.5.8",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 105,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "A. Appointment of loss assessor within 48 hours. B. Loss assessment to be completed within the next 10 days. C. Claim settlement to be completed in next 15 days (subject to receipt of farmers’ premium& first instalment of Subsidy).",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.7.3",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 105,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "The loss would be jointly assessed by a team comprising of loss assessor appointed by the insurer, block level agriculture officer, primary worker of the agriculture or revenue department and the concerned farmer.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "16.14",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 59,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "All types of admissible claims shall mandatorily be paid within the stipulated cut-off date failing which penal interest @ 12% per annum shall be payable to the farmers on admissible pending claims beyond stipulated timelines",
+          "also_in_circular_copy": true
+        }
+      ]
+    },
+    "grievance": {
+      "status": "verified",
+      "statement": "Route: KRPH 14447 (ticket, 15-day turnaround) or the Taluka/Tehsil grievance officer (7 days), then the District committee headed by the DM/Collector (15 days, speaking order), then the State committee (15 days). Matters over Rs 25 lakh, affecting more districts, or involving a breach of guidelines may go directly to the State committee. Insurers must dispose of grievances within 15 days. A farmer who is not satisfied can have a grievance reopened. A dispute over a loss survey is by written notice within 7 days to the DLMC chair, with proofs. Further appeal lies to the State Nodal Department, then STAC.",
+      "citations": [
+        {
+          "clause_id": "30.2",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 134,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "In case of receipt of any grievance, the Tehsil/Taluk level grievance redressal Officer shall take suitable action as per the provisions of these guidelines within 7 days from the receipt of grievance.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "30.3",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 135,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "This Committee will be headed by the District Magistrate (DM*)/Collector",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "30.3",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 135,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "dispose the matter within 15 days by passing a speaking order and the grievance shall be treated as closed.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "30.5",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 135,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "The grievances which have wider scope of effect impacting a greater number of districts or there is a breach of guidelines by any of the stakeholder or the grievance matter exceeds Rs. 25 Lakh in monetary terms, such matters may be directly raised at the level of the State Level Grievance Redressal Committee (SGRC). The Committee will dispose of the grievance within 15 days from the time of receipt of grievance.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "30.6.1",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 136,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Any query or complaint of the farmer will be registered on the NCIP against a unique ticket number.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "30.6.5",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 137,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "The turnaround time for the grievances and queries on the grievance portal shall be 15 days.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "30.6.7",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 137,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Any grievance resolved by the respective stakeholders shall be liable for re-opening in case the concerned farmer is not satisfied with the resolution.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "30.7.3",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 138,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Insurance Companies will have to dispose the grievance within 15 days’ time of receipt of each and every grievance/complaint.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.10/Area-protocol/row-4",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 110,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Written notice within 7 days to be submitted to the Chairman-DLMC with proofs/data/reports substantiating the claim. The DLMC to review the reports/evidence and resolve the dispute within 7 days. In case the dispute is unresolved, the affected stakeholder can make an appeal to State Nodal Department, thereafter to STAC, as per the process defined in the Grievance Redressal mechanism.",
+          "also_in_circular_copy": true
+        }
+      ]
+    },
+    "technology_and_evidence": {
+      "status": "verified",
+      "statement": "YES-TECH estimates yield at Gram Panchayat level, not at plot level, with minimum 30% weightage in the first year and gradual increases after that (PIB, Aug 2026: up to 50% in certain states; a Lok Sabha reply of 21 Jul 2026 gives MP 100% and Maharashtra 50% for 2025-26). Where over 25% of area is affected and a joint survey is disputed, technology-derived weather and/or remote-sensing indices take 70% weight against 30% for surveys, and that outcome binds all stakeholders. That remote-sensing work is done by STAC with SRSAC or a YES-TECH TIP. No clause provides for farmer-submitted satellite evidence. The insurer collects \"any other available evidence\" on occurrence and severity, which is the honest hook for our PDF. Acceptance is not guaranteed.",
+      "do_not_say": "Do not say the insurer must accept this evidence. Weightage varies by State: MP gave 100% and Maharashtra 50% in 2025-26 (Lok Sabha, 21 Jul 2026), so do not generalise from any one State. Do not say YES-TECH is \"insurance-unit level\": the guidelines say Gram Panchayat level, though the IU is ordinarily the Village/Village Panchayat for major crops.",
+      "citations": [
+        {
+          "clause_id": "2.17",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 13,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Yield Estimation System based on Technology (YES-TECH) for direct estimation of yield at Gram Panchayat (GP) level has been rolled out from Kharif 2023 season onwards",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "20.2.1.5",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 84,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Technology-based yield estimation shall be implemented on graded scale i.e., minimum 30% weightage to technology driven yield estimates in the first year along with 70% to traditional Crop Cutting Experiments approach. Gradual increase of 10%-20% thereafter will be made based on the experience of stakeholders.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "LS-S25-2026-07-21/d-yes-tech",
+          "doc": "Lok Sabha Starred Question 25, answered 21 Jul 2026: Pending Claims of PMFBY",
+          "page": 1,
+          "url": "https://sansad.in/getFile/lsapps/loksabhaquestions/annex/188/AS25_tpFUNy.pdf",
+          "quote": "However, State Government of Madhya Pradesh and Maharashtra has given 100% and 50% weightage respectively to YES-TECH based yield in 2025-26."
+        },
+        {
+          "clause_id": "PIB-FS-2026-08-29/yes-tech",
+          "doc": "PIB Research factsheet: Pradhan Mantri Fasal Bima Yojana - Affordable Crop Insurance for Every Farmer (29 Aug 2026)",
+          "page": 8,
+          "url": "https://static.pib.gov.in/WriteReadData/specificdocs/documents/2026/aug/doc_9735_20260829_18493301.pdf",
+          "quote": "It started with at least 30% weightage assigned to YES-TECH-derived yields and has now increased up to 50% across certain states."
+        },
+        {
+          "clause_id": "18.2",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 70,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "the insurance unit is the Village/Village Panchayat or any other equivalent unit for major crops",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.9.4",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 106,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "the claim calculation will be done using technology derived solutions involving weather and/or remote-sensing indices along with loss assessment surveys with a weightage of 70% and 30% respectively for assessment and evaluation of the final extent of loss. Acceptance of the technology-driven extent of loss will be binding on all stakeholders.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.9.5",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 106,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "STAC in coordination with State Remote Sensing Application Centre or TIP appointed under YES-TECH (for the crops notified under Crop Model Matrix (CMM)) will conduct yield estimation and assessment of loss as mentioned in Para 21.5.9.4 based on the protocol developed by MNCFC.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.6.2",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 104,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Insurance Company shall complete all formalities and collect any ancillary information required for the payment of such claims, like local newspaper cutting and any other available evidence to substantiate the occurrence of loss event and severity of the loss, if any.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.6.3",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 104,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Weather data report from the WINDS network, Mid-season report (MSR) under YES-TECH), IMD reports, Media reports, Local Newspaper cuttings to substantiate occurrence of loss event and severity of the loss, if any.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "21.5.10/Area-protocol/row-1",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 109,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "Supported by Satellite Image and Satellite Index based outputs to be provided by MITR, ISRO/SAC, MNCFC or MITR’s under YES-TECH, Government crop condition reports, and media reports, etc.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "2.20",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 14,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "State/UTs shall adopt use of technology, such as satellite imagery, drones, Unmanned Aerial Vehicle (UAV) and remote sensing for various applications such as crop area estimation, yield disputes resolution",
+          "also_in_circular_copy": true
+        }
+      ]
+    },
+    "cropic": {
+      "status": "verified",
+      "statement": "CROPIC is periodic geo-tagged photos of crops. OG 2023 makes it mandatory for insurers and States and optional for farmers. PIB (29 Aug 2026) says pictorial damage assessment is still at the stage of pilots being initiated.",
+      "citations": [
+        {
+          "clause_id": "20.2.2.4",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 86,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "The use of CROPIC Mobile App for collection of crop photographs shall be mandatory for Insurance Companies and State Governments/UTs.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "20.2.2.4",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 86,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "The same may be made optional for farmers to crowd-source the crop photographs.",
+          "also_in_circular_copy": true
+        },
+        {
+          "clause_id": "PIB-FS-2026-08-29/cropic",
+          "doc": "PIB Research factsheet: Pradhan Mantri Fasal Bima Yojana - Affordable Crop Insurance for Every Farmer (29 Aug 2026)",
+          "page": 8,
+          "url": "https://static.pib.gov.in/WriteReadData/specificdocs/documents/2026/aug/doc_9735_20260829_18493301.pdf",
+          "quote": "It is also envisaged to support crop damage assessment and yield estimation through pictorial analytics, for which nation-wide pilots are in the process of initiation"
+        }
+      ]
+    },
+    "tenant_farmers": {
+      "status": "verified",
+      "statement": "Sharecroppers and tenant farmers growing notified crops in notified areas are eligible for coverage, subject to insurable interest and documentary evidence.",
+      "citations": [
+        {
+          "clause_id": "3.1",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 14,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "All farmers including sharecroppers and tenant farmers growing the notified crops in the notified areas are eligible for coverage. However, farmers should have insurable interest on the insured crops and lands.",
+          "also_in_circular_copy": true
+        }
+      ]
+    }
+  },
+  "unverified": [
+    {
+      "item": "paddy_localized_inundation_kharif_2026",
+      "found": "PIB 18 Nov 2025 (release 2191224) says paddy inundation is reintroduced as localized cover, to be rolled out from Kharif 2026. PIB 12 Dec 2025 (2203207) says a committee has submitted SOPs. PIB 4 Aug 2026 (2294455, Lok Sabha reply) says hydrophilic crops are covered \"except in case of localized claims\". OG 2023 Note 2 excludes it. No SOP or amended guideline text was found, and the AP notification was not read.",
+      "app_rule": "Do not tell a paddy farmer that inundation is individually covered. Say the official statements conflict and the State notification or 14447 must confirm it.",
+      "citations": [
+        {
+          "clause_id": "PIB-2191224/para-3",
+          "doc": "PIB release 2191224: Another major relief for farmers (18 Nov 2025)",
+          "page": 1,
+          "url": "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2191224&reg=48&lang=2",
+          "quote": "will be rolled out from Kharif 2026"
+        },
+        {
+          "clause_id": "PIB-2203207/para-3",
+          "doc": "PIB release 2203207: Criteria for Assessing Losses under PMFBY (12 Dec 2025)",
+          "page": 1,
+          "url": "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2203207&reg=3&lang=2",
+          "quote": "has submitted its report alongwith recommendations and SOPs for coverage of these risks"
+        },
+        {
+          "clause_id": "PIB-2294455/para-2",
+          "doc": "PIB release 2294455: Risks and Calamities Covered under PMFBY (4 Aug 2026)",
+          "page": 1,
+          "url": "https://www.pib.gov.in/PressReleasePage.aspx?PRID=2294455&reg=6&lang=1",
+          "quote": "such cover is available except in case of localized claims"
+        }
+      ]
+    },
+    {
+      "item": "andhra_pradesh_kharif_2026_notification",
+      "found": "AP is implementing PMFBY in Kharif 2026 (PIB factsheet: 16.22 lakh farmers enrolled till 28 Aug 2026). The AP notification itself was not found, so these are unknown: whether AP notified localized or post-harvest add-ons for paddy, the crop calendar and harvest-onset dates, and the insurer by district.",
+      "app_rule": "Never name an insurer for AP from memory. Tell the farmer it is on their PMFBY application or policy receipt, and to call 14447."
+    },
+    {
+      "item": "clock_start_for_multi_day_peril",
+      "found": "Text says \"from the occurrence of a peril\". Para 21.5.8 defines a weather event as continuing until a break of more than 72 consecutive hours, but only \"for calculation of event period\". It does not say the intimation clock runs from the end of the event.",
+      "app_rule": "Count from the earliest time the farmer reports. Do not extend the deadline on the basis of the event-period definition.",
+      "citations": [
+        {
+          "clause_id": "21.5.8",
+          "doc": "PMFBY Operational Guidelines 2023 (effective Kharif 2023)",
+          "page": 105,
+          "url": "https://pmfby.amnex.co.in/pmfby/pdf/operational_guidelines_pmfby.pdf",
+          "quote": "if there is not a break of more than 72 hours between events under a similar peril, such events shall be considered as a single event for calculation of event period.",
+          "also_in_circular_copy": true
+        }
+      ]
+    },
+    {
+      "item": "guidelines_still_current_for_kharif_2026",
+      "found": "pmfby.gov.in still lists the 2023 guidelines (site date 07/11/2024) as the latest on 31 Oct 2026, and no later full text was found. The Kharif 2026 modalities in PIB 2191224 may exist as separate circulars that we did not obtain.",
+      "app_rule": "Cite as \"Operational Guidelines 2023\". Do not claim that nothing has changed."
+    },
+    {
+      "item": "official_faq",
+      "found": "pmfby.gov.in/faq is a JavaScript page whose text was not retrievable, and the FAQ PDF path cited by PIB returned 404 or would not connect. The corpus uses the PIB Research Unit FAQ of 7 Dec 2021, which predates OG 2023 and has no 72-hour text.",
+      "app_rule": "Do not cite the FAQ for deadlines."
+    },
+    {
+      "item": "yes_tech_manual_2023_v2",
+      "found": "The official PDF is image-only (120 pages, no text layer) and was not read. YES-TECH scope is taken from OG 2023 para 2.17 and PIB only.",
+      "app_rule": "Do not cite the manual."
+    },
+    {
+      "item": "helpline_live_behaviour",
+      "found": "14447 and 7065514447 are verified as published, but were not called. Whether 14447 accepts a loss intimation during a mass event, and what reference it issues, was not tested.",
+      "app_rule": "Record the reference only if the farmer enters it."
+    }
+  ]
+}

@@ -16,11 +16,19 @@ export function Missing({ what, why, children }: { what: string; why?: string | 
 }
 
 export function ErrorNote({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const net = error instanceof ApiError && error.isNetwork;
   const status = error instanceof ApiError ? error.status : null;
   const server = error instanceof ApiError && status && status >= 500;
-  const msg = net ? t("err.network") : server ? t("err.server") : error instanceof Error ? error.message : String(error);
+  const msg = net
+    ? t("err.network")
+    : server
+      ? t("err.server")
+      : error instanceof ApiError
+        ? error.localized(lang)
+        : error instanceof Error
+          ? error.message
+          : String(error);
   return (
     <div className="notice" role="alert">
       <p><Icon name="warn" /> {msg}</p>
@@ -36,7 +44,7 @@ export function ErrorNote({ error, onRetry }: { error: unknown; onRetry?: () => 
 export function Loading({ what }: { what: string }) {
   return (
     <p className="loading" role="status">
-      <span className="tick" aria-hidden="true" /> {what}
+      <span className="spinner" aria-hidden="true" /> {what}
     </p>
   );
 }

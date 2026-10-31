@@ -114,13 +114,15 @@ const PlotMap = forwardRef<PlotMapHandle, Props>(function PlotMap({ center, init
     }
     map.touchZoomRotate.disableRotation();
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-    map.on("error", (e) => {
+    map.on("error", (e: unknown) => {
       // Tile failures are survivable: the plot can still be drawn. Say so without blocking.
       if ((e as unknown as { sourceId?: string }).sourceId) setTileError(true);
     });
     mapRef.current = map;
+    if (import.meta.env.DEV) (window as unknown as { __fsMap?: unknown }).__fsMap = map;
 
-    map.on("load", () => {
+    // Not "load": that waits for every satellite tile, and on a slow network drawing must not.
+    map.once("style.load", () => {
       const polygon = new TerraDrawPolygonMode({
         pointerDistance: 36,
         styles: {

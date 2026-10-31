@@ -190,7 +190,7 @@ def extract_date(text: str, today: date | None = None) -> tuple[date | None, str
         return None, None
     if found > today:
         return None, f"future_date_refused:{found.isoformat()}"
-    if (today - found).days > 365:
+    if (today - found).days > 365 * 5:
         return None, f"too_old_refused:{found.isoformat()}"
     return found, None
 
@@ -220,9 +220,7 @@ def extract_time(text: str) -> str | None:
         hour = int(m[2])
         minute = int(m[3] or 0)
         period = m[1] or ""
-        if period in ("दोपहर", "dopahar", "शाम", "shaam", "sham") and hour < 12:
-            hour += 12
-        elif period in ("रात", "raat") and 7 <= hour < 12:
+        if period in ("दोपहर", "dopahar", "शाम", "shaam", "sham") and hour < 12 or period in ("रात", "raat") and 7 <= hour < 12:
             hour += 12
     else:
         return None

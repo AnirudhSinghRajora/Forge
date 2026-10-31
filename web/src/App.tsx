@@ -8,6 +8,7 @@ import { Icon } from "./components/Icon";
 import { Loading } from "./components/Bits";
 import { Start } from "./screens/Start";
 
+const Confirm = lazy(() => import("./screens/Confirm"));
 const Plot = lazy(() => import("./screens/Plot"));
 const Investigate = lazy(() => import("./screens/Investigate"));
 const VerdictScreen = lazy(() => import("./screens/Verdict"));
@@ -23,6 +24,8 @@ function matchRoute(path: string): Route {
   if (clean === "/radar") return { name: "radar", el: <Radar /> };
   let m = clean.match(/^\/verify\/([^/]+)$/);
   if (m) return { name: "verify", el: <Verify hash={decodeURIComponent(m[1])} /> };
+  m = clean.match(/^\/case\/([^/]+)\/confirm$/);
+  if (m) { const id = decodeURIComponent(m[1]); return { name: "confirm", el: <Confirm caseId={id} />, step: 1, caseId: id }; }
   m = clean.match(/^\/case\/([^/]+)\/plot$/);
   if (m) { const id = decodeURIComponent(m[1]); return { name: "plot", el: <Plot caseId={id} />, step: 2, caseId: id, bleed: true }; }
   m = clean.match(/^\/case\/([^/]+)\/investigate$/);

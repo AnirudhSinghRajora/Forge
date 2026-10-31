@@ -9,7 +9,7 @@ import { closeRing, HA_PER_ACRE, HA_PER_BIGHA, ringAreaM2, selfIntersects } from
 import { num } from "../format";
 
 export default function Plot({ caseId }: { caseId: string }) {
-  const { t } = useI18n();
+  const { t, lang } = useI18n();
   const mapRef = useRef<PlotMapHandle | null>(null);
   const [center, setCenter] = useState<{ lat: number; lon: number } | null>(null);
   const [initialRing, setInitialRing] = useState<number[][] | null>(null);
@@ -35,12 +35,13 @@ export default function Plot({ caseId }: { caseId: string }) {
     } catch { /* fall through to the server's copy */ }
     getCase(caseId, ctl.signal)
       .then((env) => {
-        const c = env.case ?? {};
+        const c = env.case;
         const lat = typeof c.lat === "number" ? c.lat : stored?.lat;
         const lon = typeof c.lon === "number" ? c.lon : stored?.lon;
         if (lat !== undefined && lon !== undefined) setCenter({ lat, lon });
-        const poly = c.polygon ?? env.evidence?.plot?.geometry;
+        const poly = c.plot?.geometry ?? env.evidence?.plot?.geometry;
         if (poly?.coordinates?.[0]) setInitialRing(poly.coordinates[0]);
+        if (c.active_run_id) navigate(`/case/${encodeURIComponent(caseId)}/investigate?run=${encodeURIComponent(c.active_run_id)}`, { replace: true });
         setReady(true);
       })
       .catch((e) => {
@@ -86,7 +87,7 @@ export default function Plot({ caseId }: { caseId: string }) {
     setErr(null);
     try {
       const res = await putPlot(caseId, { type: "Polygon", coordinates: [closed] });
-      setSaved({ area_ha: res.area_ha, warnings: res.warnings ?? [] });
+      setSaved({ area_ha: res.area_ha, warnings: (lang === "hi" ? res.warnings_hi : null) ?? res.warnings ?? [] });
       if ((res.warnings ?? []).length === 0) {
         await begin();
         return;

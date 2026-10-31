@@ -20,6 +20,7 @@ MODERATE_DELTA = -0.10
 P_STRICT = 0.05
 P_LOOSE = 0.10
 NEW_WATER_MIN = 0.2
+ARCHIVE_UNREACHABLE = "the satellite archive could not be reached in this run; it will be retried soon"
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,16 @@ def post_status(ev: Evidence) -> str | None:
 
 def pre_status(ev: Evidence) -> str | None:
     return _status(ev, ev.optical.pre.scene_id if ev.optical.pre else None)
+
+
+def comparison_incomplete(ev: Evidence) -> bool:
+    """An accepted image exists after the event but the comparison did not finish, or the archive
+    could not be searched at all. Different from "no image", and never reported as that."""
+    if ev.optical.post is not None:
+        return False
+    if ev.verdict is not None and ARCHIVE_UNREACHABLE in ev.verdict.reasons:
+        return True
+    return any(q.status == "accepted" and q.date > ev.event.date for q in ev.optical.scenes_considered)
 
 
 def accepted_optical_pair(ev: Evidence) -> bool:
@@ -160,6 +171,11 @@ def decide_level(ev: Evidence) -> tuple[VerdictLevel, list[str]]:
         return "not_damage_likely_harvest", ["harvest objection conceded"]
 
     if not has_usable_data(ev):
+        if comparison_incomplete(ev):
+            return "insufficient", [
+                ("an accepted image exists after the event, but the comparison did not finish "
+                "because the satellite archive was slow or unavailable; it will be retried")
+            ]
         return "insufficient", ["no accepted optical post scene and no usable radar pair"]
     if _too_few_placebos(ev) and not has_any_signal(ev):
         return "insufficient", [f"fewer than {MIN_PLACEBOS} placebos and no other signal"]

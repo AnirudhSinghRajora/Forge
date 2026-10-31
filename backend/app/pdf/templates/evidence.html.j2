@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+<meta charset="utf-8">
+<title>FasalSaakshi {{ L.title }}</title>
+<style>
+@page {
+  size: A4; margin: 16mm 14mm 18mm;
+  @bottom-left { content: "FasalSaakshi · {{ (ev.evidence_hash or '')[:16] }}"; font: 8pt "Noto Sans", sans-serif; color: #77756f; }
+  @bottom-right { content: counter(page) " / " counter(pages); font: 8pt "Noto Sans", sans-serif; color: #77756f; }
+}
+* { box-sizing: border-box; }
+body { font-family: "Noto Sans", "Noto Sans Devanagari", "Noto Sans Telugu", sans-serif; font-size: 9.6pt; line-height: 1.45; color: #1d1c1a; margin: 0; }
+h1 { font-size: 19pt; margin: 0; line-height: 1.2; }
+h2 { font-size: 12pt; margin: 16pt 0 6pt; padding-bottom: 3pt; border-bottom: 1pt solid #d8d6cf; break-after: avoid; }
+p { margin: 0 0 6pt; }
+.brand { font-size: 9pt; letter-spacing: .04em; color: #5d5b55; }
+.head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12pt; }
+.qr { width: 74pt; text-align: center; font-size: 6.5pt; color: #5d5b55; }
+.qr img { width: 74pt; height: 74pt; }
+.verdict { border-left: 4pt solid #5d5b55; padding: 8pt 10pt; background: #f5f4f0; margin: 10pt 0; break-inside: avoid; }
+.verdict .level { font-size: 8pt; text-transform: uppercase; letter-spacing: .07em; color: #5d5b55; }
+.verdict .line { font-size: 13pt; font-weight: 600; line-height: 1.3; margin-top: 2pt; }
+.verdict.strong { border-color: #008300; } .verdict.moderate { border-color: #2a78d6; }
+.verdict.weak { border-color: #77756f; } .verdict.insufficient { border-color: #eda100; }
+.verdict.not_damage_likely_harvest { border-color: #eb6834; }
+.meta { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6pt; font-size: 8.5pt; }
+.meta b { display: block; font-size: 7.5pt; font-weight: 500; color: #77756f; }
+.pair { display: flex; gap: 8pt; }
+.pair figure { flex: 1; margin: 0; }
+figure { margin: 0 0 6pt; break-inside: avoid; }
+figure img { width: 100%; display: block; border-radius: 2pt; }
+figcaption { font-size: 8pt; color: #5d5b55; margin-top: 2pt; }
+.caveat { font-size: 8.2pt; color: #4a4843; background: #fbf6e9; border-left: 2.5pt solid #eda100; padding: 4pt 7pt; margin: 3pt 0 8pt; break-inside: avoid; }
+.testimony { font-size: 10.5pt; padding: 8pt 10pt; border: 1pt solid #d8d6cf; border-radius: 3pt; break-inside: avoid; }
+table { border-collapse: collapse; width: 100%; font-size: 8.4pt; }
+th { text-align: left; font-weight: 600; color: #5d5b55; border-bottom: 1pt solid #b9b7af; padding: 3pt 4pt; }
+td { vertical-align: top; border-bottom: .5pt solid #e3e1da; padding: 3.5pt 4pt; }
+tr { break-inside: avoid; }
+.outcome { font-weight: 600; white-space: nowrap; }
+.outcome.conceded { color: #b84413; } .outcome.rebutted { color: #006b00; } .outcome.unresolved { color: #6a5300; }
+ul { margin: 2pt 0 6pt; padding-left: 13pt; } li { margin-bottom: 2pt; }
+.small { font-size: 7.6pt; color: #5d5b55; }
+.mono { font-family: "Noto Sans Mono", monospace; font-size: 7.2pt; word-break: break-all; }
+.clause { margin-bottom: 7pt; break-inside: avoid; } .clause .ref { font-size: 8pt; font-weight: 600; color: #3e3c37; }
+.clause .why { font-size: 8pt; color: #5d5b55; } .clause q { font-size: 8.6pt; quotes: "\201C" "\201D"; }
+.seal { display: flex; gap: 12pt; align-items: center; border: 1pt solid #d8d6cf; padding: 8pt; border-radius: 3pt; break-inside: avoid; }
+.seal img { width: 90pt; height: 90pt; }
+.disclaimer { font-size: 8.4pt; color: #4a4843; margin-top: 10pt; }
+</style>
+</head>
+<body>
+<div class="head">
+  <div>
+    <div class="brand">FasalSaakshi</div>
+    <h1>{{ L.title }}</h1>
+    <div class="small">{{ L.generated }}: {{ generated }}</div>
+  </div>
+  <div class="qr"><img src="{{ qr }}" alt="QR"><div>/verify</div></div>
+</div>
+
+<div class="verdict {{ level }}">
+  <div class="level">{{ L.verdict }} · {{ level }} · rubric {{ ev.verdict.rubric_version if ev.verdict else '' }}</div>
+  <div class="line">{{ headline }}</div>
+</div>
+
+<div class="meta">
+  <div><b>{{ L.field }}</b>{{ '%.2f'|format(ev.plot.area_ha) }} ha · {{ '%.5f'|format(ev.plot.centroid[1]) }}, {{ '%.5f'|format(ev.plot.centroid[0]) }}</div>
+  <div><b>Event</b>{{ ev.event.type }} · {{ ev.event.date }} ({{ ev.event.date_source }})</div>
+  <div><b>Crop</b>{{ ev.event.crop or L.no_data }}</div>
+  <div><b>District</b>{{ [case.district, case.state]|select|join(', ') or L.no_data }}</div>
+</div>
+
+{% if explanation %}<h2>{{ L.explanation }}</h2><p>{{ explanation }}</p>{% endif %}
+{% if ev.verdict %}
+<ul class="small">{% for r in ev.verdict.reasons %}<li>{{ r }}</li>{% endfor %}{% for c in ev.verdict.caveats %}<li>{{ c }}</li>{% endfor %}</ul>
+{% endif %}
+{% if testimony %}<h2>{{ L.testimony }}</h2><div class="testimony">{{ testimony }}</div>{% endif %}
+
+{% if ev.claim_path %}
+<h2>{{ L.route }}: {{ ev.claim_path.route }}</h2>
+{% for r in ev.claim_path.reasons %}<p>{{ r }}</p>{% endfor %}
+{% if deadline %}<p><b>{{ L.deadline }}:</b> {{ ist(deadline.due_at) }} · {{ L[deadline.status] }} · clause {{ deadline.basis }}{% if not case.event_time %} · start of the event day assumed{% endif %}</p>{% endif %}
+{% if ev.claim_path.next_steps %}<p><b>{{ L.next }}</b></p><ul>{% for s in ev.claim_path.next_steps %}<li>{{ s }}</li>{% endfor %}</ul>{% endif %}
+{% if ev.claim_path.evidence_use %}<p><b>{{ L.use }}:</b> {{ ev.claim_path.evidence_use }}</p>{% endif %}
+{% if ev.claim_path.unknowns %}<p class="small"><b>{{ L.unknowns }}:</b> {{ ev.claim_path.unknowns|join(', ') }}</p>{% endif %}
+{% endif %}
+
+<h2>{{ L.before_after }}</h2>
+{% if pre_chip and post_chip %}
+<div class="pair">
+  <figure><img src="{{ pre_chip }}" alt=""><figcaption>{{ L.before }}: {{ pre_date }}</figcaption></figure>
+  <figure><img src="{{ post_chip }}" alt=""><figcaption>{{ L.after }}: {{ post_date }}</figcaption></figure>
+</div>
+{% else %}<p class="small">{{ L.no_data }}</p>{% endif %}
+<div class="pair">
+  {% if map_img %}<figure><img src="{{ map_img }}" alt=""><figcaption>{{ L.map }}</figcaption></figure>{% endif %}
+  {% if delta_chip %}<figure><img src="{{ delta_chip }}" alt=""><figcaption>{{ L.delta }}</figcaption></figure>{% endif %}
+  {% if sar_chip %}<figure><img src="{{ sar_chip }}" alt=""><figcaption>Sentinel-1 VH</figcaption></figure>{% endif %}
+</div>
+
+{% if placebo_img %}
+<h2>{{ L.placebo }} ({{ placebo_sensor }})</h2>
+<figure><img src="{{ placebo_img }}" alt=""></figure>
+<p class="small">{% if placebo_p is not none %}{{ placebo.n_at_least_as_extreme }} / {{ placebo.n_placebos }} · p = {{ '%.3f'|format(placebo_p) }}{% if placebo.n_non_overlapping is not none %} · non-overlapping: {{ placebo.n_non_overlapping }}{% endif %}{% else %}{{ placebo.insufficient_reason or L.no_data }}{% endif %}</p>
+{% endif %}
+{% if twin_img %}<h2>{{ L.twin }}</h2><figure><img src="{{ twin_img }}" alt=""><figcaption>{{ ev.neighbours.counterfactual.method }}</figcaption></figure>{% endif %}
+
+{% if ev.village %}
+<h2>{{ L.draw }}</h2>
+{% if draw_applicability %}<p>{{ draw_applicability }}</p>{% endif %}
+{% if draw_img %}
+<figure><img src="{{ draw_img }}" alt=""></figure>
+<p class="small">5th-95th percentile: {{ '%+.2f'|format(draw.average_p05) }} to {{ '%+.2f'|format(draw.average_p95) }}{% if draw.share_below_half_of_plot is not none %} · under half of this field's change: {{ '%.0f'|format(draw.share_below_half_of_plot * 100) }}%{% endif %} · {{ draw.n_candidate_parcels }} candidate parcels · seed {{ draw.seed }} · clause 21.5.8</p>
+{% elif draw %}<p class="small">{{ draw.insufficient_reason }}</p>{% endif %}
+<p class="small">Affected share of comparable cropland ({{ ev.village.radius_m }} m, {{ ev.village.sensor }}): {% if ev.village.affected_share is not none %}{{ '%.0f'|format(ev.village.affected_share * 100) }}%{% else %}{{ L.no_data }}{% endif %} · {{ ev.village.affected_definition }} · real cases nearby in our records: {{ ev.village.nearby_real_cases if ev.village.nearby_real_cases is not none else L.no_data }}</p>
+<div class="caveat">{{ draw_caveat }}</div>
+{% endif %}
+{% if vanish_img %}
+<h2>{{ L.vanish }}</h2>
+<figure><img src="{{ vanish_img }}" alt=""></figure>
+<div class="caveat">{{ vanish_caveat }}</div>
+{% endif %}
+
+<h2>{{ L.weather }}</h2>
+{% if weather_img %}<figure><img src="{{ weather_img }}" alt=""></figure>{% endif %}
+{% if ev.weather %}
+<p class="small">{{ ev.weather.source }} · {{ ist(ev.weather.fetched_at) }} · event window: {{ ev.weather.precip_mm_event_window if ev.weather.precip_mm_event_window is not none else L.no_data }} mm · hail-code hours: {{ ev.weather.hail_code_hours if ev.weather.hail_code_hours is not none else L.no_data }} · thunder hours: {{ ev.weather.thunder_hours if ev.weather.thunder_hours is not none else L.no_data }} · max gust: {{ ev.weather.max_gust_kmh if ev.weather.max_gust_kmh is not none else L.no_data }} km/h</p>
+<div class="caveat">{{ ev.weather.grid_note }}</div>
+{% else %}<p class="small">{{ L.no_data }}</p>{% endif %}
+<p><b>{{ L.alerts }}:</b> {% if ev.alerts %}{% endif %}{% if not ev.alerts %}{{ L.none }}{% endif %}</p>
+{% if ev.alerts %}<ul class="small">{% for a in ev.alerts %}<li>{{ a.source }} · {{ ist(a.issued) }} · {{ a.area }}: {{ a.headline }}</li>{% endfor %}</ul>{% endif %}
+<p><b>{{ L.news }}:</b> {% if not ev.news %}{{ L.none }}{% endif %}</p>
+{% if ev.news %}<ul class="small">{% for n in ev.news %}<li>{{ n.title }}: <span class="mono">{{ n.url }}</span></li>{% endfor %}</ul>{% endif %}
+
+<h2>{{ L.cross }}</h2>
+<table>
+  <thead><tr><th style="width:30%">{{ L.challenge }}</th><th>{{ L.finding }}</th><th style="width:13%">{{ L.outcome }}</th></tr></thead>
+  <tbody>
+  {% for o in objections %}<tr><td>{{ o.challenge }}</td><td>{{ o.finding }}</td><td class="outcome {{ o.outcome }}">{{ o.outcome_label }}</td></tr>{% endfor %}
+  </tbody>
+</table>
+
+{% if ev.policy %}
+<h2>{{ L.clauses }}</h2>
+{% for c in ev.policy %}<div class="clause"><div class="ref">{{ c.clause_id }} · {{ c.doc }}{% if c.page %}, p. {{ c.page }}{% endif %}</div>{% if c.applies_because %}<div class="why">{{ c.applies_because }}</div>{% endif %}<q>{{ c.text }}</q></div>{% endfor %}
+{% endif %}
+
+{% if ev.optical.scenes_considered %}
+<h2>{{ L.scenes }}</h2>
+<table>
+  <thead><tr><th>Date</th><th>Scene</th><th>QA</th><th>Cloud %</th><th>Reasons</th></tr></thead>
+  <tbody>{% for q in ev.optical.scenes_considered %}<tr><td style="white-space:nowrap">{{ q.date }}</td><td class="mono">{{ q.id }}</td><td>{{ q.status }}</td><td>{{ '%.1f'|format(q.metadata_cloud_pct) if q.metadata_cloud_pct is not none else '' }}</td><td>{{ q.reasons|join('; ') }}</td></tr>{% endfor %}</tbody>
+</table>
+{% endif %}
+
+<h2>{{ L.provenance }}</h2>
+<table>
+  <thead><tr><th>Field</th><th>Source</th><th>Asset</th><th>Retrieved</th></tr></thead>
+  <tbody>{% for p in ev.provenance %}<tr><td>{{ p.field }}</td><td>{{ p.source }}</td><td class="mono">{{ p.asset or p.url or '' }}</td><td style="white-space:nowrap">{{ ist(p.retrieved_at) }}</td></tr>{% endfor %}</tbody>
+</table>
+
+{% if numbers %}
+<h2>Replay numbers</h2>
+<table>
+  <thead><tr><th>Field</th><th>Value</th><th>Field</th><th>Value</th></tr></thead>
+  <tbody>{% for batch in numbers|batch(2) %}<tr>{% for k, v in batch %}<td class="mono">{{ k }}</td><td>{{ v if v is not none else '-' }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+</table>
+{% endif %}
+
+<h2>{{ L.hash }}</h2>
+<div class="seal">
+  <img src="{{ qr }}" alt="QR">
+  <div>
+    <p>{{ L.verify_note }}</p>
+    <p class="mono">sha256: {{ ev.evidence_hash }}</p>
+    <p class="mono">{{ verify_url }}</p>
+    <p class="small">engine {{ ev.replay.engine_version if ev.replay else '' }} · seed {{ ev.replay.seed if ev.replay else '' }}</p>
+  </div>
+</div>
+<p class="disclaimer">{{ L.disclaimer }}</p>
+{% if L.note_lang %}<p class="small">{{ L.note_lang }}</p>{% endif %}
+</body>
+</html>

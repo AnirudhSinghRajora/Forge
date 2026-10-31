@@ -65,7 +65,28 @@ export interface ReplayCore {
   engine_version: string; polygon: GeoPolygon; event_date: string; optical_pre_id?: string | null; optical_post_id?: string | null;
   sar_pre_id?: string | null; sar_post_id?: string | null; history_scene_ids: string[]; seed: number; numbers: Record<string, number | null>;
 }
+export interface ScaleLevel { block_m: number; plot_cell_value: number | null; context_min?: number | null; chip_path?: string | null }
+export interface ScaleFade { sensor: "s2" | "s1"; statistic: string; bounds: [number, number, number, number]; levels: ScaleLevel[] }
+export interface SurveyDraw { parcels: [number, number][]; average: number }
+export interface SurveyLottery {
+  n_simulations: number; parcels_per_survey: number; statistic: string; plot_value: number | null; n_candidate_parcels: number;
+  average_median: number | null; average_p05: number | null; average_p95: number | null; share_below_half_of_plot: number | null;
+  histogram_edges: number[]; histogram_counts: number[]; sample_draws: SurveyDraw[]; seed: number; insufficient_reason?: string | null;
+  rule_applicability: "may_apply" | "illustration_only";
+}
+export interface VillageWitness {
+  radius_m: number; sensor: "s2" | "s1"; n_cropland_pixels: number; affected_share: number | null; affected_definition: string;
+  nearby_real_cases?: number | null; lottery?: SurveyLottery | null;
+}
+export type ClaimRoute = "not_insured" | "localized_addon" | "post_harvest_addon" | "area_yield_basic" | "undetermined";
+export interface ClaimPath {
+  route: ClaimRoute; insured: "yes" | "no" | "unknown"; crop_stage: "standing" | "cut_and_spread" | "harvested_stored" | "unknown";
+  intimation: "essential" | "not_essential" | "unknown"; countdown_applies: boolean; reasons: string[]; next_steps: string[];
+  evidence_use?: string | null; unknowns: string[]; clause_ids: string[];
+}
 export interface Evidence {
+  scale_fade?: ScaleFade | null; village?: VillageWitness | null; claim_path?: ClaimPath | null;
+  testimony_hi?: string | null; testimony_en?: string | null; testimony_te?: string | null;
   case_id: string; run_id: string; created_at: string; plot: PlotInfo; event: EventInfo; optical: OpticalEvidence;
   neighbours?: NeighbourEvidence | null; history?: HistoryEvidence | null; sar?: SarEvidence | null; weather?: WeatherEvidence | null;
   alerts: Alert[]; news: NewsItem[]; timeline: TimelinePoint[]; chips: Chip[]; cross_examination: Objection[]; verdict?: Verdict | null;
@@ -81,8 +102,8 @@ export interface TraceEvent {
   seq: number; run_id: string; ts: string; type: TraceType; node: string; title_hi: string; title_en: string; detail: Record<string, unknown>;
 }
 
-export interface Parsed { crop?: string | null; event_type?: EventType | null; event_date?: string | null; transcript?: string | null; confidence?: number | null }
-export interface CreateCaseResponse { case_id: string; parsed: Parsed; needs: string[] }
-export interface PlotResponse { area_ha: number; warnings: string[] }
+export interface Parsed { crop?: string | null; event_type?: EventType | null; event_date?: string | null; event_time?: string | null; transcript?: string | null; confidence?: number | null; llm_used?: boolean; date_note?: string | null }
+export interface CreateCaseResponse { case_id: string; parsed: Parsed; needs: string[]; questions?: Record<string, Record<string, string>> }
+export interface PlotResponse { area_ha: number; warnings: string[]; warnings_hi?: string[]; warning_codes?: string[] }
 export interface AskCitation { clause_id?: string; doc?: string; page?: number | null; text?: string; url?: string | null }
-export interface AskResponse { answer?: string | null; citations?: AskCitation[]; not_covered?: boolean }
+export interface AskResponse { answer?: string | null; answer_hi?: string | null; answer_en?: string | null; citations?: (AskCitation | string)[]; not_covered?: boolean; covered?: boolean }
