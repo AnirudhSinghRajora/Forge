@@ -203,6 +203,25 @@ def test_a_superseded_hash_stays_verifiable(monkeypatch):
     assert events[0]["superseded"] is True and events[-1]["status"] == "verified"
 
 
+def test_start_names_each_scenes_archive(monkeypatch):
+    core = CORE.model_copy(update={"scene_archives": {"a": "planetary-computer", "b": "planetary-computer"}})
+    install_fake_geo(monkeypatch, scene_archive=lambda sid: "planetary-computer")
+    events = collect(seed_row(core))
+    assert events[0]["scene_archives"] == {"a": "planetary-computer", "b": "planetary-computer"}
+    assert events[-1]["status"] == "verified"
+
+
+def test_a_scene_now_resolving_to_another_archive_is_reported(monkeypatch):
+    def replay(core):
+        raise AssertionError("must not recompute against another archive")
+
+    core = CORE.model_copy(update={"scene_archives": {"a": "earth-search"}})
+    install_fake_geo(monkeypatch, scene_archive=lambda sid: "planetary-computer", replay=replay)
+    events = collect(seed_row(core))
+    assert events[-1]["status"] == "archive_mismatch"
+    assert events[-1]["moved"] == {"a": {"sealed": "earth-search", "current": "planetary-computer"}}
+
+
 def test_engine_version_difference_is_said(monkeypatch):
     install_fake_geo(monkeypatch, ENGINE_VERSION="test-2")
     events = collect(seed_row())

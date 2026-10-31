@@ -676,6 +676,8 @@ def test_earth_search_scene_ids_are_not_parsed(client, monkeypatch):
     wait_done(client, client.post(f"/api/cases/{case_id}/investigate").json()["run_id"])
     ev = client.get(f"/api/cases/{case_id}").json()["evidence"]
     assert ev["optical"]["post"]["scene_id"] == post_id and ev["replay"]["optical_post_id"] == post_id
+    assert ev["replay"]["scene_archives"][post_id] == "earth-search"
+    assert any(p["source"].startswith("earth-search") and p["asset"] == post_id for p in ev["provenance"])
     assert client.get(f"/api/cases/{case_id}/evidence.pdf").status_code == 200
 
 
@@ -732,3 +734,29 @@ def test_slow_cold_reads_give_a_provisional_verdict_then_the_real_one(client, mo
     final = client.get(f"/api/cases/{case_id}").json()
     assert final["sealed"] and final["evidence"]["optical"]["post"]["scene_id"] == POST_ID
     assert "still computing" not in " ".join(final["evidence"]["verdict"]["reasons"])
+
+
+def test_background_reads_are_limited(client, monkeypatch):
+    from app.agent import graph
+
+    running, peak = [0], [0]
+    lock = threading.Lock()
+
+    def tracked(value):
+        def fn(*a, **k):
+            with lock:
+                running[0] += 1
+                peak[0] = max(peak[0], running[0])
+            time.sleep(0.05)
+            with lock:
+                running[0] -= 1
+            return value
+        return fn
+
+    install_fake_geo(monkeypatch, village_witness=tracked(_village()), scale_fade=tracked(_fade()),
+                     render_chips=tracked([]), timeline=tracked([]))
+    case_id = new_case(client)
+    wait_done(client, client.post(f"/api/cases/{case_id}/investigate").json()["run_id"])
+    assert 1 <= peak[0] <= graph.MAX_BACKGROUND_READS
+    exhibits = client.get(f"/api/cases/{case_id}").json()["exhibits"]
+    assert all(exhibits[n]["status"] == "done" for n in ("village", "scale_fade", "chips", "timeline"))

@@ -180,11 +180,18 @@ def block_layout(item_id: str, asset: str, *, fresh: bool = False) -> tuple[floa
     raise GeoUnavailable(f"reading the layout of {item_id}/{asset} failed: {last}") from last
 
 
-def read_overview(item_id: str, asset: str, grid: Grid) -> np.ndarray | None:
+def read_overview(item_id: str, asset: str, grid: Grid, *, fresh: bool = False) -> np.ndarray | None:
     """A coarse read that uses the COG's overviews, which WarpedVRT does not (measured: it fetched
     native blocks for a whole tile). Only for pictures and context, never for a reported statistic.
     The item must be in the grid's CRS; otherwise this returns None and the caller reads normally.
     """
+    key = (item_id, asset, grid.key, "overview")
+    if not fresh:
+        cached = _lru_get(key)
+        if cached is None:
+            cached = _disk_get(key)
+        if cached is not None:
+            return cached
     item = get_item(item_id)
     href = asset_href(item, asset)
     if href is None:
@@ -206,7 +213,11 @@ def read_overview(item_id: str, asset: str, grid: Grid) -> np.ndarray | None:
     last: Exception | None = None
     for delay in (*RETRY_DELAYS, None):
         try:
-            return fetch()
+            data = fetch()
+            if data is not None and not fresh:
+                _disk_put(key, data)
+                _lru_put(key, data)
+            return data
         except (RasterioError, RasterioIOError, OSError) as exc:
             last = exc
             if delay is not None:

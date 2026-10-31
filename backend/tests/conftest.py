@@ -181,6 +181,7 @@ def install_fake_geo(monkeypatch, **overrides):
         "sar_compare": lambda *a, **k: sar_evidence(),
         "history": lambda *a, **k: history_ok(),
         "history_scene_ids": lambda h: ["h1", "h2", "h3", "h4"],
+        "scene_archive": lambda sid: "earth-search" if sid.endswith("_L2A") else "planetary-computer",
         "timeline": lambda *a, **k: [],
         "render_chips": lambda *a, **k: [],
         "flatten_numbers": lambda *a, **k: {"optical.plot_delta_ndvi": -0.25},

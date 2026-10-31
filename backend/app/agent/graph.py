@@ -71,8 +71,12 @@ LLM_REPHRASE_S = 10
 LLM_EXPLAIN_S = 50
 
 VERDICT_TARGET_S = 75  # stop waiting for background evidence here, to land the verdict within 90 s
-EXHIBIT_TIMEOUT_S = 330  # a slow exhibit is still worth having; the verdict is already out
+EXHIBIT_TIMEOUT_S = 560  # a slow exhibit is still worth having; the verdict is already out
 EXHIBITS = ("sar", "history", "village", "scale_fade", "chips", "timeline")
+# On a thin link, parallel reads mean every exhibit times out and none lands. At most this many
+# background tools read at once, in the order they were asked for, and each reuses the last one's
+# windows from the geo cache. A fast link hardly notices the limit.
+MAX_BACKGROUND_READS = 2
 _TIMEOUTS_S = {
     "weather": 25, "alerts": 12, "news": 30, "search_optical": 25, "qa_scene": 30,
     "optical_compare": 70, "search_sar": 25, "sar_compare": 70, "history": EXHIBIT_TIMEOUT_S,
@@ -166,6 +170,7 @@ class Ctx:
     history_future: Any = None
     optical_future: Any = None  # optical work that missed the verdict target, landing later
     evidence_run_id: str | None = None  # a retry updates the evidence row of the original run
+    reads: threading.Semaphore = field(default_factory=lambda: threading.Semaphore(MAX_BACKGROUND_READS))
     exhibits: dict = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -267,6 +272,11 @@ class State(TypedDict, total=False):
 
 def _prov(ev: Evidence, field_name: str, source: str, asset: str | None = None,
           url: str | None = None, when: datetime | None = None) -> None:
+    if asset and source.startswith(PC):
+        try:  # scene ids are opaque, and a scene may come from another public archive
+            source = source.replace(PC, _geo().scene_archive(asset), 1)
+        except Exception:  # noqa: BLE001  provenance keeps its default rather than failing a run
+            log.warning("no archive recorded for %s", asset)
     ev.provenance.append(Provenance(
         field=field_name, source=source, asset=asset, url=url,
         retrieved_at=when or datetime.now(UTC),
@@ -907,6 +917,14 @@ def run_sar(state: State, ctx: Ctx, node: str, background: bool = False) -> Any:
     return result
 
 
+def gated(ctx: Ctx, fn: Callable[[], Any]) -> Callable[[], Any]:
+    def run():
+        with ctx.reads:
+            return fn()
+
+    return run
+
+
 def _mark_sar(ctx: Ctx, ev: Evidence, sar) -> None:
     if sar is not None and sar.usable:
         ctx.set_exhibit("sar", "done")
@@ -952,7 +970,15 @@ def n_sar_compare(state: State, ctx: Ctx) -> dict:
     if state.get("sar_tried") and ev.sar is not None:
         return {}
     # Waited for up to the verdict target at the cross-examination, like the rest.
-    ctx.sar_future = _TOOLS.submit(run_sar, state, ctx, "sar_compare", True)
+    optical = ctx.optical_future
+
+    def radar():
+        if optical is not None:  # the optical comparison is the main evidence, so it reads first
+            wait([optical], timeout=VERDICT_TARGET_S * 2)
+        with ctx.reads:
+            return run_sar(state, ctx, "sar_compare", True)
+
+    ctx.sar_future = _TOOLS.submit(radar)
     return {"evidence": ev, "sar_tried": True}
 
 
@@ -1023,7 +1049,7 @@ def n_optical_compare(state: State, ctx: Ctx) -> dict:
         # They never run alongside the optical comparison: it is the main evidence and competing
         # reads slow it badly on a thin link.
         if not state.get("sar_tried") and ctx.calls_left() >= 3:
-            ctx.sar_future = _TOOLS.submit(run_sar, state, ctx, "optical_compare", True)
+            ctx.sar_future = _TOOLS.submit(gated(ctx, lambda: run_sar(state, ctx, "optical_compare", True)))
             update["sar_tried"] = True
     return update
 
@@ -1086,9 +1112,10 @@ def n_history(state: State, ctx: Ctx) -> dict:
                  "The tool budget is used up, so the history comparison was skipped")
         ctx.set_exhibit("history", "failed", "tool budget used up")
         return {}
+    polygon, event_date = state["polygon"], ev.event.date
+    delta, pre_ndvi = ev.optical.plot_delta_ndvi, ev.optical.pre.ndvi_median
     ctx.history_future = _TOOLS.submit(
-        run_history, ctx, state["polygon"], ev.event.date, ev.optical.plot_delta_ndvi,
-        ev.optical.pre.ndvi_median,
+        gated(ctx, lambda: run_history(ctx, polygon, event_date, delta, pre_ndvi))
     )
     return {"evidence": ev, "history_date": ev.event.date}
 
@@ -1153,9 +1180,10 @@ def _apply_late_optical(ctx: Ctx, ev: Evidence, result: dict, state: State) -> N
         _prov(ev, name, f"{PC} (sentinel-2-l2a)", asset=scene.id)
     if ctx.history_future is None and ev.history is None and ev.optical.pre is not None:
         ctx.set_exhibit("history", "pending")
+        polygon, event_date = state["polygon"], ev.event.date
+        delta, pre_ndvi = ev.optical.plot_delta_ndvi, ev.optical.pre.ndvi_median
         ctx.history_future = _TOOLS.submit(
-            run_history, ctx, state["polygon"], ev.event.date, ev.optical.plot_delta_ndvi,
-            ev.optical.pre.ndvi_median,
+            gated(ctx, lambda: run_history(ctx, polygon, event_date, delta, pre_ndvi))
         )
 
 
@@ -1498,7 +1526,9 @@ def n_exhibits(state: State, ctx: Ctx) -> dict:
             _reexamine(ctx, ev, state)
             persist(ctx, ev)
     ctx.optical_future = None
-    futures = {_TOOLS.submit(fn): name for name, fn in _exhibit_runners(ctx, ev, polygon, seed).items()}
+    # Dict order is priority: the Ten-Field Draw, then the scale view that shares its change map.
+    runners = _exhibit_runners(ctx, ev, polygon, seed)
+    futures = {_TOOLS.submit(gated(ctx, fn)): name for name, fn in runners.items()}
     persist(ctx, ev)
     pending = set(futures)
     while pending or ctx.sar_future is not None or ctx.history_future is not None:
@@ -1771,20 +1801,29 @@ def _refresh_draft(ctx: Ctx, state: State, ev: Evidence) -> None:
             row.payload = draft
 
 
+def _scene_archives(scene_ids: list[str | None]) -> dict[str, str]:
+    """Which public archive each scene came from. Part of the hash, and verify reads from it."""
+    lookup = _geo().scene_archive
+    return {sid: lookup(sid) for sid in scene_ids if sid}
+
+
 def seal_core(ev: Evidence, polygon: dict, seed: int) -> ReplayCore:
     geo = _geo()
     pre_id = ev.optical.pre.scene_id if ev.optical.pre else None
     post_id = ev.optical.post.scene_id if ev.optical.post else None
     sar, hist = ev.sar, ev.history
+    sar_pre, sar_post = (sar.pre_scene_id, sar.post_scene_id) if sar else (None, None)
+    history_ids = geo.history_scene_ids(hist) if hist else []
     return ReplayCore(
         engine_version=geo.ENGINE_VERSION,
         polygon=polygon,
         event_date=ev.event.date,
         optical_pre_id=pre_id,
         optical_post_id=post_id,
-        sar_pre_id=sar.pre_scene_id if sar else None,
-        sar_post_id=sar.post_scene_id if sar else None,
-        history_scene_ids=geo.history_scene_ids(hist) if hist else [],
+        sar_pre_id=sar_pre,
+        sar_post_id=sar_post,
+        history_scene_ids=history_ids,
+        scene_archives=_scene_archives([pre_id, post_id, sar_pre, sar_post, *history_ids]),
         seed=seed,
         numbers=geo.flatten_numbers(
             ev.optical if pre_id and post_id else None, ev.neighbours, sar, hist, ev.village,

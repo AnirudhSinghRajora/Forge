@@ -186,3 +186,31 @@ def test_settled_post_scene_has_no_such_caveat():
 
 def test_wide_events_are_named_as_the_limit_of_the_far_test():
     assert any("wider than 12 km" in c for c in rubric.decide(good()).caveats)
+
+
+def test_ripening_caveat_says_a_later_pass_will_help_and_schedules_one():
+    ev = evidence(delta=-0.25, bare=0.1, pretrend=-0.01)
+    result = rubric.decide(ev)
+    assert any("cannot be told apart from ripening" in c and "later satellite pass" in c for c in result.caveats)
+    assert result.schedule_recheck
+
+
+def test_settled_by_history_has_no_ripening_caveat():
+    assert not any("ripening" in c for c in rubric.decide(good()).caveats)
+
+
+def test_optical_and_radar_disagreeing_is_stated():
+    ev = good(sar=sar_evidence(p=0.4))
+    assert rubric.sensors_disagree(ev)
+    assert any("Optical and radar disagree" in c for c in rubric.decide(ev).caveats)
+    assert not rubric.sensors_disagree(good(sar=sar_evidence(p=0.01)))
+
+
+def test_radar_that_is_absent_or_unusable_is_not_a_disagreement():
+    assert not rubric.sensors_disagree(good())
+    assert not rubric.sensors_disagree(good(sar=sar_evidence(p=0.4, usable=False)))
+
+
+def test_area_wide_result_is_consistent_with_not_proof():
+    ev = good(p=placebo(p=0.4), far=placebo(p=0.01))
+    assert any("consistent with the event" in c and "not proof" in c for c in rubric.decide(ev).caveats)

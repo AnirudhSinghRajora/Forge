@@ -69,6 +69,13 @@ def _obj(oid, challenge_hi, challenge_en, test, measured, outcome, finding_hi, f
     )
 
 
+def _history_settles(ev: Evidence) -> bool:
+    """This field's own past years show it does not normally fall this much now."""
+    h = ev.history
+    return bool(h and not h.downweighted and h.excess_vs_history is not None
+                and h.excess_vs_history <= HISTORY_SIMILAR)
+
+
 def _no_post(ev: Evidence, hi: str, en: str) -> tuple[str, str]:
     if rubric.comparison_incomplete(ev):
         return (
@@ -114,6 +121,18 @@ def check_harvest(ev: Evidence) -> Objection:
     delta = ev.optical.plot_delta_ndvi
     drop_frac = ev.optical.drop_frac
     measured["drop_frac"] = drop_frac
+    if bare <= BARE_MIN and delta is not None and delta <= HARVEST_MIN_DELTA and not _history_settles(ev):
+        # Near harvest a falling NDVI can be ripening. It is not cut, so bare soil cannot settle this,
+        # and only this field's own past years could.
+        return out(
+            "unresolved",
+            f"खेत का {pct(bare)}% हिस्सा ही खाली मिट्टी है, यानी कटाई नहीं दिखती। पर फ़सल पकने के समय हरियाली अपने आप भी घटती "
+            f"है, और बदलाव {signed(delta)} को बिना तुलना के उससे अलग नहीं किया जा सकता। अगली सैटेलाइट तस्वीर से मदद मिलेगी। "
+            "क्या फ़सल कटाई के क़रीब थी?",
+            f"Only {pct(bare)}% of the plot is bare, so no cut shows. But greenness also falls on its "
+            f"own as a crop ripens, and a change of {signed(delta)} cannot be told apart from that "
+            "without a control. A later satellite pass will help. Was the crop close to harvest?",
+        )
     if bare <= BARE_MIN:
         return out(
             "rebutted",

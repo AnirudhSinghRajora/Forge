@@ -28,6 +28,18 @@ def _date_te(d) -> str:
 
 def _caveat_lines(ev: Evidence) -> tuple[list[str], list[str], list[str]]:
     hi, en, te = [], [], []
+    if rubric.ripening_unresolved(ev):
+        hi.append("अगर मेरी फ़सल कटाई के क़रीब थी, तो यह गिरावट पकने से भी हो सकती है। बिना तुलना के मैं यह अलग नहीं कर सकता; अगली तस्वीर से मदद मिलेगी।")
+        en.append("If my crop was near harvest, this fall could also be ripening. Without a control I cannot tell them apart; a later image will help.")
+        te.append("నా పంట కోతకు దగ్గరగా ఉంటే, ఈ తగ్గుదల పంట పక్వానికి వచ్చినందువల్ల కూడా కావచ్చు. పోలిక లేకుండా నేను వేరు చేయలేను; తదుపరి చిత్రం సహాయపడుతుంది.")
+    if rubric.sensors_disagree(ev):
+        hi.append("तस्वीरें और रडार यहाँ एक बात नहीं कहते: तस्वीरों में बदलाव दिखता है, रडार उसका समर्थन नहीं करता।")
+        en.append("The images and the radar disagree here: the images show a change, and the radar does not support it.")
+        te.append("చిత్రాలు, రాడార్ ఇక్కడ ఏకీభవించడం లేదు: చిత్రాల్లో మార్పు కనిపిస్తోంది, రాడార్ దాన్ని సమర్థించడం లేదు.")
+    if rubric.area_wide(ev):
+        hi.append("पूरे इलाक़े का यह बदलाव घटना से मेल खाता है, पर यह उसके कारण का प्रमाण नहीं है।")
+        en.append("This change across the area is consistent with the event, but it is not proof of the cause.")
+        te.append("ప్రాంతమంతటా ఈ మార్పు సంఘటనకు సరిపోలుతోంది, కానీ అది కారణానికి రుజువు కాదు.")
     if ev.weather is None:
         hi.append("उस समय का मौसम डेटा मुझे नहीं मिल सका।")
         en.append("I could not get weather data for that time.")

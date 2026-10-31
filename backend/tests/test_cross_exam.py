@@ -24,6 +24,22 @@ def test_harvest_rebutted_with_values():
     assert o.outcome == "rebutted" and o.measured["post_bare_fraction"] == 0.1
 
 
+def test_a_drop_with_no_bare_soil_and_no_history_stays_unresolved():
+    """Near harvest it can be ripening, and only a control could say otherwise."""
+    o = get(evidence(delta=-0.25, bare=0.1, pattern="patchy"), "harvest")
+    assert o.outcome == "unresolved" and "later satellite pass will help" in o.finding_en
+
+
+def test_history_settles_the_ripening_question():
+    assert get(evidence(delta=-0.25, bare=0.1, history=history_ok(excess=-0.2)), "harvest").outcome == "rebutted"
+    assert get(evidence(delta=-0.25, bare=0.1, history=history_ok(excess=-0.05)), "harvest").outcome == "unresolved"
+    assert get(evidence(delta=-0.25, bare=0.1, history=history_ok(excess=-0.2, down=True)), "harvest").outcome == "unresolved"
+
+
+def test_no_drop_means_no_ripening_question():
+    assert get(evidence(delta=-0.02, bare=0.1), "harvest").outcome == "rebutted"
+
+
 def test_harvest_conceded_neighbours_and_history():
     ev = evidence(bare=0.8, pattern="uniform", neighbour_bare=0.5, history=history_ok(excess=-0.02))
     assert get(ev, "harvest").outcome == "conceded"

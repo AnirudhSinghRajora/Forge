@@ -6,11 +6,13 @@ GET /api/verify/{hash} streams, in order:
   progress       a heartbeat while a group downloads
   number         stored vs recomputed for one field, as soon as its group finishes
   group_done     that group finished, or `group_failed` if it could not be read
-  result         verified | mismatch | partial | upstream_unavailable | tampered | unknown_hash
+  result         verified | mismatch | partial | upstream_unavailable | archive_mismatch | tampered
+                 | unknown_hash
 
 Source of the numbers: every recomputation reads with fresh=True, which skips the memory and disk
-caches and goes to the public archive over the network. Reading our own cache would prove nothing,
-so `start` and each number state where the data came from, and a test pins this.
+caches and goes over the network to the archive recorded for that scene in the sealed record.
+Reading our own cache would prove nothing, so `start` and each number state where the data came
+from, and a test pins this.
 
 Hash = sha256 of the canonical JSON (sorted keys) of ReplayCore, recomputed from the stored core
 first: a tampered record is detected before any satellite data is fetched.
@@ -178,6 +180,7 @@ async def stream(hash_value: str) -> AsyncIterator[dict]:
         sar_pre_id=core.sar_pre_id, sar_post_id=core.sar_post_id,
         history_scene_ids=core.history_scene_ids, seed=core.seed, n_numbers=len(core.numbers),
         numbers=core.numbers, tolerance=TOLERANCE, polygon=core.polygon, source=SOURCE,
+        scene_archives=core.scene_archives,
     )
     if not core.numbers:
         yield _event("result", status="nothing_to_recompute", ok=True, n_numbers=0,
@@ -193,6 +196,21 @@ async def stream(hash_value: str) -> AsyncIterator[dict]:
                      message_en="This record was sealed by a different engine version, so numbers "
                                 "could differ for that reason.",
                      message_hi="यह रिकॉर्ड इंजन के दूसरे संस्करण से बना था, इसलिए आँकड़े इस कारण भी अलग हो सकते हैं।")
+
+    # A number is only checked against the archive it was read from. The engine resolves each scene
+    # id to its archive; a record it would now read elsewhere is reported, not silently re-pointed.
+    moved = {
+        sid: {"sealed": sealed, "current": geo.scene_archive(sid)}
+        for sid, sealed in core.scene_archives.items()
+        if geo.scene_archive(sid) != sealed
+    }
+    if moved:
+        yield _event("result", status="archive_mismatch", ok=False, moved=moved,
+                     message_en="A scene in this record would now be read from a different archive "
+                                "than the one it was sealed from, so it was not recomputed.",
+                     message_hi="इस रिकॉर्ड की एक तस्वीर अब उस संग्रह से नहीं पढ़ी जाएगी जिससे मुहर लगी थी, इसलिए दोबारा गणना "
+                                "नहीं की गई।")
+        return
 
     started = time.monotonic()
     checked: dict[str, dict] = {}

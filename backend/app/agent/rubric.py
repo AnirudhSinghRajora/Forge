@@ -243,8 +243,45 @@ def _weak_reasons(ev: Evidence, sources: list[str]) -> list[str]:
     return reasons
 
 
+def ripening_unresolved(ev: Evidence) -> bool:
+    """A drop that cannot be told from ripening, because no bare soil or history settles it."""
+    harvest = _objection(ev, "harvest")
+    delta = ev.optical.plot_delta_ndvi
+    return (
+        harvest is not None and harvest.outcome == "unresolved"
+        and ev.optical.post is not None and delta is not None and delta <= MODERATE_DELTA
+    )
+
+
+def sensors_disagree(ev: Evidence) -> bool:
+    """Optical shows a field signal, and a usable radar pair does not support it."""
+    if not (field_signal(ev) and ev.optical.plot_delta_ndvi is not None
+            and ev.optical.plot_delta_ndvi <= MODERATE_DELTA):
+        return False
+    sp = sar_p(ev)
+    return sp is not None and sp > P_SAR
+
+
+def area_wide(ev: Evidence) -> bool:
+    return far_significant(ev) and not ring_significant(ev)
+
+
 def _caveats(ev: Evidence, level: str) -> list[str]:
     caveats = []
+    if ripening_unresolved(ev):
+        caveats.append(
+            "If the crop was near harvest, this fall in greenness cannot be told apart from ripening "
+            "without a control. A later satellite pass will help."
+        )
+    if sensors_disagree(ev):
+        caveats.append(
+            "Optical and radar disagree: the optical images show a change here, and the radar pair "
+            "does not support it."
+        )
+    if area_wide(ev):
+        caveats.append(
+            "The change across this area is consistent with the event. That is not proof of its cause."
+        )
     if ev.weather is None:
         caveats.append("Weather data could not be retrieved for this run.")
     elif not ev.weather.corroborated:
@@ -293,5 +330,8 @@ def decide(ev: Evidence) -> RubricResult:
         reasons=reasons,
         caveats=_caveats(ev, level),
         falsifiers_checked=[o.id for o in ev.cross_examination],
-        schedule_recheck=level == "insufficient" or ev.optical.post is None or post_too_early(ev),
+        schedule_recheck=(
+            level == "insufficient" or ev.optical.post is None or post_too_early(ev)
+            or ripening_unresolved(ev)
+        ),
     )
