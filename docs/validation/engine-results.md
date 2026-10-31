@@ -251,6 +251,30 @@ If either year has under 30 of the 60 plots with a usable radar pair, the result
 
 A miss is reported as a miss. Silt, ponding that drained before the pass, or orbit gaps may explain one, but do not convert it into a pass. The placebo may have low power in a flood wider than its ring, as in Bhiwani. That is a reason to expect a partial result. It does not change the score.
 
+### Result: PARTIAL
+
+Run once, 60 plots each year, all with a usable radar pair, no outages. Scorer: `tests/geo_punjab_report.py`.
+
+| Measure | 2025 (flood) | 2024 (control) | Criterion | Outcome |
+|---|---|---|---|---|
+| Plots with `new_water_frac` >= 0.2 | **28.3%** | **0.0%** | at least 3x and 15 points | **Passes** |
+| SAR placebo p<=0.05 | **1.7%** | **8.3%** | at least 2x and 15 points | **Fails** |
+| Radar field conditions (either) | 28.3% | 8.3% | reported | |
+| Mean plot water share, before to after | 0.000 to 0.153 | 0.001 to 0.000 | reported | |
+| Median VH change (neighbour median) | -1.28 dB (-1.37) | +0.12 dB (+0.13) | reported | |
+| Optical pairs found | 18 of 60 | 57 of 60 | reported | |
+| Median optical change | -0.236 | +0.068 | reported | |
+| Optical strong and moderate field conditions | 1 and 1, of 18 | 2 and 2, of 57 | reported | No discrimination |
+
+By site, 2025 (new water >= 0.2; median VH): Dera Baba Nanak 45%, -5.46 dB. Kot Gurbaksh 35%, -2.12 dB. Pakhoke Mehmaran 5%, -0.01 dB. One of the three named sites shows almost nothing. All three are 0% in 2024.
+
+**Reading.** Radar found new water where a flood was reported and none in the control. This is the first positive radar case. The placebo missed it: the ring flooded too, and radar has no far test. That explains the failed part; it does not change the score.
+
+**Limits seen only after running.**
+- The pair rule picked different timing in the two years. 2025: 22 Aug to 3 Sep (ascending 27, 40 plots), 23 Aug to 4 Sep (descending 34, 20 plots). 2024: 16 to 28 Aug (descending 34, all 60), so that post pass is one day after the date, and earlier in the season. The control does not sample early September 2024, so its 0.0% may be cleaner than a same-dates comparison. The test was fixed, so it was not re-run with another rule.
+- In the samples checked, the water threshold was the fixed -18 dB, because Otsu fell outside the plausible range.
+- 2025 pairs start up to 5 days before the breach, so earlier rain may be included.
+
 ## 8. Read time
 
 Measured on this machine, whose link to the blob store measured about 0.39 MB/s, shared with other jobs. Cold timings are upper bounds and depend on who else is downloading. Tracked separately below once the read-time work is done.

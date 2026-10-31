@@ -21,7 +21,7 @@ from app.tools.geo.optical import RED_EDGE_BANDS
 from app.tools.geo.qa import QA_BANDS
 from app.tools.geo.raster import prefetch_region
 from app.tools.geo.scale import _scale_fade
-from app.tools.geo.village import _village_witness
+from app.tools.geo.village import _village_witness, optical_change
 from tests.geo_fpr_sirsa import CROPLAND, square, worldcover
 
 LAT, LON, SIZE = 28.735, 76.205, 1400
@@ -34,6 +34,7 @@ def main() -> None:
     ap.add_argument("--n", type=int, default=40)
     ap.add_argument("--seed", type=int, default=20261101)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--min-pre-ndvi", type=float, default=None, help="keep only plots at least this green before")
     args = ap.parse_args()
     epsg = utm_epsg(LON, LAT)
     x, y = Transformer.from_crs(4326, epsg, always_xy=True).transform(LON, LAT)
@@ -64,7 +65,16 @@ def main() -> None:
                 continue
             lon, lat = to_ll.transform(grid.left + (c + 0.5) * 10, grid.top - (r + 0.5) * 10)
             poly = square(lon, lat, side)
-            parse_plot(poly)
+            plot = parse_plot(poly)
+            if args.min_pre_ndvi is not None:
+                try:
+                    plot_grid = plot.grid(0)
+                    change = optical_change(plot, plot_grid, PRE, POST, False)
+                except SceneUnusable:
+                    skipped += 1
+                    continue
+                if change.plot_pre < args.min_pre_ndvi:
+                    continue
             try:
                 village = _village_witness(poly, PRE, POST, done, "s2")
                 fade = _scale_fade(poly, PRE, POST, None, "s2")
