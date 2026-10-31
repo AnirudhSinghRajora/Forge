@@ -21,7 +21,7 @@ from app.tools.geo.base import STAC_URL, SceneUnusable
 from app.tools.geo.grid import Grid, parse_plot
 from app.tools.geo.optical import RED_EDGE_BANDS, _load_scene, _optical_compare
 from app.tools.geo.qa import QA_BANDS
-from app.tools.geo.raster import _read_once, prefetch_region
+from app.tools.geo.raster import _warped_once, prefetch_region
 from app.tools.geo.stac import search_scenes
 
 EPSG = 32643
@@ -44,7 +44,7 @@ def worldcover(grid: Grid) -> np.ndarray:
     items = [i for i in items if i.properties.get("esa_worldcover:product_version", "").startswith("2") or "2021" in i.id]
     item = sorted(items, key=lambda i: i.id)[-1]
     print("land cover:", item.id, flush=True)
-    return _read_once(item.assets["map"].href, grid, False)
+    return _warped_once(item.assets["map"].href, grid, False)
 
 
 def pick_scene(region_plot, when: date, tile: str) -> str:

@@ -137,7 +137,7 @@ Landfall 02:00-08:00 IST on 28 Oct 2026 near 16.45 N, 81.90 E.
 | Source | Pass | Status |
 |---|---|---|
 | Sentinel-2 | 26 Oct (47%) | Latest before landfall |
-| Sentinel-2 | **31 Oct, S2C (tile 44QND, 40%)** | On Earth Search at time of writing, not yet on Planetary Computer |
+| Sentinel-2 | **31 Oct, S2C (tile 44QND, 40%)** | First found on Earth Search. Reached Planetary Computer by 1 Nov, 02:40 IST, as `S2C_MSIL2A_20261031T045931_R119_T44QND_20261031T093002` |
 | Sentinel-2 | About 2 Nov (S2A, orbit 119) | Expected from the repeat pattern, not confirmed |
 | Sentinel-1 RTC | 23 Oct, desc, orbit 19 | Latest over the delta. Before landfall |
 | Sentinel-1 | 28 Oct, S1D, orbit 92 | EW mode (coarse wide swath), no RTC, not comparable with its IW history |
@@ -172,6 +172,15 @@ Planetary Computer stays primary. On identical pixels of the same pass, PC minus
 ## 5. Sirsa and Fatehabad, 24 Oct 2026 (hard case)
 
 The storm was the evening of Saturday 24 Oct. **The 24 Oct Sentinel-1 pass was at 00:59 UTC (06:29 IST), about 12 hours before it, so it is pre-event.** The first true post-event radar is 28 Oct, 13:03 UTC, ascending, orbit 100, which pairs with 16 Oct on the same orbit. The first optical pass after the storm is the rejected 28 Oct one.
+
+Radar on the two named villages we could place, 16 to 28 Oct, ascending, orbit 100, one 1.4 ha square at each cropland point from `events.md` B2:
+
+| Plot | VH change | Neighbours | Excess | Ring p | New water | Latest clear optical |
+|---|---|---|---|---|---|---|
+| Jallopur (29.69151, 75.49735) | -0.65 dB | -0.11 dB | -0.54 dB | 0.22 | 0.0 | 23 Oct NDVI 0.45 (0.67 on 18 Oct, before the storm) |
+| Darbi (29.57327, 75.15664) | -0.81 dB | -0.13 dB | -0.68 dB | 0.27 | 0.0 | 18 Oct NDVI 0.76 |
+
+**No signal is established on either.** Radar sees a small VH drop, well inside the placebo range, and no new water. There is no usable optical after the storm yet. The Jallopur drop from 0.67 to 0.45 came before the storm, and harvest was underway, so it says nothing about the hail. This is one square per village, and hail is patchy, so it does not refute the reports. The next optical pass should be checked when it lands.
 
 ## 6. Disclosures
 
@@ -277,6 +286,30 @@ By site, 2025 (new water >= 0.2; median VH): Dera Baba Nanak 45%, -5.46 dB. Kot 
 
 ## 8. Read time
 
-Measured on this machine, whose link to the blob store measured about 0.39 MB/s, shared with other jobs. Cold timings are upper bounds and depend on who else is downloading. Tracked separately below once the read-time work is done.
+Measured on this machine, whose link to the blob store measured about 0.39 MB/s, shared with other jobs. Timings depend on who else is downloading, so treat small differences as noise. **Nothing here was measured from a European host.** How fast the engine runs there is not known.
+
+`geo-1.2.0` keeps whole COG blocks, so tools with overlapping windows download each byte once per run. It also reads the far windows concurrently, checks bands QA does not measure from overviews, and lets `replay` share only what it re-downloaded itself.
+
+**Numbers did not change.** From an empty cache, all 104 numbers on each demo plot are byte-identical to frozen `geo-1.1.0`. The block reader is pixel-identical to the previous reader on S2 10 m and 20 m, S1, and Earth Search (`tests/geo_blocks_check.py`).
+
+| Tool, cold | Before: `geo-1.1.0`, typical plot | After: `geo-1.2.0`, Kirtan, never run before | After: Jallopur | After: Darbi |
+|---|---|---|---|---|
+| `search_and_qa` | 104 s (6 scenes) | 144 s (23 scenes) | 231 s (7 scenes) | 76 s |
+| `optical_compare` with far test | 252 s | 214 s | no optical post | no optical post |
+| `history` | 143 s | 45 s | | |
+| `sar_compare` | 124 s | 79 s | 24 s | 55 s |
+| `village_witness` | 92 s | 23 s | 83 s (radar) | 0.4 s (radar) |
+| `scale_fade` | 0.2 s | 0.1 s | 0.4 s | 0.5 s |
+| `timeline` | 58 s | 250 s (46-day window) | 62 s | 179 s |
+| `render_chips` | 192 s | 110 s | | |
+| Full `replay`, all 104 numbers | 1587 s (sharing the link) | **269 s**, byte-identical | | |
+
+Pins differ in scene count, and the "before" and "after" runs were at different times, so this is not a controlled comparison. The clearest gains are the tools that reuse windows (`history`, `village_witness`, `replay`).
+
+**Targets not met.** Cold from this machine:
+- 25 s per compare: not met. `optical_compare` took 214 s.
+- A verdict inside 90 s (Addendum 3): not met. `search_and_qa` plus `optical_compare` is about 6 minutes on a pin never run before. Repeat runs on a warmed plot take seconds.
+
+The far test's reads are a large known part of what remains in `optical_compare`: six windows, three bands, two scenes. I did not measure the split. Reducing them changes which placebos are drawn, so it would be a method change, and it was left alone because the locked runs depend on it.
 
 Verify timings from BACKEND's records (`backend/var`; the live record's hash starts `97b0da03e868`): all 20 field numbers in 41 s and 26 s on two runs; all 104 numbers in 1066 s while sharing the link. My own full `replay` of the typical plot also matched all 104 numbers exactly, in 1587 s while sharing the link with a locked run's download.
