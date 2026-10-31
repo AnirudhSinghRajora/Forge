@@ -554,17 +554,17 @@ def check_regional_trend(ev: Evidence) -> Objection:
                 f"మీ పొలం తుఫాను ప్రాంతం వెలుపలి పొలాలకు భిన్నంగా ఉంది: {far_te}. పొరుగు పొలాలతో పోలిక కుదరలేదు, "
                 "కాబట్టి ప్రభావం మీ పొలానికే పరిమితమా అని చెప్పలేం.",
             )
-        ring_te = (f"చుట్టుపక్కల {ring.n_placebos} పొలాల్లో {ring.n_at_least_as_extreme} పొలాలు ఇంత మారాయి, "
-                   f"p = {ring_p:.3f}")
+        ring_te = (f"చుట్టుపక్కల {ring.n_placebos} పొలాల్లో {ring.n_at_least_as_extreme} పొలాలు ఇంత మారాయి "
+                   f"(p = {ring_p:.3f})")
         return out(
             "rebutted",
-            f"आपका खेत तूफ़ान के इलाक़े से बाहर के खेतों से अलग है: {far_hi}। यह अपने पड़ोसियों से साफ़ तौर पर अलग नहीं है "
-            f"({ring_hi}), और हो सकता है वे भी प्रभावित हुए हों, इसलिए हो सकता है असर सिर्फ़ आपके खेत तक सीमित न हो।",
+            f"आपका खेत तूफ़ान के इलाक़े से बाहर के खेतों से अलग है: {far_hi}। यह अपने पड़ोसियों से साफ़ तौर पर अलग नहीं है, और "
+            f"हो सकता है वे भी प्रभावित हुए हों, इसलिए हो सकता है असर सिर्फ़ आपके खेत तक सीमित न हो: {ring_hi}।",
             f"Your field stands apart from fields outside the storm area: {far_en}. It is not clearly "
-            f"different from its neighbours ({ring_en}), who may have been affected too, so the effect "
-            "may not be limited to your field.",
-            f"మీ పొలం తుఫాను ప్రాంతం వెలుపలి పొలాలకు భిన్నంగా ఉంది: {far_te}. ఇది పొరుగు పొలాలకు స్పష్టంగా భిన్నంగా లేదు "
-            f"({ring_te}), అవి కూడా ప్రభావితమై ఉండవచ్చు, కాబట్టి ప్రభావం మీ పొలానికే పరిమితం కాకపోవచ్చు.",
+            "different from its neighbours, who may have been affected too, so the effect may not be "
+            f"limited to your field: {ring_en}.",
+            f"మీ పొలం తుఫాను ప్రాంతం వెలుపలి పొలాలకు భిన్నంగా ఉంది: {far_te}. ఇది పొరుగు పొలాలకు స్పష్టంగా భిన్నంగా లేదు, "
+            f"అవి కూడా ప్రభావితమై ఉండవచ్చు, కాబట్టి ప్రభావం మీ పొలానికే పరిమితం కాకపోవచ్చు: {ring_te}.",
         )
     if ring_yes:
         return out(

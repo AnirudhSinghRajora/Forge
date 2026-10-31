@@ -36,7 +36,7 @@ from langgraph.graph import END, StateGraph
 from sqlalchemy import select
 
 from app import errors
-from app.agent import claim_path, cross_exam, explain, llm, rubric, testimony, validate
+from app.agent import advisory, claim_path, cross_exam, explain, llm, rubric, testimony, validate
 from app.agent.cross_exam import date_en, date_hi, signed
 from app.agent.parse import event_date_problem, today_ist
 from app.agent.trace import Tracer
@@ -294,13 +294,13 @@ def persist(ctx: Ctx, ev: Evidence | None) -> None:
     """Saved after every node, so a crash or refresh still has the evidence gathered so far."""
     if ev is None:
         return
-    with session_scope() as s:
+    with advisory.ROW_LOCK, session_scope() as s:
         run_id = ctx.evidence_run_id or ctx.run_id
         row = s.scalar(select(EvidenceRow).where(EvidenceRow.run_id == run_id))
         if row is None:
             row = EvidenceRow(run_id=run_id, case_id=ctx.case_id, json={})
             s.add(row)
-        row.exhibits = ctx.exhibits
+        row.exhibits = advisory.merged(row.exhibits, ctx.exhibits)
         row.json = ev.model_dump(mode="json")
         row.verdict_level = ev.verdict.level if ev.verdict else None
         row.evidence_hash = ev.evidence_hash
@@ -1299,7 +1299,8 @@ def n_cross_examine(state: State, ctx: Ctx) -> dict:
             "objection", "cross_examine", objection.challenge_hi, objection.challenge_en,
             id=objection.id, test=objection.test, measured=objection.measured,
             outcome=objection.outcome, finding_hi=objection.finding_hi,
-            finding_en=objection.finding_en, round=state.get("loops", 0) + 1,
+            finding_en=objection.finding_en, finding_te=objection.finding_te,
+            challenge_te=objection.challenge_te, round=state.get("loops", 0) + 1,
         )
     followup, why = _pick_followup(state, ctx, followups, ev)
     update: dict = {"evidence": ev, "route": "verdict", "llm_rephrase": rephrased,
@@ -1564,7 +1565,8 @@ def _reexamine(ctx: Ctx, ev: Evidence, state: State) -> None:
                 "objection", "cross_examine", objection.challenge_hi, objection.challenge_en,
                 id=objection.id, test=objection.test, measured=objection.measured,
                 outcome=objection.outcome, finding_hi=objection.finding_hi,
-                finding_en=objection.finding_en, round="late_evidence",
+                finding_en=objection.finding_en, finding_te=objection.finding_te,
+                challenge_te=objection.challenge_te, round="late_evidence",
             )
     was_provisional = ev.verdict is not None and rubric.STILL_COMPUTING in ev.verdict.reasons
     if rubric.decide_level(ev)[0] != level_before or (
@@ -1619,6 +1621,8 @@ def n_exhibits(state: State, ctx: Ctx) -> dict:
                 ctx.set_exhibit(name, "failed", f"it could not be computed (ref {ref}); it can be retried")
             _emit_exhibit(ctx, name)
             persist(ctx, ev)
+            if name == "chips" and ctx.exhibits[name]["status"] == "done":
+                advisory.start(ctx.run_id, ev, (advisory.IMAGE_OPINION,))  # the seal does not wait for it
         had_background = ctx.sar_future is not None or ctx.history_future is not None
         if land_background(ctx, ev, 0.0 if pending else 1.0, state) or (
             had_background and ctx.sar_future is None and ctx.history_future is None
@@ -1917,6 +1921,9 @@ def n_seal(state: State, ctx: Ctx) -> dict:
              f"Evidence sealed: {ev.evidence_hash[:12]}. Anyone can recompute its satellite numbers from public "
              "data; the verdict and weather can be checked for tampering.",
              action="sealed", evidence_hash=ev.evidence_hash, n_numbers=len(core.numbers))
+    persist(ctx, ev)
+    case = state.get("case") or {}
+    advisory.start(ctx.run_id, ev, (advisory.STATEMENT_CHECK,), case.get("transcript"), case.get("crop_stage"))
     return {"evidence": ev}
 
 
@@ -2037,6 +2044,9 @@ def retry_exhibit(run_id: str, case_id: str, name: str, tracer: Tracer) -> str:
                 ctx.set_exhibit(name, "done")
             except ToolFailed as exc:
                 ctx.set_exhibit(name, "failed", str(exc))
+    if name == "chips" and ctx.exhibits[name]["status"] == "done":
+        persist(ctx, ev)
+        advisory.start(evidence_run, ev, (advisory.IMAGE_OPINION,))
     new_core = seal_core(ev, polygon, seed)
     new_hash = evidence_hash(new_core)
     if name not in ("chips", "timeline") and new_hash != old_hash:  # those two carry no sealed numbers

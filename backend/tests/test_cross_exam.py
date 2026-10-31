@@ -118,8 +118,21 @@ def test_regional_trend_both_significant():
 def test_regional_trend_far_yes_ring_no_is_not_limited_to_the_field_and_not_a_weakness():
     o = get(evidence(p=placebo(p=0.4), far=placebo(p=0.01)), "regional_trend")
     assert o.outcome == "rebutted"
-    assert "does not look limited to your field" in o.finding_en
-    assert "सीमित नहीं दिखता" in o.finding_hi
+    # It answers the surveyor's question first: what sets this field apart.
+    assert o.finding_en.startswith("Your field stands apart from fields outside the storm area: ")
+    assert "not clearly different from its neighbours, who may have been affected too" in o.finding_en
+    assert "the effect may not be limited to your field" in o.finding_en
+    assert "does not look limited" not in o.finding_en
+    assert o.finding_hi.startswith("आपका खेत तूफ़ान के इलाक़े से बाहर के खेतों से अलग है") and "सीमित न हो" in o.finding_hi
+    assert o.finding_te.startswith("మీ పొలం తుఫాను ప్రాంతం వెలుపలి పొలాలకు భిన్నంగా ఉంది") and "పరిమితం కాకపోవచ్చు" in o.finding_te
+    assert "0.010" in o.finding_te and "0.400" in o.finding_te
+
+
+def test_regional_trend_far_yes_with_no_ring_test_does_not_claim_about_the_neighbours():
+    ev = evidence(p=placebo(p=1.0, reason="too few"), far=placebo(p=0.01))
+    o = get(ev, "regional_trend")
+    assert o.outcome == "rebutted"
+    assert "not clearly different" not in o.finding_en and "was not available" in o.finding_en
 
 
 def test_regional_trend_ring_yes_far_no_is_a_local_loss():

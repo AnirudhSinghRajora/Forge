@@ -17,8 +17,8 @@ import qrcode
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app import disclosures, errors
+from app.agent import advisory, rubric
 from app.agent import explain as explain_mod
-from app.agent import rubric
 from app.config import get_settings
 from app.evidence.schema import Evidence
 from app.pdf import charts
@@ -41,6 +41,11 @@ L = {
         "vanish": "बड़े खानों में खो जाता नुकसान", "weather": "मौसम (मॉडल का अनुमान)", "alerts": "सरकारी चेतावनियाँ", "news": "ख़बरें",
         "cross": "जिरह: सर्वेयर की आपत्तियाँ", "challenge": "आपत्ति", "finding": "जाँच का नतीजा", "outcome": "परिणाम",
         "clauses": "दिशानिर्देशों के अनुच्छेद (अंग्रेज़ी में मूल पाठ)", "scenes": "देखी गई तस्वीरें", "provenance": "हर आँकड़े का स्रोत",
+        "cap_placebo": "नीचे की पट्टी: हरियाली (NDVI) में बदलाव। ऊपर की ओर: खेतों की संख्या। रेखा: आपका खेत (Your field)।",
+        "cap_draw": "नीचे की पट्टी: 10 खेतों का औसत बदलाव। ऊपर की ओर: कितनी बार ऐसा ड्रॉ निकला। रेखा: आपका खेत (Your field)।",
+        "cap_vanish": "हर खाने के आकार पर आपके खेत वाले खाने का बदलाव।",
+        "cap_twin": "नीली रेखा: आपका खेत। नारंगी रेखा: मिलते-जुलते खेतों से अनुमान। खड़ी रेखा: घटना का दिन (event)।",
+        "cap_weather": "हर दिन की बारिश (मिमी), मौसम मॉडल के अनुसार। खड़ी रेखा: घटना का दिन (event)।",
         "hash": "सबूत की मुहर", "verify_note": "यह QR खोलकर कोई भी सार्वजनिक सैटेलाइट डेटा से सैटेलाइट के आँकड़े दोबारा निकाल सकता है।",
         "near": "सीमा के पास", "none": "कोई नहीं मिला", "no_data": "उपलब्ध नहीं", "generated": "बनाया गया",
         "disclaimer": "यह सबूत है, दावे का फ़ैसला नहीं। किसान के सैटेलाइट सबूत के लिए दिशानिर्देशों में अलग कोई नियम नहीं है और इसे माना ही जाएगा, ऐसा नहीं है।",
@@ -66,6 +71,7 @@ L = {
         "vanish": "The same change at coarser cells", "weather": "Weather (model-indicated)", "alerts": "Official alerts", "news": "News",
         "cross": "Cross-examination: the surveyor's objections", "challenge": "Objection", "finding": "What the test found", "outcome": "Outcome",
         "clauses": "Guideline clauses", "scenes": "Images considered", "provenance": "Where each number comes from",
+        "cap_placebo": "", "cap_draw": "", "cap_vanish": "", "cap_twin": "", "cap_weather": "",
         "hash": "Evidence seal", "verify_note": "Open this QR code to recompute the satellite numbers from public satellite data.",
         "near": "near the threshold", "none": "None found", "no_data": "Not available", "generated": "Generated",
         "disclaimer": "This is evidence, not a claim decision. No clause provides for farmer-submitted satellite evidence, and acceptance is not guaranteed.",
@@ -92,6 +98,11 @@ L = {
         "vanish": "పెద్ద గడుల్లో అదే మార్పు", "weather": "వాతావరణం (నమూనా అంచనా)", "alerts": "అధికారిక హెచ్చరికలు", "news": "వార్తలు",
         "cross": "క్రాస్ ఎగ్జామినేషన్: సర్వేయర్ అభ్యంతరాలు", "challenge": "అభ్యంతరం", "finding": "పరీక్ష ఫలితం", "outcome": "తీర్పు",
         "clauses": "మార్గదర్శకాల నిబంధనలు (ఆంగ్లంలో మూల పాఠం)", "scenes": "పరిశీలించిన చిత్రాలు", "provenance": "ప్రతి సంఖ్య మూలం",
+        "cap_placebo": "అడ్డ అక్షం: పచ్చదనం (NDVI) మార్పు. నిలువు అక్షం: పొలాల సంఖ్య. గీత: మీ పొలం (Your field).",
+        "cap_draw": "అడ్డ అక్షం: 10 పొలాల సగటు మార్పు. నిలువు అక్షం: అలాంటి డ్రా ఎన్నిసార్లు వచ్చింది. గీత: మీ పొలం (Your field).",
+        "cap_vanish": "ప్రతి గడి పరిమాణంలో మీ పొలం ఉన్న గడి మార్పు.",
+        "cap_twin": "నీలి గీత: మీ పొలం. నారింజ గీత: పోలికైన పొలాల నుంచి అంచనా. నిలువు గీత: సంఘటన రోజు (event).",
+        "cap_weather": "రోజువారీ వర్షం (మి.మీ), వాతావరణ నమూనా ప్రకారం. నిలువు గీత: సంఘటన రోజు (event).",
         "hash": "ఆధారాల ముద్ర", "verify_note": "ఈ QR తెరిచి ఉపగ్రహ సంఖ్యలను పబ్లిక్ ఉపగ్రహ డేటా నుంచి మళ్లీ లెక్కించవచ్చు.",
         "near": "హద్దు దగ్గర", "none": "ఏదీ దొరకలేదు", "no_data": "అందుబాటులో లేదు", "generated": "తయారైన సమయం",
         "disclaimer": "ఇది ఆధారం, క్లెయిమ్ నిర్ణయం కాదు. రైతు సమర్పించే ఉపగ్రహ ఆధారాలకు ప్రత్యేక నిబంధన లేదు, అంగీకారానికి హామీ లేదు.",
@@ -130,6 +141,19 @@ UNKNOWN_NAMES = {
     "paddy_localized_inundation_cover": ("धान में जलभराव का कवर", "వరి ముంపుకు కవర్", "cover for paddy inundation"),
     "unseasonal_rain_on_standing_crop": ("खड़ी फ़सल पर बेमौसम बारिश का कवर", "నిలబడిన పంటపై అకాల వర్షానికి కవర్", "cover for unseasonal rain on a standing crop"),
     "policy_corpus": ("नीति के दस्तावेज़", "విధాన పత్రాలు", "the policy documents"),
+}
+EXHIBIT_NAMES = {
+    "sar": ("रडार की तुलना", "రాడార్ పోలిక", "Radar comparison"),
+    "history": ("पिछले वर्षों से तुलना", "గత సంవత్సరాలతో పోలిక", "Comparison with past years"),
+    "village": ("दस खेतों का ड्रॉ", "పది పొలాల డ్రా", "The Ten-Field Draw"),
+    "scale_fade": ("बड़े खानों वाला चित्र", "పెద్ద గడుల చిత్రం", "The same change at coarser cells"),
+    "chips": ("पहले और बाद की तस्वीरें", "ముందు, తర్వాతి చిత్రాలు", "Before and after images"),
+    "timeline": ("सैटेलाइट दर्शनों की सूची", "ఉపగ్రహ దర్శనాల జాబితా", "Every satellite pass"),
+}
+SCENE_STATUS = {
+    "accepted": ("स्वीकृत", "అంగీకరించింది", "accepted"),
+    "suspect": ("संदिग्ध", "అనుమానాస్పదం", "suspect"),
+    "rejected": ("अस्वीकृत", "తిరస్కరించింది", "rejected"),
 }
 DATE_SOURCES = {
     "farmer": ("आपकी बताई तारीख़", "మీరు చెప్పిన తేదీ", "your date"),
@@ -235,6 +259,10 @@ def _reason_lines(ev: Evidence, lang: str) -> list[str]:
     return [*ev.verdict.reasons, *ev.verdict.caveats]
 
 
+def _objection_text(o, name: str, lang: str) -> str:
+    return getattr(o, f"{name}_{lang}", None) or getattr(o, f"{name}_en")
+
+
 def _tests_text(ev: Evidence, lang: str) -> str | None:
     line = explain_mod.tests_line(ev)
     return line[{"hi": 0, "en": 1, "te": 2}[lang]] if line else None
@@ -254,8 +282,6 @@ def build_context(ev: Evidence, case: dict, actions: list[dict], lang: str, char
     draw = ev.village.lottery if ev.village else None
     base = base_url or get_settings().public_web_url or "http://localhost:8000"
     verify_url = f"{base.rstrip('/')}/verify/{ev.evidence_hash}"
-    challenge_key, finding_key = ("challenge_hi", "finding_hi") if lang == "hi" else (
-        "challenge_en", "finding_en")
     return {
         "L": labels,
         "lang": lang,
@@ -272,6 +298,8 @@ def build_context(ev: Evidence, case: dict, actions: list[dict], lang: str, char
         "date_source_name": _in_lang(DATE_SOURCES, ev.event.date_source, lang),
         "crop_name": _crop(ev.event.crop, lang),
         "day": lambda when: _day(when, lang),
+        "scene_status": lambda status: _in_lang(SCENE_STATUS, status, lang),
+        "sensor_name": {"s2": "Sentinel-2", "s1": "Sentinel-1"},
         "explanation": _pick(ev, "explanation", lang),
         "testimony": _pick(ev, "testimony", lang),
         "reason_lines": _reason_lines(ev, lang),
@@ -309,7 +337,7 @@ def build_context(ev: Evidence, case: dict, actions: list[dict], lang: str, char
         "vanish_img": _as_uri(charts.scale_chart(ev.scale_fade, chart_dir / "scale.png")),
         "vanish_caveat": VANISH_CAVEATS[lang],
         "objections": [
-            {"id": o.id, "challenge": getattr(o, challenge_key), "finding": getattr(o, finding_key),
+            {"id": o.id, "challenge": _objection_text(o, "challenge", lang), "finding": _objection_text(o, "finding", lang),
              "outcome": o.outcome, "outcome_label": labels[o.outcome]}
             for o in ev.cross_examination
         ],
@@ -341,7 +369,8 @@ def build_pdf(ev: Evidence, case: dict, actions: list[dict], lang: str = "hi",
 
     tag = (ev.evidence_hash or ev.run_id)[:16]
     chart_dir = get_settings().artifacts_dir / ev.case_id / f"pdf_{tag}"
-    failed = {k: errors.public_text(v.get("reason"), "it could not be computed") for k, v in (exhibits or {}).items()
-              if v.get("status") == "failed"}
+    # The advisory exhibits are not part of the record, so the record does not list them.
+    failed = {_in_lang(EXHIBIT_NAMES, k, lang): errors.public_text(v.get("reason"), "it could not be computed")
+              for k, v in (exhibits or {}).items() if v.get("status") == "failed" and k not in advisory.NAMES}
     html = build_html(ev, case, actions, lang, chart_dir, failed, base_url)
     return HTML(string=html, base_url=str(chart_dir)).write_pdf()

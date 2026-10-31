@@ -122,3 +122,37 @@ def test_server_error_falls_through_to_none(gemini_stub):
     assert llm.narrate({"x": 1}, "hi") is None
     paths = [p for p, _ in gemini_stub["requests"]]
     assert any("interactions" in p for p in paths) and any("generateContent" in p for p in paths)
+
+
+def test_images_pass_the_sdks_own_validation(gemini_stub):
+    gemini_stub["responses"]["interactions"] = interaction(steps=[output_text(json.dumps({
+        "description_hi": "भूरा", "description_en": "Browner", "description_te": "గోధుమ",
+        "visible_change": "clear", "consistent": "yes"}))])
+    png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 20
+    opinion = llm.read_images([("true colour, before", png)], {"ndvi_before": 0.7})
+    assert opinion and opinion.consistent == "yes"
+    path, body = gemini_stub["requests"][0]
+    assert "interactions" in path and body["store"] is False
+    assert body["response_format"]["mime_type"] == "application/json"
+    parts = body["input"][0]["content"]  # the SDK wraps a list of parts as one user turn
+    image = next(p for p in parts if p.get("type") == "image")
+    assert image["mime_type"] == "image/png" and base64.b64decode(image["data"]) == png
+
+
+def test_the_witness_answer_passes_the_sdks_own_validation(gemini_stub):
+    gemini_stub["responses"]["interactions"] = interaction(steps=[output_text(json.dumps({
+        "covered": True, "answer": "ok", "cited_fields": ["verdict.level"], "cited_clause_ids": []}))])
+    answer = llm.answer_from_record("why?", {"verdict.level": "weak"}, [], "en")
+    assert answer and answer.covered and answer.cited_fields == ["verdict.level"]
+    schema = gemini_stub["requests"][0][1]["response_format"]["schema"]
+    assert schema["properties"]["cited_fields"]["type"] == "array"
+
+
+def test_the_statement_check_passes_the_sdks_own_validation(gemini_stub):
+    gemini_stub["responses"]["interactions"] = interaction(steps=[output_text(json.dumps({
+        "found": True, "about": "date", "question_hi": "क्या?", "question_en": "Which day?", "question_te": "ఏ రోజు?"}))])
+    check = llm.find_contradiction({"transcript": "x"}, {"event.date": "2026-03-09"})
+    assert check and check.about == "date"
+    schema = gemini_stub["requests"][0][1]["response_format"]["schema"]
+    assert schema["properties"]["about"]["enum"] == ["date", "event", "crop_stage", "none"]
+    assert "$defs" not in schema  # the documented schema subset does not list $defs, so none is sent

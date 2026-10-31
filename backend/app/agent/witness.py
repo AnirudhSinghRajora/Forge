@@ -148,14 +148,14 @@ def allowed_numbers(facts: dict, clause_texts: list[str] = ()) -> set[float]:
 
 
 def _clauses(question: str, ev: Evidence) -> dict[str, dict]:
-    """Clauses on this case's own route first, then the ones retrieved for this question."""
-    found: dict[str, dict] = {}
+    """The clauses retrieved for this question, then those on this case's own route, up to a limit."""
+    found: dict[str, dict] = {str(row["clause_id"]): policy._citation(row) for row in policy.retrieve(question)}
     for clause in ev.policy:
+        if len(found) >= MAX_CLAUSES:
+            break
         found.setdefault(clause.clause_id, {"clause_id": clause.clause_id, "doc": clause.doc, "page": clause.page,
                                             "text": clause.text[:policy.MAX_CLAUSE_CHARS], "url": clause.url})
-    for row in policy.retrieve(question):
-        found.setdefault(str(row["clause_id"]), policy._citation(row))
-    return dict(list(found.items())[-MAX_CLAUSES:] if len(found) > MAX_CLAUSES else found.items())
+    return found
 
 
 def accepted(raw, facts: dict, clauses: dict[str, dict], lang: str) -> dict | None:

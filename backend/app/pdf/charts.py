@@ -29,6 +29,19 @@ GRID = "#e6e5e0"
 SURFACE = "#ffffff"
 
 
+STATISTIC_LABELS = {
+    "median_delta_ndvi": "Change in greenness (NDVI)",
+    "delta_ndvi": "Change in greenness (NDVI)",
+    "median_vh_change_db": "Change in radar signal (VH, dB)",
+    "vh_change_db": "Change in radar signal (VH, dB)",
+}
+
+
+def statistic_label(statistic: str) -> str:
+    """A chart's words for a statistic. A machine name not listed here still reads as words."""
+    return STATISTIC_LABELS.get(statistic, statistic.replace("_", " "))
+
+
 def _style(ax) -> None:
     ax.set_facecolor(SURFACE)
     for side in ("top", "right", "left"):
@@ -72,7 +85,7 @@ def placebo_histogram(placebo: PlaceboTest | None, path: Path, label: str = "sam
     side = "right" if placebo.plot_value < sum(placebo.histogram_edges) / len(placebo.histogram_edges) else "left"
     _marker(ax, placebo.plot_value, f"Your field {signed(placebo.plot_value)}", ymax * 1.08, SERIES_2, side)
     ax.set_ylim(0, ymax * 1.15)
-    ax.set_xlabel(f"{placebo.statistic} on {placebo.n_placebos} {label}",
+    ax.set_xlabel(f"{statistic_label(placebo.statistic)} on {placebo.n_placebos} {label}",
                   fontsize=8, color=INK_2)
     ax.set_ylabel("fields", fontsize=8, color=INK_2)
     return _save(fig, path)
@@ -140,8 +153,8 @@ def draw_histogram(draw: SurveyLottery | None, path: Path) -> str | None:
     if draw.plot_value is not None:
         _marker(ax, draw.plot_value, f"Your field {signed(draw.plot_value)}", ymax * 1.12, SERIES_2,
                 "right")
-    ax.set_xlabel(f"Average of {draw.parcels_per_survey} random parcels, {draw.n_simulations} "
-                  f"simulated draws ({draw.statistic})", fontsize=8, color=INK_2)
+    ax.set_xlabel(f"{statistic_label(draw.statistic)}: average of {draw.parcels_per_survey} random "
+                  f"parcels, {draw.n_simulations} simulated draws", fontsize=8, color=INK_2)
     ax.set_ylabel("draws", fontsize=8, color=INK_2)
     return _save(fig, path)
 
@@ -164,7 +177,7 @@ def scale_chart(fade: ScaleFade | None, path: Path) -> str | None:
                     va="bottom" if value >= 0 else "top", fontsize=8, color=INK)
     span = max(abs(v) for v in values) or 1.0
     ax.set_ylim(min(0, min(values)) - span * 0.2, max(0, max(values)) + span * 0.2)
-    ax.set_ylabel(fade.statistic, fontsize=8, color=INK_2)
+    ax.set_ylabel(statistic_label(fade.statistic), fontsize=8, color=INK_2)
     return _save(fig, path)
 
 

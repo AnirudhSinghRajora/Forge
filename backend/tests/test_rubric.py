@@ -283,7 +283,8 @@ def test_the_near_line_reaches_testimony_and_explanation_in_every_language():
     ev.verdict = Verdict(level=result.level, headline_hi="h", headline_en="e", reasons=result.reasons,
                          caveats=result.caveats, falsifiers_checked=result.falsifiers_checked,
                          rubric_version=result.version)
-    for text, line in zip(testimony.templates(ev), (explain.NEAR_LINE[0], explain.NEAR_LINE[1], explain.NEAR_LINE[2]), strict=True):
-        assert line in text
+    for text, line in zip(testimony.templates(ev), testimony.NEAR_LINE, strict=True):
+        assert line in text  # the same caveat, in the field's own voice
+    assert "a slightly different drawing of me could change this result" in testimony.templates(ev)[1]
     hi, en, te = explain.template_explanation(ev, result.level)
     assert explain.NEAR_LINE[0] in hi and explain.NEAR_LINE[1] in en and explain.NEAR_LINE[2] in te

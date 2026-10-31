@@ -71,4 +71,9 @@ def test_far_yes_ring_no_never_says_the_whole_area_was_hit():
     assert "does not look limited to your field" in tests[1]
     assert any("does not look limited to your field" in c for c in caveats)
     assert "does not look limited to me" in en
+    # The testimony says it once, in the field's own voice, in every language.
+    assert en.count("does not look limited") == 1 and "your field" not in en.replace("I am your field.", "")
+    assert hi.count("सीमित नहीं दिखता") == 1 and "आपके खेत" not in hi
+    assert te.count("పరిమితమైనట్లు") == 1 and "మీ పొలానికే" not in te
+    assert en.count("not proof of") == 1
     assert "पूरा इलाक़ा" not in hi and "पूरे इलाक़े" not in hi and "ప్రాంతమంత" not in te

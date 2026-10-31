@@ -45,13 +45,13 @@ def tests_line(ev: Evidence) -> tuple[str, str, str] | None:
         )
     if far:
         return (
-            "मैं तूफ़ान के इलाक़े से बाहर के खेतों से ज़्यादा बदला। आसपास के खेतों से फ़र्क़ इतना साफ़ नहीं कि पक्का कहा जाए, और हो सकता है "
-            "वे भी प्रभावित हुए हों, इसलिए असर सिर्फ़ मुझ तक सीमित नहीं दिखता। यह घटना से मेल खाता है, पर यह उसके कारण का प्रमाण नहीं है।",
-            "I changed more than fields outside the storm area. The difference from the fields around me is not "
-            "clear enough to call, and they may have been affected too, so the effect does not look limited to me. "
-            "That is consistent with the event, but it is not proof of the cause.",
-            "నేను తుఫాను ప్రాంతం వెలుపలి పొలాల కంటే ఎక్కువగా మారాను. నా చుట్టుపక్కల పొలాలతో తేడా ఖచ్చితంగా చెప్పేంత స్పష్టంగా లేదు, అవి కూడా "
-            "ప్రభావితమై ఉండవచ్చు, కాబట్టి ప్రభావం నా వరకే పరిమితమైనట్లు కనిపించడం లేదు. ఇది సంఘటనకు సరిపోలుతోంది, కానీ అది కారణానికి రుజువు కాదు.",
+            ("मैं तूफ़ान के इलाक़े से बाहर के खेतों से ज़्यादा बदला। आसपास के खेतों से फ़र्क़ इतना साफ़ नहीं कि पक्का कहा जाए, और हो सकता है "
+             "वे भी प्रभावित हुए हों, इसलिए असर सिर्फ़ मुझ तक सीमित नहीं दिखता। यह घटना से मेल खाता है, पर यह उसके कारण का प्रमाण नहीं है।"),
+            ("I changed more than fields outside the storm area. The difference from the fields around me is not "
+             "clear enough to call, and they may have been affected too, so the effect does not look limited to me. "
+             "That is consistent with the event, but it is not proof of the cause."),
+            ("నేను తుఫాను ప్రాంతం వెలుపలి పొలాల కంటే ఎక్కువగా మారాను. నా చుట్టుపక్కల పొలాలతో తేడా ఖచ్చితంగా చెప్పేంత స్పష్టంగా లేదు, అవి కూడా "
+             "ప్రభావితమై ఉండవచ్చు, కాబట్టి ప్రభావం నా వరకే పరిమితమైనట్లు కనిపించడం లేదు. ఇది సంఘటనకు సరిపోలుతోంది, కానీ అది కారణానికి రుజువు కాదు."),
         )
     if ring:
         return (

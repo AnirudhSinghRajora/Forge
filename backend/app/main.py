@@ -23,7 +23,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from app.agent import parse as report_parse
 from app import disclosures, errors, limits
-from app.agent import rubric, runner
+from app.agent import advisory, current_text, rubric, runner
 from app.agent.plot import PlotRejected, check_pin, validate_polygon
 from app.config import VERSION, get_settings
 from app.db import Action, Case, EvidenceRow, Plot, Run, RunEvent, init_db, session_scope
@@ -396,7 +396,9 @@ def create_case(
         elif text:
             llm_parsed = llm.bounded(25, llm.parse_text, text, lang)
         if llm_parsed is not None:
-            parsed = llm.merge_parsed(llm_parsed, parsed)
+            # A voice note has no typed text, so the fixed rules read what Gemini heard to fill gaps.
+            fallback = parsed if parsed.transcript else report_parse.parse_text(llm_parsed.transcript)
+            parsed = llm.merge_parsed(llm_parsed, fallback)
     elif audio is not None:
         audio_failed = True
 
@@ -422,7 +424,7 @@ def create_case(
             "event_date": parsed.event_date.isoformat() if parsed.event_date else None,
             "event_time": parsed.event_time, "transcript": parsed.transcript,
             "confidence": parsed.confidence, "llm_used": parsed.llm_used,
-            "date_note": parsed.date_note,
+            "date_note": parsed.date_note, "clarifying_question": parsed.clarifying_question,
         },
         "needs": needs,
         "questions": {n: QUESTIONS[n] for n in needs if n in QUESTIONS},
@@ -574,7 +576,7 @@ def get_case(case_id: str, request: Request, lang: str | None = Query(None)) -> 
         row = _latest_evidence(s, case_id)
         evidence = parsed = None
         if row is not None:
-            evidence = _public_evidence(_with_live_route(dict(row.json), case, lang or case.lang))
+            evidence = _public_evidence(current_text.refresh(_with_live_route(dict(row.json), case, lang or case.lang)))
             parsed = Evidence.model_validate(evidence)
         items = s.scalars(
             select(Action).where(Action.case_id == case_id).order_by(Action.created_at)
@@ -609,9 +611,10 @@ def _public_evidence(evidence: dict) -> dict:
 
 
 def _public_exhibits(exhibits: dict | None) -> dict:
+    shown = {name: advisory.public(name, entry) for name, entry in (exhibits or {}).items()}
     return {
         name: {**entry, "reason": errors.public_text(entry.get("reason"), "it could not be computed; it can be retried")}
-        for name, entry in (exhibits or {}).items()
+        for name, entry in shown.items()
     }
 
 
@@ -750,17 +753,20 @@ async def stream_run(
 
 
 _PDF_RENDERS = threading.BoundedSemaphore(2)  # each render is heavy on memory
+PDF_TEXT_VERSION = 2  # raised when the fixed wording or labels change, so an older render is not reused
 
 
 def _pdf_cache_path(evidence: Evidence, case: dict, exhibits: dict, lang: str, base_url: str) -> Path:
     """Everything the page prints that is not fixed by the seal: the route as it stands now, the
     deadline's status, what could not be computed, and where the QR code points."""
     state = {
+        "text_version": PDF_TEXT_VERSION,
         "lang": lang, "base_url": base_url, "event_time": case.get("event_time"),
         "district": case.get("district"), "state": case.get("state"),
         "claim_path": evidence.claim_path.model_dump(mode="json") if evidence.claim_path else None,
         "deadlines": [d.model_dump(mode="json") for d in evidence.deadlines],
-        "failed": sorted((k, v.get("reason") or "") for k, v in exhibits.items() if v.get("status") == "failed"),
+        "failed": sorted((k, v.get("reason") or "") for k, v in exhibits.items()
+                         if v.get("status") == "failed" and k not in advisory.NAMES),
     }
     digest = hashlib.sha256(json.dumps(state, sort_keys=True, ensure_ascii=False).encode()).hexdigest()[:24]
     folder = f"pdf_{evidence.evidence_hash[:16]}"
@@ -800,7 +806,7 @@ def evidence_pdf(case_id: str, request: Request, lang: str = Query("hi")) -> Res
                                 if e.get("status") == "pending"],
                 },
             )
-        evidence = Evidence.model_validate(_with_live_route(dict(row.json), case, lang))
+        evidence = Evidence.model_validate(current_text.refresh(_with_live_route(dict(row.json), case, lang)))
         case_info = _case_dict(s, case)
         items = s.scalars(select(Action).where(Action.case_id == case_id)).all()
         actions = [_action_dict(a) for a in items]
@@ -840,7 +846,7 @@ def summary_audio(
         row = _latest_evidence(s, case_id)
         if row is None:
             raise HTTPException(404, detail="no evidence yet")
-        evidence = Evidence.model_validate(row.json)
+        evidence = Evidence.model_validate(current_text.refresh(dict(row.json)))
     path = explain.summary_audio_path(evidence, lang, kind)
     if path is None:
         raise HTTPException(404, detail="no TTS available; use browser speech")
@@ -906,12 +912,48 @@ class AskBody(BaseModel):
 
 @app.post("/api/cases/{case_id}/ask")
 def ask(case_id: str, body: AskBody, request: Request) -> dict:
-    from app.tools import policy
+    """Answers from this case's record and the cited clauses. It reads the record and writes nothing."""
+    from app.agent import claim_path, witness
 
     with session_scope() as s:
-        _get_case(s, case_id)
-    limits.enforce(request, "asks", get_settings().rate_asks_per_hour)
-    return policy.ask(body.question, body.lang)
+        case = _get_case(s, case_id)
+        limits.enforce(request, "asks", get_settings().rate_asks_per_hour)
+        row = _latest_evidence(s, case_id)
+        evidence, next_steps = None, None
+        if row is not None and row.verdict_level:
+            evidence = Evidence.model_validate(current_text.refresh(_with_live_route(
+                dict(row.json), case, body.lang if body.lang in ("hi", "en", "te") else case.lang)))
+            next_steps = claim_path.text_by_language(case)
+    return witness.ask(body.question, body.lang, evidence, next_steps)
+
+
+@app.post("/api/cases/{case_id}/advisories")
+def start_advisories(case_id: str, request: Request) -> dict:
+    """Starts what Gemini has not yet looked at on this record: the runs do this themselves, and a
+    record sealed before a key existed gets it here. A request that starts nothing costs nothing."""
+    from app.agent import llm
+
+    with session_scope() as s:
+        case = _get_case(s, case_id)
+        row = _latest_evidence(s, case_id)
+        if row is None or not row.verdict_level:
+            raise HTTPException(409, detail="there is no result to look at yet")
+        evidence = Evidence.model_validate(row.json)
+        run_id, exhibits = row.run_id, dict(row.exhibits or {})
+        transcript, crop_stage = case.transcript, case.crop_stage
+    if not llm.available():
+        return {"gemini": False, "started": []}
+    wanted = []
+    for name in advisory.NAMES:
+        entry = exhibits.get(name)
+        if entry is None or entry.get("status") == "failed" or advisory.is_stale(entry):
+            wanted.append(name)
+    if (exhibits.get("chips") or {}).get("status", "done") != "done" and advisory.IMAGE_OPINION in wanted:
+        wanted.remove(advisory.IMAGE_OPINION)
+    if not wanted:
+        return {"gemini": True, "started": []}
+    limits.enforce(request, "advisories", get_settings().rate_advisories_per_hour)
+    return {"gemini": True, "started": advisory.start(run_id, evidence, tuple(wanted), transcript, crop_stage)}
 
 
 # Verification, artifacts, jobs, radar
