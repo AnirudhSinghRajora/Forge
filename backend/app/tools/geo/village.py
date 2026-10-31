@@ -36,6 +36,8 @@ OPTICAL_DROP = -0.15
 SAR_DROP_DB = -3.0
 # Below these, "half of this plot's change" would be half of noise, so that share is not reported.
 MIN_MEANINGFUL_DROP = {"s2": -0.05, "s1": -1.0}
+VISIBLE_DROP = {"s2": OPTICAL_DROP, "s1": SAR_DROP_DB}  # the same thresholds affected_share uses
+MIN_AFFECTED_SHARE_OF_PARCEL = 0.5
 
 
 @dataclass(frozen=True)
@@ -163,6 +165,23 @@ def share_below_half(averages: np.ndarray, plot_value: float, sensor: str) -> fl
     return float(np.mean(averages > plot_value / 2))
 
 
+def affected_candidates(
+    values: np.ndarray, offsets: np.ndarray, mask: np.ndarray, affected: np.ndarray, sensor: str
+) -> np.ndarray:
+    """Indices of parcels that visibly dropped, by the same definition as `affected_share`.
+
+    The parcel's change must pass the drop threshold, and most of its pixels must count as affected.
+    That second part keeps out harvest-like bare soil on optical, as the affected share does.
+    """
+    rows, cols = np.nonzero(mask)
+    rel_r, rel_c = rows - rows.min(), cols - cols.min()
+    keep = []
+    for index, (y, x) in enumerate(offsets):
+        if values[index] <= VISIBLE_DROP[sensor] and affected[rel_r + y, rel_c + x].mean() >= MIN_AFFECTED_SHARE_OF_PARCEL:
+            keep.append(index)
+    return np.asarray(keep, dtype=int)
+
+
 def clustering_problem(offsets: np.ndarray, res_m: int) -> str | None:
     """Reason why candidates are too bunched for a 'random parcels across the area' reading."""
     cell = max(1, CLUSTER_CELL_M // res_m)
@@ -207,6 +226,17 @@ def _lottery(change: ChangeMap, plot: Plot, ring: np.ndarray, seed: int) -> Surv
 
     averages, draws = simulate_surveys(placements.values, seed)
     p05, p50, p95 = np.percentile(averages, [5, 50, 95])
+
+    # Second scenario: only fields that visibly dropped, closer to who would report a loss.
+    chosen = affected_candidates(placements.values, placements.offsets, change.mask, change.affected, change.sensor)
+    only_median = only_p05 = only_p95 = only_reason = None
+    if chosen.size < MIN_CANDIDATES:
+        only_reason = (
+            f"only {chosen.size} parcels visibly dropped (need {MIN_CANDIDATES}), so this scenario has no numbers"
+        )
+    else:
+        only_averages, _ = simulate_surveys(placements.values[chosen], seed + 1)
+        only_p05, only_median, only_p95 = np.percentile(only_averages, [5, 50, 95])
     counts, edges = np.histogram(averages, bins=HIST_BINS)
     rows, cols = np.nonzero(change.mask)
     grid = change.grid
@@ -231,6 +261,11 @@ def _lottery(change: ChangeMap, plot: Plot, ring: np.ndarray, seed: int) -> Surv
         average_p05=r4(p05),
         average_p95=r4(p95),
         share_below_half_of_plot=r4(share_below_half(averages, change.plot_value, change.sensor)),
+        affected_only_n_candidates=int(chosen.size),
+        affected_only_median=r4(only_median),
+        affected_only_p05=r4(only_p05),
+        affected_only_p95=r4(only_p95),
+        affected_only_reason=only_reason,
         histogram_edges=[r4(e) for e in edges],
         histogram_counts=[int(c) for c in counts],
         sample_draws=sample,

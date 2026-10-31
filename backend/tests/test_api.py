@@ -760,3 +760,36 @@ def test_background_reads_are_limited(client, monkeypatch):
     assert 1 <= peak[0] <= graph.MAX_BACKGROUND_READS
     exhibits = client.get(f"/api/cases/{case_id}").json()["exhibits"]
     assert all(exhibits[n]["status"] == "done" for n in ("village", "scale_fade", "chips", "timeline"))
+
+
+def test_slow_comparison_lands_behind_a_provisional_verdict(client, monkeypatch):
+    from app.agent import graph
+    from tests import conftest
+
+    monkeypatch.setattr(graph, "VERDICT_TARGET_S", 0.05)
+    release = threading.Event()
+    base = conftest.evidence(cross=[])
+
+    def slow_compare(*a, **k):
+        release.wait(20)
+        return base.optical, base.neighbours
+
+    install_fake_geo(monkeypatch, optical_compare=slow_compare)
+    case_id = new_case(client, insured="yes", crop_stage="standing")
+    run_id = client.post(f"/api/cases/{case_id}/investigate").json()["run_id"]
+    body = None
+    start = time.time()
+    while time.time() - start < 15:
+        body = client.get(f"/api/cases/{case_id}").json()
+        if body["verdict_ready"]:
+            break
+        time.sleep(0.05)
+    assert body["evidence"]["verdict"]["level"] == "insufficient"
+    assert "still computing" in body["evidence"]["verdict"]["reasons"][0]
+    release.set()
+    events = wait_done(client, run_id)
+    verdicts = [e["detail"] for e in events if e["type"] == "verdict"]
+    assert verdicts[0]["provisional"] is True and verdicts[-1]["level"] == "strong"
+    final = client.get(f"/api/cases/{case_id}").json()
+    assert final["sealed"] and final["exhibits"]["history"]["status"] == "done"
+    assert final["exhibits"]["sar"]["status"] == "done" and final["evidence"]["sar"]

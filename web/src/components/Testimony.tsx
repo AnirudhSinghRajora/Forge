@@ -6,27 +6,11 @@ import { Stamp } from "./Stamp";
 import { useInView, usePrefersReducedMotion } from "./Bits";
 import { dayLabel, num } from "../format";
 import { bboxOfRing } from "../geo";
+import { ndviColour } from "../plain";
 import type { Chip, Evidence } from "../types";
 
 interface Frame {
   date: string; sensor: "s2" | "s1"; ndvi: number | null; vh: number | null; qa: string | null; chip: Chip | null;
-}
-
-/** NDVI to the chip's own RdYlGn stretch (-0.1 to 0.9), so a silhouette and a chip read alike. */
-function ndviColour(v: number): string {
-  const stops: [number, [number, number, number]][] = [
-    [0, [165, 0, 38]], [0.25, [244, 109, 67]], [0.5, [255, 255, 191]], [0.75, [102, 189, 99]], [1, [0, 104, 55]],
-  ];
-  const p = Math.max(0, Math.min(1, (v + 0.1) / 1.0));
-  for (let i = 1; i < stops.length; i++) {
-    if (p <= stops[i][0]) {
-      const [a, ca] = stops[i - 1];
-      const [b, cb] = stops[i];
-      const f = (p - a) / (b - a);
-      return `rgb(${ca.map((c, k) => Math.round(c + (cb[k] - c) * f)).join(",")})`;
-    }
-  }
-  return "rgb(0,104,55)";
 }
 
 function vhGrey(db: number): string {

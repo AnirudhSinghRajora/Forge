@@ -1011,12 +1011,27 @@ def n_optical_compare(state: State, ctx: Ctx) -> dict:
                 "pretrend_delta": r[1].pretrend_delta,
                 "gap_at_post": r[1].counterfactual.gap_at_post if r[1].counterfactual else None,
             },
-            pre=pre.id, post=post.id, seed=seed,
+            timeout_s=EXHIBIT_TIMEOUT_S, pre=pre.id, post=post.id, seed=seed,
         )
 
     update: dict = {"evidence": ev, "optical_failed": False}
+    running = _TOOLS.submit(compare)
     try:
-        optical, neighbours = compare()
+        optical, neighbours = running.result(timeout=max(5.0, VERDICT_TARGET_S - ctx.elapsed()))
+    except FutureTimeout:
+        # The bytes are slow, not wrong. A provisional verdict goes out on time, marked as such,
+        # and the comparison lands behind it as late evidence.
+        ctx.emit("decision", "optical_compare",
+                 "तस्वीरें अभी डाउनलोड हो रही हैं। तुलना पीछे चलती रहेगी और आते ही नतीजा बदल जाएगा।",
+                 "The images are still downloading. The comparison carries on behind the result and "
+                 "will update it as soon as it lands.",
+                 action="optical_continues", pre=pre.id, post=post.id)
+
+        def land():
+            o, n = running.result()
+            return {"considered": [], "optical": o, "neighbours": n, "pre": pre, "post": post}
+
+        ctx.optical_future = _TOOLS.submit(land)
     except ToolFailed:
         update["optical_failed"] = True
     else:
@@ -1178,6 +1193,8 @@ def _apply_late_optical(ctx: Ctx, ev: Evidence, result: dict, state: State) -> N
     ev.neighbours = result["neighbours"]
     for name, scene in (("optical.pre", result["pre"]), ("optical.post", result["post"])):
         _prov(ev, name, f"{PC} (sentinel-2-l2a)", asset=scene.id)
+    if ctx.sar_future is None and ev.sar is None and ctx.exhibits["sar"]["status"] == "pending":
+        ctx.sar_future = _TOOLS.submit(gated(ctx, lambda: run_sar(state, ctx, "optical_compare", True)))
     if ctx.history_future is None and ev.history is None and ev.optical.pre is not None:
         ctx.set_exhibit("history", "pending")
         polygon, event_date = state["polygon"], ev.event.date
@@ -1526,6 +1543,8 @@ def n_exhibits(state: State, ctx: Ctx) -> dict:
             _reexamine(ctx, ev, state)
             persist(ctx, ev)
     ctx.optical_future = None
+    if ctx.sar_future is None and ctx.exhibits["sar"]["status"] == "pending":
+        ctx.set_exhibit("sar", "not_applicable", "radar corroboration was not run")
     # Dict order is priority: the Ten-Field Draw, then the scale view that shares its change map.
     runners = _exhibit_runners(ctx, ev, polygon, seed)
     futures = {_TOOLS.submit(gated(ctx, fn)): name for name, fn in runners.items()}

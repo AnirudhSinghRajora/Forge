@@ -206,3 +206,14 @@ GEO's validation found two faults. (1) Field-vs-ring placebo has low power insid
 3. An independent event not used in design: Sirsa hail, 14 Mar 2025 (events.md C2).
 
 **Second data source:** Earth Search (`earth-search.aws.element84.com/v1`, public, no account) has Sentinel-2 `S2C_44QND_20261031_0_L2A` over the Godavari delta, 40% tile cloud, not yet on Planetary Computer. Add it as a fallback source for Sentinel-2. `ReplayCore` and provenance record which archive each scene came from, and QA and offset handling apply unchanged. Planetary Computer stays primary.
+
+## Addendum 5, 31 Oct 2026, 11:15 PM: what the real numbers say, and the new order
+Measured on the Bhiwani in-swath plot (28.700911 N, 76.215719 E, the most extreme of 200 scanned): the Vanishing runs −0.437 (10 m), −0.352, −0.267, −0.164, −0.098 (3 km). The Ten-Field Draw averages −0.080 with a p05-p95 of −0.129 to −0.039.
+
+**New exhibit order: (1) The storm's footprint and the Vanishing, (2) the Ten-Field Draw.** The Vanishing is the stronger and simpler result. Its question is about area-yield scale (Gram Panchayat), as Addendum 2 requires.
+
+**The Draw gets a second scenario.** Real surveys sample the intimation list, and reporting farmers are likely to be the damaged ones, so drawing from all cropland understates the average. Show both side by side: "all cropland" and "only fields that visibly dropped" (`affected_only_*`). The true list lies somewhere between, and we don't know it. Report the spread within each. Do not lean on the plot-vs-average gap as a survey finding.
+
+**Selection must be disclosed.** Any plot chosen from a scan is labelled as such, with the count ("strongest of 200 scanned"). Add a typical in-band plot beside the extreme one, chosen by rule (the median in-band plot), and report the distribution of the Draw and Vanishing results across in-band plots.
+
+**Arnab:** at tile scale, the east-west gradient is mostly seasonal (about −0.1 is normal for these weeks in 2023 and 2024). No Arnab signal is established at tile scale. Do not present the 31 Oct gradient as storm damage. Reports of flattened paddy are not contradicted: lodged paddy can stay green.

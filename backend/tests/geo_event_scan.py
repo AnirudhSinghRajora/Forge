@@ -37,6 +37,8 @@ def main() -> None:
     ap.add_argument("--s1-post")
     ap.add_argument("--n", type=int, default=200)
     ap.add_argument("--seed", type=int, default=20261031)
+    ap.add_argument("--margin-px", type=int, default=MARGIN_PX)
+    ap.add_argument("--far", action="store_true", help="also run the far test; needs network per plot")
     ap.add_argument("--out", required=True)
     args = ap.parse_args()
 
@@ -63,8 +65,8 @@ def main() -> None:
             attempts += 1
             side = float(rng.uniform(100.0, 141.4))
             hw = int(math.ceil(side / 20))
-            r = int(rng.integers(MARGIN_PX, grid.height - MARGIN_PX))
-            c = int(rng.integers(MARGIN_PX, grid.width - MARGIN_PX))
+            r = int(rng.integers(args.margin_px, grid.height - args.margin_px))
+            c = int(rng.integers(args.margin_px, grid.width - args.margin_px))
             if np.mean(cover[r - hw: r + hw, c - hw: c + hw] == CROPLAND) < 0.8:
                 continue
             lon, lat = to_ll.transform(grid.left + (c + 0.5) * 10, grid.top - (r + 0.5) * 10)
@@ -74,13 +76,16 @@ def main() -> None:
             rec: dict = dict(i=done, lon=round(lon, 6), lat=round(lat, 6), side_m=round(side, 1))
             try:
                 if args.s2_pre and args.s2_post:
-                    optical, neighbours = _optical_compare(poly, args.s2_pre, args.s2_post, seed=done, with_twin=False)
+                    optical, neighbours = _optical_compare(poly, args.s2_pre, args.s2_post, seed=done, with_twin=False, with_far=args.far)
                     p = neighbours.placebo
                     rec.update(
                         pre_ndvi=optical.pre.ndvi_median, post_ndvi=optical.post.ndvi_median, delta=optical.plot_delta_ndvi,
                         drop_frac=optical.drop_frac, pattern=optical.within_plot_pattern, bare=optical.post_bare_fraction,
                         neighbour_delta=neighbours.neighbour_median_delta, neighbour_bare=neighbours.neighbour_bare_fraction_post,
                         n_placebos=p.n_placebos, p=p.p_value, placebo_median=p.placebo_median, insufficient=p.insufficient_reason,
+                        far_p=neighbours.far_placebo.p_value if neighbours.far_placebo else None,
+                        far_n=neighbours.far_placebo.n_placebos if neighbours.far_placebo else None,
+                        far_insufficient=neighbours.far_placebo.insufficient_reason if neighbours.far_placebo else None,
                     )
             except (SceneUnusable, PlotError) as exc:
                 skipped[str(exc)[:60]] = skipped.get(str(exc)[:60], 0) + 1

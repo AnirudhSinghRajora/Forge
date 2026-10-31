@@ -96,7 +96,7 @@ def main() -> None:
             if plot.epsg != EPSG:
                 continue
             try:
-                optical, neighbours = _optical_compare(poly, pre_id, post_id, seed=done, with_twin=False)
+                optical, neighbours = _optical_compare(poly, pre_id, post_id, seed=done, with_twin=False, with_far=False)
             except SceneUnusable as exc:
                 skipped += 1
                 print("skip", exc, flush=True)

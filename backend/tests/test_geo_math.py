@@ -17,7 +17,7 @@ from app.tools.geo.qa import RawQA, apply_q5, evaluate_optical, evaluate_sar
 from app.tools.geo.sar import water_threshold
 from app.tools.geo.scale import block_average
 from app.tools.geo.twin import field_twin
-from app.tools.geo.village import clustering_problem, share_below_half, simulate_surveys
+from app.tools.geo.village import affected_candidates, clustering_problem, share_below_half, simulate_surveys
 
 
 def square(lon=75.03, lat=29.53, side_m=120.0):
@@ -345,6 +345,16 @@ class TestLottery:
     def test_share_is_not_reported_for_a_noise_level_plot(self):
         assert share_below_half(np.array([-0.4, 0.0]), -0.01, "s2") is None
         assert share_below_half(np.array([-4.0, 0.0]), -0.5, "s1") is None
+
+    def test_affected_candidates_require_a_drop_and_mostly_affected_pixels(self):
+        mask = np.zeros((20, 20), bool)
+        mask[0:2, 0:2] = True
+        affected = np.zeros((20, 20), bool)
+        affected[10:12, 10:12] = True  # the first parcel
+        affected[14, 14] = True  # the second has only one of four pixels affected
+        offsets = np.array([[10, 10], [14, 14], [10, 10]])
+        values = np.array([-0.3, -0.3, -0.05])  # the third passes on pixels but not on the drop
+        assert affected_candidates(values, offsets, mask, affected, "s2").tolist() == [0]
 
     def test_clustering(self):
         assert clustering_problem(np.array([[0, 0], [1, 1], [2, 2]]), 10) is not None

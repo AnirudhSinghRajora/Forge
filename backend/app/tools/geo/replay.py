@@ -84,7 +84,8 @@ def flatten_numbers(
         lottery = village.lottery
         if lottery is not None:
             for name in ("n_simulations", "plot_value", "n_candidate_parcels", "average_median", "average_p05",
-                         "average_p95", "share_below_half_of_plot"):
+                         "average_p95", "share_below_half_of_plot", "affected_only_n_candidates", "affected_only_median",
+                         "affected_only_p05", "affected_only_p95"):
                 out[f"village.lottery.{name}"] = r4(getattr(lottery, name))
     if scale_fade is not None:
         out["scale_fade.sensor_is_s1"] = 1.0 if scale_fade.sensor == "s1" else 0.0

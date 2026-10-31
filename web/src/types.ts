@@ -30,7 +30,8 @@ export interface OpticalEvidence {
 }
 export interface NeighbourEvidence {
   ring_m: [number, number]; n_comparable_pixels: number; neighbour_median_delta: number | null; plot_minus_neighbour: number | null;
-  neighbour_bare_fraction_post?: number | null; placebo?: PlaceboTest | null; counterfactual?: Counterfactual | null;
+  neighbour_bare_fraction_post?: number | null; placebo?: PlaceboTest | null; far_placebo?: PlaceboTest | null;
+  pretrend_delta?: number | null; pretrend_placebo?: PlaceboTest | null; counterfactual?: Counterfactual | null;
 }
 export interface HistoryYear { year: number; pre_scene_id: string | null; post_scene_id: string | null; pre_ndvi: number | null; delta_ndvi: number | null; note?: string | null }
 export interface HistoryEvidence { years: HistoryYear[]; typical_delta?: number | null; excess_vs_history?: number | null; downweighted?: boolean; note?: string | null }
@@ -71,6 +72,7 @@ export interface SurveyDraw { parcels: [number, number][]; average: number }
 export interface SurveyLottery {
   n_simulations: number; parcels_per_survey: number; statistic: string; plot_value: number | null; n_candidate_parcels: number;
   average_median: number | null; average_p05: number | null; average_p95: number | null; share_below_half_of_plot: number | null;
+  affected_only_n_candidates?: number | null; affected_only_median?: number | null; affected_only_p05?: number | null; affected_only_p95?: number | null;
   histogram_edges: number[]; histogram_counts: number[]; sample_draws: SurveyDraw[]; seed: number; insufficient_reason?: string | null;
   rule_applicability: "may_apply" | "illustration_only";
 }

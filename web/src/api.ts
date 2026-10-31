@@ -85,7 +85,11 @@ export function createCase(input: CreateCaseInput): Promise<CreateCaseResponse> 
   return request<CreateCaseResponse>("/api/cases", { method: "POST", body: fd }, 120000);
 }
 
-export interface CaseEnvelope { case: CaseRecord; evidence: Evidence | null; actions: ActionRecord[] | null }
+export interface ExhibitStatus { status: "pending" | "done" | "failed" | "not_applicable"; reason?: string | null; updated_at?: string | null }
+export interface CaseEnvelope {
+  case: CaseRecord; evidence: Evidence | null; actions: ActionRecord[] | null;
+  sealed?: boolean; verdict_ready?: boolean; exhibits?: Record<string, ExhibitStatus>;
+}
 
 /** The case row from _case_dict in backend/app/main.py. */
 export interface CaseRecord {
@@ -119,6 +123,9 @@ export const postSubmission = (id: string, body: { channel: string; reference_no
   request<CaseRecord>(`/api/cases/${encodeURIComponent(id)}/submission`, { method: "POST", ...json(body) });
 export const askPolicy = (id: string, question: string, lang: string) =>
   request<AskResponse>(`/api/cases/${encodeURIComponent(id)}/ask`, { method: "POST", ...json({ question, lang }) }, 60000);
+
+export const retryExhibit = (id: string, name: string) =>
+  request<{ run_id: string; exhibit: string; status: string }>(`/api/cases/${encodeURIComponent(id)}/exhibits/${encodeURIComponent(name)}/retry`, { method: "POST" });
 
 export const artifactUrl = (path: string) => {
   // The server's path may be relative to the artifact root or a full path under it.

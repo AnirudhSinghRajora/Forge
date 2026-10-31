@@ -256,7 +256,7 @@ class Deadline(BaseModel):
 
 
 class Chip(BaseModel):
-    kind: Literal["true_colour_pre", "true_colour_post", "ndvi_pre", "ndvi_post", "delta_map", "sar_change"]
+    kind: Literal["true_colour_pre", "true_colour_post", "ndvi_pre", "ndvi_post", "delta_map", "sar_change", "region_map"]
     path: str  # served by GET /artifacts/{path}
     scene_id: str | None = None
     date: Date | None = None
@@ -309,6 +309,13 @@ class SurveyLottery(BaseModel):
     average_p05: float | None
     average_p95: float | None
     share_below_half_of_plot: float | None  # share of surveys whose average change is under half of this plot's
+    # Second scenario: parcels drawn only from fields that visibly dropped, closer to who reports a loss.
+    affected_only_n_candidates: int | None = None
+    affected_only_median: float | None = None
+    affected_only_p05: float | None = None
+    affected_only_p95: float | None = None
+    # Why that scenario is empty. Separate from insufficient_reason, which hides the whole Draw.
+    affected_only_reason: str | None = None
     histogram_edges: list[float] = []
     histogram_counts: list[int] = []
     sample_draws: list[SurveyDraw] = []  # a few real draws, for the map animation
