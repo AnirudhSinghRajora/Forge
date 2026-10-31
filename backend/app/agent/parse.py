@@ -48,7 +48,7 @@ _EVENTS: list[tuple[str, tuple[str, ...], tuple[str, ...]]] = [
     ("pest", ("pest", "pests", "insect", "insects", "bollworm", "sundi", "keet"),
      ("कीट", "कीड़", "सुंडी", "పురుగు", "తెగులు")),
     ("drought", ("drought", "sukha", "sookha"), ("सूखा", "కరువు", "ఎండిపో")),
-    ("wind", ("wind", "gale", "storm", "windstorm", "toofan", "tufan", "aandhi", "andhi"),
+    ("wind", ("wind", "gale", "storm", "windstorm", "toofan", "tufan", "tufaan", "aandhi", "andhi"),
      ("आंधी", "आँधी", "तूफान", "तूफ़ान", "तेज़ हवा", "तेज हवा", "గాలి", "ఈదురు")),
     ("unseasonal_rain", ("rain", "rains", "rainfall", "raining", "baarish", "barish", "barsaat",
                          "barsat", "varsha"),
@@ -96,6 +96,7 @@ class ParsedReport:
     confidence: float = 0.0
     date_note: str | None = None
     llm_used: bool = False
+    clarifying_question: str | None = None  # from Gemini, through the validator; it changes no field
     extra: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:
@@ -108,6 +109,7 @@ class ParsedReport:
             "confidence": self.confidence,
             "date_note": self.date_note,
             "llm_used": self.llm_used,
+            "clarifying_question": self.clarifying_question,
         }
 
 
@@ -228,6 +230,11 @@ def extract_date(text: str, today: date | None = None) -> tuple[date | None, str
     return found, None
 
 
+def _hindi_word(word: str) -> str:
+    """निकल contains कल and आजकल contains आज, and neither is a date."""
+    return rf"(?<![\u0900-\u097F]){word}(?![\u0900-\u097F])"
+
+
 def _relative_days(lowered: str) -> int | None:
     if m := re.search(rf"(\d{{1,2}}|{_NUM_ALT})\s*(?:दिन|din|days?|రోజుల|రోజులు|రోజు)\s*"
                       r"(?:पहले|pehle|pahle|ago|back|క్రితం|కిందట|ముందు)", lowered):
@@ -235,9 +242,9 @@ def _relative_days(lowered: str) -> int | None:
         return int(word) if word.isdigit() else _NUMBER_WORDS.get(word)
     if re.search(r"day before yesterday|परसों|parson|parso|మొన్న", lowered):
         return 2
-    if re.search(r"(?<![a-z])(yesterday|last night|kal)(?![a-z])|कल|నిన్న", lowered):
+    if re.search(rf"(?<![a-z])(yesterday|last night|kal)(?![a-z])|{_hindi_word('कल')}|నిన్న", lowered):
         return 1
-    if re.search(r"(?<![a-z])(today|tonight|this morning|aaj)(?![a-z])|आज|ఈరోజు|ఈ రోజు|నేడు", lowered):
+    if re.search(rf"(?<![a-z])(today|tonight|this morning|aaj)(?![a-z])|{_hindi_word('आज')}|ఈరోజు|ఈ రోజు|నేడు", lowered):
         return 0
     return None
 

@@ -65,10 +65,12 @@ def signed(x: float) -> str:
     return "0.00" if abs(x) < 0.005 else f"{x:+.2f}"
 
 
-def _obj(oid, challenge_hi, challenge_en, test, measured, outcome, finding_hi, finding_en):
+def _obj(oid, challenge_hi, challenge_en, test, measured, outcome, finding_hi, finding_en,
+         finding_te=None, challenge_te=None):
     return Objection(
         id=oid, challenge_hi=challenge_hi, challenge_en=challenge_en, test=test,
         measured=measured, outcome=outcome, finding_hi=finding_hi, finding_en=finding_en,
+        finding_te=finding_te, challenge_te=challenge_te,
     )
 
 
@@ -460,6 +462,8 @@ def check_corrupt_scene(ev: Evidence) -> tuple[Objection, list[str]]:
 def check_regional_trend(ev: Evidence) -> Objection:
     challenge_hi = "पूरे इलाक़े में ऐसा ही हुआ है। इसमें आपके खेत की क्या ख़ास बात है?"
     challenge_en = "The whole area looks like this. What's special about your field?"
+    # NEEDS NATIVE REVIEW
+    challenge_te = "ప్రాంతం మొత్తం ఇలాగే ఉంది. మీ పొలంలో ప్రత్యేకత ఏమిటి?"
     test = (
         "Two same-shape placebo tests: against immediate neighbours (ring) and against comparable "
         f"fields 5-12 km away (far). Either at p <= {rubric.P_FIELD} counts."
@@ -479,8 +483,9 @@ def check_regional_trend(ev: Evidence) -> Objection:
 
     measured = {**facts("ring", ring), **facts("far", far), **facts("radar", sar)}
 
-    def out(outcome, hi, en):
-        return _obj("regional_trend", challenge_hi, challenge_en, test, measured, outcome, hi, en)
+    def out(outcome, hi, en, te=None):
+        return _obj("regional_trend", challenge_hi, challenge_en, test, measured, outcome, hi, en, te,
+                    challenge_te)
 
     if not optical:
         p = rubric.usable_p(sar)
@@ -534,10 +539,32 @@ def check_regional_trend(ev: Evidence) -> Objection:
             f"Your field stands apart from both distant and nearby fields: {far_en}; {ring_en}.",
         )
     if far_yes:
+        # The surveyor asked what sets this field apart, so that comes first. The ring test missing its
+        # line does not show that the neighbours changed as much.
+        far_te = (f"5-12 కి.మీ దూరంలోని {far.n_placebos} పోలికైన పొలాల్లో {far.n_at_least_as_extreme} పొలాలు ఇంత "
+                  f"మారాయి (p = {far_p:.3f})")
+        if ring_p is None:
+            return out(
+                "rebutted",
+                f"आपका खेत तूफ़ान के इलाक़े से बाहर के खेतों से अलग है: {far_hi}। पड़ोसी खेतों से तुलना नहीं हो सकी, इसलिए "
+                "यह नहीं कहा जा सकता कि असर सिर्फ़ आपके खेत तक है।",
+                f"Your field stands apart from fields outside the storm area: {far_en}. The comparison "
+                "with its neighbours was not available, so this cannot say whether the effect is limited "
+                "to your field.",
+                f"మీ పొలం తుఫాను ప్రాంతం వెలుపలి పొలాలకు భిన్నంగా ఉంది: {far_te}. పొరుగు పొలాలతో పోలిక కుదరలేదు, "
+                "కాబట్టి ప్రభావం మీ పొలానికే పరిమితమా అని చెప్పలేం.",
+            )
+        ring_te = (f"చుట్టుపక్కల {ring.n_placebos} పొలాల్లో {ring.n_at_least_as_extreme} పొలాలు ఇంత మారాయి, "
+                   f"p = {ring_p:.3f}")
         return out(
             "rebutted",
-            f"असर सिर्फ़ आपके खेत तक सीमित नहीं दिखता: {far_hi}; {ring_hi}।",
-            f"The effect does not look limited to your field: {far_en}; {ring_en}.",
+            f"आपका खेत तूफ़ान के इलाक़े से बाहर के खेतों से अलग है: {far_hi}। यह अपने पड़ोसियों से साफ़ तौर पर अलग नहीं है "
+            f"({ring_hi}), और हो सकता है वे भी प्रभावित हुए हों, इसलिए हो सकता है असर सिर्फ़ आपके खेत तक सीमित न हो।",
+            f"Your field stands apart from fields outside the storm area: {far_en}. It is not clearly "
+            f"different from its neighbours ({ring_en}), who may have been affected too, so the effect "
+            "may not be limited to your field.",
+            f"మీ పొలం తుఫాను ప్రాంతం వెలుపలి పొలాలకు భిన్నంగా ఉంది: {far_te}. ఇది పొరుగు పొలాలకు స్పష్టంగా భిన్నంగా లేదు "
+            f"({ring_te}), అవి కూడా ప్రభావితమై ఉండవచ్చు, కాబట్టి ప్రభావం మీ పొలానికే పరిమితం కాకపోవచ్చు.",
         )
     if ring_yes:
         return out(

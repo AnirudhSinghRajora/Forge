@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     rate_investigations_per_hour: int = 12
     rate_verify_per_hour: int = 3
     rate_asks_per_hour: int = 60
+    rate_advisories_per_hour: int = 30  # counted only when a request really starts Gemini work
     rate_cases_per_hour: int = 60
     rate_pdf_renders_per_hour: int = 60
     max_queued_runs: int = 8

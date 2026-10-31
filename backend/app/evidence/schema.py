@@ -227,6 +227,9 @@ class Objection(BaseModel):
     outcome: ObjectionOutcome
     finding_hi: str
     finding_en: str
+    # Not hashed. Telugu where it has been written; the screen falls back to English otherwise.
+    challenge_te: str | None = None
+    finding_te: str | None = None
 
 
 class Verdict(BaseModel):

@@ -302,6 +302,17 @@ _INTENTS = [
 ]
 
 
+def rule_intent(question: str) -> str | None:
+    """The verified rule this question asks about by name or intent, if any."""
+    routed = _intent_rule(question, (load_key_rules() or {}).get("rules") or {})
+    return routed[0] if routed else None
+
+
+def conflicted(question: str) -> bool:
+    """Official statements differ on paddy inundation, so only fixed text may answer this."""
+    return bool(_PADDY.search(question) and _INUNDATION.search(question))
+
+
 def _intent_rule(question: str, rules: dict) -> tuple[str, dict] | None:
     for name, matches in _INTENTS:
         rule = rules.get(name)
@@ -371,7 +382,7 @@ def ask(question: str, lang: str = "hi") -> dict:
         return {"answer": CORPUS_MISSING[lang], "citations": [], "covered": False,
                 "reason": UNAVAILABLE}
     not_covered = {"answer": NOT_COVERED[lang], "citations": [], "covered": False}
-    if _PADDY.search(question) and _INUNDATION.search(question):
+    if conflicted(question):
         return {"answer": PADDY_INUNDATION[lang],
                 "citations": _unverified_citations("paddy_localized_inundation_kharif_2026"),
                 "covered": True, "llm_used": False}

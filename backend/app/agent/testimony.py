@@ -21,12 +21,57 @@ log = logging.getLogger(__name__)
 _date_te = explain_mod._date_te
 
 
+# Addendum 7's caveat, in the voice of the rest of the testimony.
+NEAR_LINE = (
+    "एक निर्णायक तुलना सीमा के पास है, इसलिए मेरी सीमा थोड़ी अलग बनाने पर यह नतीजा बदल सकता है।",
+    "A deciding comparison is near the threshold, so a slightly different drawing of me could change this result.",
+    # NEEDS NATIVE REVIEW
+    "ఒక నిర్ణయాత్మక పోలిక హద్దు దగ్గర ఉంది, కాబట్టి నా సరిహద్దును కొద్దిగా వేరుగా గీస్తే ఈ ఫలితం మారవచ్చు.",
+)
+
+
+def tests_line(ev: Evidence) -> tuple[str, str, str] | None:
+    """Both answers, in the field's own voice. The far-yes, ring-no line carries the area-wide caveat
+    with it, so the testimony says it once."""
+    plain = explain_mod.tests_line(ev)
+    if plain is None or ev.neighbours is None or ev.optical.post is None:
+        return plain  # radar counts look-alike fields, and that sentence has no "your" in it
+    ring, far = rubric.ring_significant(ev), rubric.far_significant(ev)
+    if far and ring:
+        return (
+            "मैं दूर के खेतों से भी ज़्यादा बदला और अपने आसपास के खेतों से भी।",
+            "I changed more than distant fields and more than the fields around me.",
+            "నేను దూరంలోని పొలాల కంటే, నా చుట్టుపక్కల పొలాల కంటే కూడా ఎక్కువగా మారాను.",
+        )
+    if far:
+        return (
+            "मैं तूफ़ान के इलाक़े से बाहर के खेतों से ज़्यादा बदला। आसपास के खेतों से फ़र्क़ इतना साफ़ नहीं कि पक्का कहा जाए, और हो सकता है "
+            "वे भी प्रभावित हुए हों, इसलिए असर सिर्फ़ मुझ तक सीमित नहीं दिखता। यह घटना से मेल खाता है, पर यह उसके कारण का प्रमाण नहीं है।",
+            "I changed more than fields outside the storm area. The difference from the fields around me is not "
+            "clear enough to call, and they may have been affected too, so the effect does not look limited to me. "
+            "That is consistent with the event, but it is not proof of the cause.",
+            "నేను తుఫాను ప్రాంతం వెలుపలి పొలాల కంటే ఎక్కువగా మారాను. నా చుట్టుపక్కల పొలాలతో తేడా ఖచ్చితంగా చెప్పేంత స్పష్టంగా లేదు, అవి కూడా "
+            "ప్రభావితమై ఉండవచ్చు, కాబట్టి ప్రభావం నా వరకే పరిమితమైనట్లు కనిపించడం లేదు. ఇది సంఘటనకు సరిపోలుతోంది, కానీ అది కారణానికి రుజువు కాదు.",
+        )
+    if ring:
+        return (
+            "मैं अपने आसपास के खेतों से ज़्यादा बदला: यह बदलाव मुझ तक सीमित दिखता है।",
+            "I changed more than the fields around me: this looks local to me.",
+            "నేను నా చుట్టుపక్కల పొలాల కంటే ఎక్కువగా మారాను: ఈ మార్పు నా వరకే పరిమితమైనట్లు ఉంది.",
+        )
+    return (
+        "यह साफ़ नहीं दिखता कि मैं पास के या दूर के खेतों से ज़्यादा बदला।",
+        "I did not clearly change more than nearby fields, or more than distant ones.",
+        "నేను సమీప పొలాల కంటే గానీ, దూరంలోని పొలాల కంటే గానీ స్పష్టంగా ఎక్కువగా మారలేదు.",
+    )
+
+
 def _caveat_lines(ev: Evidence) -> tuple[list[str], list[str], list[str]]:
     hi, en, te = [], [], []
     if rubric.level_could_change(ev, ev.verdict.level if ev.verdict else "insufficient"):
-        hi.append(explain_mod.NEAR_LINE[0])
-        en.append(explain_mod.NEAR_LINE[1])
-        te.append(explain_mod.NEAR_LINE[2])
+        hi.append(NEAR_LINE[0])
+        en.append(NEAR_LINE[1])
+        te.append(NEAR_LINE[2])
     if rubric.ripening_unresolved(ev):
         later = rubric.recheck_possible(ev)
         hi.append("अगर मेरी फ़सल कटाई के क़रीब थी, तो यह गिरावट पकने से भी हो सकती है। बिना तुलना के मैं यह अलग नहीं कर सकता" + ("; अगली तस्वीर से मदद मिलेगी।" if later else "।"))
@@ -36,10 +81,6 @@ def _caveat_lines(ev: Evidence) -> tuple[list[str], list[str], list[str]]:
         hi.append("तस्वीरें और रडार यहाँ एक बात नहीं कहते: तस्वीरों में बदलाव दिखता है, रडार उसका समर्थन नहीं करता।")
         en.append("The images and the radar disagree here: the images show a change, and the radar does not support it.")
         te.append("చిత్రాలు, రాడార్ ఇక్కడ ఏకీభవించడం లేదు: చిత్రాల్లో మార్పు కనిపిస్తోంది, రాడార్ దాన్ని సమర్థించడం లేదు.")
-    if rubric.area_wide(ev):
-        hi.append("असर सिर्फ़ मेरे तक सीमित नहीं दिखता। यह घटना से मेल खाता है, पर यह उसके कारण का प्रमाण नहीं है।")
-        en.append("The effect does not look limited to me. That is consistent with the event, but it is not proof of the cause.")
-        te.append("ప్రభావం నా వరకే పరిమితమైనట్లు కనిపించడం లేదు. ఇది సంఘటనకు సరిపోలుతోంది, కానీ అది కారణానికి రుజువు కాదు.")
     if ev.weather is None:
         hi.append("उस समय का मौसम डेटा मुझे नहीं मिल सका।")
         en.append("I could not get weather data for that time.")
@@ -106,7 +147,7 @@ def templates(ev: Evidence) -> tuple[str, str, str]:
         en.append("No trustworthy image shows me after the event yet.")
         te.append("సంఘటన తర్వాత నన్ను చూపే నమ్మదగిన చిత్రం ఇంకా లేదు.")
 
-    tests = explain_mod.tests_line(ev)
+    tests = tests_line(ev)
     if tests:
         hi.append(tests[0])
         en.append(tests[1])
