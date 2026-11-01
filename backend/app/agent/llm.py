@@ -15,13 +15,17 @@ import io
 import json
 import logging
 import re
+import subprocess
 import sys
+import tempfile
 import threading
+import time
 import wave
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 from typing import Literal, TypeVar
 
 from pydantic import BaseModel
@@ -51,8 +55,25 @@ _key_in_use: str | None = None
 last_errors: dict[str, str] = {}
 
 
+# After repeated failures, stop asking for a while, so an outage costs a visitor no long waits.
+FAILURE_WINDOW_S = 120.0
+FAILURES_TO_PAUSE = 2
+PAUSE_S = 180.0
+_recent_failures: list[float] = []
+_paused_until = 0.0
+
+
+def _record_failure() -> None:
+    global _paused_until
+    now = time.monotonic()
+    _recent_failures[:] = [t for t in _recent_failures if now - t < FAILURE_WINDOW_S] + [now]
+    if len(_recent_failures) >= FAILURES_TO_PAUSE:
+        _paused_until = now + PAUSE_S
+        _recent_failures.clear()
+
+
 def available() -> bool:
-    return get_settings().gemini_enabled
+    return get_settings().gemini_enabled and time.monotonic() >= _paused_until
 
 
 _BOUNDED = ThreadPoolExecutor(max_workers=8, thread_name_prefix="llm")
@@ -66,6 +87,7 @@ def bounded(seconds: float, fn, *args, **kwargs):
         return future.result(timeout=seconds)
     except FutureTimeout:
         log.warning("gemini call to %s exceeded %.0f s", getattr(fn, "__name__", "?"), seconds)
+        _record_failure()
     except Exception as exc:  # noqa: BLE001
         log.warning("gemini call to %s failed: %s", getattr(fn, "__name__", "?"), exc)
     return None
@@ -93,6 +115,8 @@ def client():
 def _note(capability: str, surface: str, exc: Exception) -> None:
     message = f"{surface}: {type(exc).__name__}: {errors.scrub(exc)[:300]}"
     last_errors[capability] = message
+    if surface != "interactions":  # the first of two surfaces failing is not yet a failed call
+        _record_failure()
     log.warning("gemini %s failed on %s", capability, message)
 
 
@@ -114,8 +138,56 @@ def _legacy_parts(parts: list[dict]) -> list:
     return out
 
 
+def _claude_cli(capability: str, parts: list[dict], schema: type[BaseModel] | None, timeout: float) -> str | None:
+    """Temporary local-demo path: one prompt through the signed-in claude CLI. No tools except reading
+    the images written here, and no project context, since the prompt can hold a farmer's text.
+    Audio is not supported, so it returns None and the app's existing fallback applies."""
+    settings = get_settings()
+    if any(p["type"] != "text" and not str(p.get("mime_type", "")).startswith("image/") for p in parts):
+        return None
+    with tempfile.TemporaryDirectory(prefix="forge-llm-") as folder:
+        lines, images = [], 0
+        for part in parts:
+            if part["type"] == "text":
+                lines.append(part["text"])
+            else:
+                images += 1
+                path = Path(folder) / f"image-{images}.{part['mime_type'].split('/')[-1]}"
+                path.write_bytes(base64.b64decode(part["data"]))
+                lines.append(f"[Image file: {path}]")
+        if schema is not None:
+            lines.append("Reply with only one JSON object matching this JSON Schema, with no other text:\n"
+                         + json.dumps(schema.model_json_schema()))
+        command = [settings.claude_cli_path, "-p", "--output-format", "json", "--model", settings.claude_cli_model,
+                   "--no-session-persistence", "--strict-mcp-config", "--setting-sources", "user",
+                   "--tools", "Read" if images else ""]
+        if images:
+            command += ["--allowedTools", "Read", "--add-dir", folder]
+        try:
+            done = subprocess.run(command, input="\n\n".join(lines), capture_output=True, text=True,
+                                  timeout=timeout, cwd=folder, check=False)
+            payload = json.loads(done.stdout)
+            if payload.get("is_error"):
+                raise RuntimeError(str(payload.get("result"))[:200])
+            return str(payload.get("result") or "").strip() or None
+        except Exception as exc:  # noqa: BLE001
+            _note(capability, "claude_cli", exc)
+            return None
+
+
+def _json_object(text: str) -> str:
+    return text[text.index("{"): text.rindex("}") + 1]
+
+
 def _structured[T: BaseModel](capability: str, model: str, parts: list[dict], schema: type[T],
                               timeout: float | None = None) -> T | None:
+    if get_settings().llm_provider == "claude_cli":
+        raw = _claude_cli(capability, parts, schema, timeout or 40.0)
+        try:
+            return schema.model_validate_json(_json_object(raw)) if raw else None
+        except Exception as exc:  # noqa: BLE001
+            _note(capability, "claude_cli", exc)
+            return None
     gem = client()
     if gem is None:
         return None
@@ -152,6 +224,8 @@ def _structured[T: BaseModel](capability: str, model: str, parts: list[dict], sc
 
 
 def _plain_text(capability: str, model: str, parts: list[dict]) -> str | None:
+    if get_settings().llm_provider == "claude_cli":
+        return _claude_cli(capability, parts, None, 40.0)
     gem = client()
     if gem is None:
         return None

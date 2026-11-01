@@ -351,7 +351,10 @@ def _refresh_needs(s, case: Case) -> None:
 @app.get("/api/health")
 def health() -> dict:
     settings = get_settings()
-    return {"status": "ok", "gemini": settings.gemini_enabled, "version": VERSION}
+    body = {"status": "ok", "gemini": settings.gemini_enabled, "version": VERSION}
+    if settings.llm_provider != "gemini":
+        body["llm_provider"] = settings.llm_provider
+    return body
 
 
 # Cases

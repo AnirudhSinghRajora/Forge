@@ -167,3 +167,19 @@ def test_raising_llm_is_a_none_from_bounded():
         raise RuntimeError("x")
 
     assert llm.bounded(1, boom) is None
+
+
+def test_repeated_failures_pause_the_model_then_it_returns(monkeypatch):
+    from app.agent import llm
+
+    monkeypatch.setattr(llm, "_paused_until", 0.0)
+    monkeypatch.setattr(llm, "_recent_failures", [])
+    monkeypatch.setattr(llm, "FAILURES_TO_PAUSE", 2)
+    monkeypatch.setattr(llm.get_settings(), "gemini_api_key", "x", raising=False)
+    assert llm.available() is True
+    llm._record_failure()
+    assert llm.available() is True
+    llm._record_failure()
+    assert llm.available() is False
+    monkeypatch.setattr(llm, "_paused_until", 0.0)
+    assert llm.available() is True

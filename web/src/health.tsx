@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { getHealth, type Health } from "./api";
+import { setProviderName } from "./i18n";
 
 interface HealthState { health: Health | null; reachable: boolean | null; recheck: () => void }
 const Ctx = createContext<HealthState>({ health: null, reachable: null, recheck: () => {} });
@@ -11,6 +12,7 @@ export function HealthProvider({ children }: { children: React.ReactNode }) {
     getHealth()
       .then((h) => {
         setHealth(h);
+        setProviderName(h.llm_provider === "claude_cli" ? "Claude" : "Gemini");
         setReachable(true);
       })
       .catch(() => setReachable(false));

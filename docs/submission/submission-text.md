@@ -85,7 +85,7 @@ The verdict stays off the LLM because the same evidence has to give the same lev
 
 | Item | Value |
 |---|---|
-| Prototype | `TODO(deploy)` |
-| Demo video | `TODO(video)` |
+| Prototype | https://exercise-instance-promptly-proxy.trycloudflare.com |
+| Demo video | https://drive.google.com/file/d/1Tt_5LF6CzvONoBqgDpttNTY_Go2xSDd1/view?usp=sharing |
 | Repository | https://github.com/AnirudhSinghRajora/Forge |
 | Deck | Team to add a link with view access |

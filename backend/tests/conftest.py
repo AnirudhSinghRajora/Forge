@@ -208,3 +208,12 @@ def fake_weather(monkeypatch):
     monkeypatch.setattr(weather_tool, "fetch_weather", lambda *a, **k: weather())
     monkeypatch.setattr(alerts, "locate", lambda *a, **k: {"district": "Sirsa", "state": "Haryana"})
     return weather_tool
+
+
+@pytest.fixture(autouse=True)
+def _llm_pause_is_per_test(monkeypatch):
+    from app.agent import llm
+
+    monkeypatch.setattr(llm, "_paused_until", 0.0)
+    monkeypatch.setattr(llm, "_recent_failures", [])
+    monkeypatch.setattr(llm, "FAILURES_TO_PAUSE", 10**6)

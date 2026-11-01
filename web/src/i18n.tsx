@@ -1184,6 +1184,10 @@ function initialLang(): Lang {
   return "hi";
 }
 
+// Copy names the model that is really answering; the local Claude demo must not read "Gemini".
+let providerName = "Gemini";
+export function setProviderName(name: string) { providerName = name; }
+
 export function I18nProvider({ children }: { children: React.ReactNode }) {
   const [lang, setLangState] = useState<Lang>(initialLang);
   const setLang = useCallback((l: Lang) => {
@@ -1202,7 +1206,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
       const row: Row | undefined = S[key];
       let out: string = row ? row[IDX[lang]] : key;
       if (vars) for (const [k, v] of Object.entries(vars)) out = out.replaceAll(`{${k}}`, String(v));
-      return out;
+      return providerName === "Gemini" ? out : out.replaceAll("Gemini", providerName);
     },
   }), [lang, setLang]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;

@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=BACKEND_DIR / ".env", extra="ignore")
 
     gemini_api_key: str | None = None
+    # Temporary, for a local demo: answer through the signed-in claude CLI instead of the Gemini API.
+    llm_provider: str = "gemini"
+    claude_cli_path: str = "claude"
+    claude_cli_model: str = "sonnet"
     gemini_model_pro: str = "gemini-3.1-pro-preview"
     gemini_model_flash: str = "gemini-3.8-flash"
     gemini_model_tts: str = "gemini-3.8-flash-tts"
@@ -78,7 +82,7 @@ class Settings(BaseSettings):
 
     @property
     def gemini_enabled(self) -> bool:
-        return bool(self.gemini_api_key)
+        return bool(self.gemini_api_key) or self.llm_provider == "claude_cli"
 
 
 @lru_cache

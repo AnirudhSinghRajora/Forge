@@ -4,8 +4,8 @@ A field's own satellite record of a specific crop loss, tested against look-alik
 
 Forge '26 Gen AI Buildathon. Theme 2, Problem 2.
 
-- **Live app:** `TODO(deploy)`
-- **Demo video:** `TODO(video)`
+- **Live app:** https://exercise-instance-promptly-proxy.trycloudflare.com
+- **Demo video:** https://drive.google.com/file/d/1Tt_5LF6CzvONoBqgDpttNTY_Go2xSDd1/view?usp=sharing
 
 > **Read before trusting any result.** There is no plot-level ground truth for any event here. The evidence shows consistency, not accuracy. Sensitivity via the field-signal test is shown only on the event the method was designed on. Radar does not confirm the Bhiwani hail band. No Cyclone Arnab signal is established. None of the Gemini features has been run against the real API. See [Limitations](#limitations).
 
@@ -45,7 +45,7 @@ cd backend && uv run python -m app.agent.llm --selftest
 docker exec -it fasalsaakshi .venv/bin/python -m app.agent.llm --selftest   # in the deployed container
 ```
 
-Selftest result: `TODO(gemini)`
+Live checks on the deployed app, 1 Nov 2026: report parsing, Ask the witness (English and Hindi, including a refusal), the image second opinion and speech all answered through Gemini 3.6 Flash and Gemini 3.8 Flash-Lite TTS. Gemini 3.8 Flash and 3.1 Pro returned quota errors on our key, so the models are set by environment variable.
 
 ## Architecture
 
@@ -304,7 +304,7 @@ Independent runs from a clean database produced identical hashes for these recor
 
 ### Time
 
-Measured on the development machine, on a slow link shared with other jobs ([section 8](docs/validation/engine-results.md#8-read-time)). Hosted timing: `TODO(deploy)`.
+Measured on the development machine, on a slow link shared with other jobs ([section 8](docs/validation/engine-results.md#8-read-time)). Hosted timing: not yet measured.
 
 | Step | Time |
 |---|---|

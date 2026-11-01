@@ -66,7 +66,7 @@ const json = (body: unknown): RequestInit => ({
   body: JSON.stringify(body),
 });
 
-export interface Health { status: string; gemini: boolean; version: string }
+export interface Health { status: string; gemini: boolean; version: string; llm_provider?: string }
 export const getHealth = () => request<Health>("/api/health", {}, 8000);
 
 export interface CreateCaseInput { audio?: Blob | null; text?: string; lat: number; lon: number; lang: string }
