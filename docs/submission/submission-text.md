@@ -55,6 +55,18 @@ Three exhibits make this readable: The Field Testifies (the evidence told by the
 
 An insurer may decline this evidence, as no clause provides for it. Details are in the repo's `docs/validation/engine-results.md`.
 
+### How Gen AI is used
+
+Gemini understands, explains and questions. Code measures and decides. A model can't talk the verdict up.
+
+- **Understands the report:** Hindi, Telugu and Hinglish voice or text into structured facts, with a clarifying question when it's ambiguous.
+- **Ask the witness:** answers a farmer's question about their own result, grounded only in that case's record and cited clauses. Answers must cite what they used and pass digit and phrase checks, and it refuses what the record doesn't cover.
+- **Contradiction question:** asks when the statement and evidence don't fit. It changes nothing by itself.
+- **Second opinion on images:** advisory only, and never fed to the rubric. A disagreement shows as "needs a person to look".
+- **Speech and related reports:** testimony read aloud, and grounded search for related reports, which never change a level.
+
+The verdict stays off the LLM because the same evidence has to give the same level, and a sealed result has to be reproducible. None of this has been run against the real API yet: `TODO(gemini)`.
+
 ### Technical architecture
 
 **One container:** FastAPI serves the built Vite + React (MapLibre) app and the API from one URL. SQLite by default, Postgres through `DATABASE_URL`.
@@ -65,7 +77,7 @@ An insurer may decline this evidence, as no clause provides for it. Details are 
 
 **Other data:** Open-Meteo with NASA POWER as fallback, NDMA SACHET alerts, and a cited clause corpus from PMFBY Operational Guidelines 2023.
 
-**LLM optional:** the verdict, cross-examination and testimony text are deterministic, so the same evidence gives the same level with or without an LLM. Gemini is used for parsing voice and text, policy answers under validation, speech, and finding related reports. All of that is still unverified until a key is tested. Any LLM text must pass a validator: every digit must exist in the evidence.
+**LLM optional:** the verdict, cross-examination and testimony text are deterministic, so the same evidence gives the same level with or without an LLM. Each Gemini feature falls back to fixed text or a clear "not available" state. Its output is stored outside the sealed core.
 
 **Verification:** a SHA-256 hash over the polygon, scene ids, archives, seed, engine version, numbers, and a digest of the verdict and weather. Public recomputation reads satellite numbers fresh from the archive, with caches bypassed. Independent runs from a clean database produced identical hashes.
 

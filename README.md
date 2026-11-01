@@ -7,7 +7,7 @@ Forge '26 Gen AI Buildathon. Theme 2, Problem 2.
 - **Live app:** `TODO(deploy)`
 - **Demo video:** `TODO(video)`
 
-> **Read before trusting any result.** There is no plot-level ground truth for any event here. The evidence shows consistency, not accuracy. Sensitivity via the field-signal test is shown only on the event the method was designed on. Radar does not confirm the Bhiwani hail band. No Cyclone Arnab signal is established. Gemini paths have not been run against the real API. See [Limitations](#limitations).
+> **Read before trusting any result.** There is no plot-level ground truth for any event here. The evidence shows consistency, not accuracy. Sensitivity via the field-signal test is shown only on the event the method was designed on. Radar does not confirm the Bhiwani hail band. No Cyclone Arnab signal is established. None of the Gemini features has been run against the real API. See [Limitations](#limitations).
 
 ## What it is, and who it is for
 
@@ -22,6 +22,30 @@ A farmer in India reports a loss, in Hindi, Telugu or English, and outlines the 
 **For:** PMFBY-insured farmers, and the people who help them (bank staff, agriculture officers, FPOs, KVKs).
 
 **It is not** a claim decision, an insurer tool, a yield estimate, or proof of cause. It never files anything. It records a filing only when the farmer enters a reference number. No clause in the guidelines provides for farmer-submitted satellite evidence, and an insurer may decline to look at it.
+
+## How Gen AI is used
+
+**Gemini understands, explains and questions. Code measures and decides. A model can't talk the verdict up.**
+
+| Feature | What Gemini does | What holds it back | Without Gemini |
+|---|---|---|---|
+| Understands the report | Turns Hindi, Telugu and Hinglish voice or text into structured facts, and asks a clarifying question if the report is ambiguous | The question passes the validator and changes no field. The farmer confirms every fact | Keyword parser, typed text or the browser's speech recognition |
+| Ask the witness (`agent/witness.py`) | Answers a farmer's question about their own result, in their language | It sees only an allow-listed copy of that case's record and the retrieved clauses. An answer is shown only if it cites the fields or clauses it used, and passes the digit check and phrase denylist. It refuses what the record doesn't cover | Suggested questions get the record's fixed words, rule questions get retrieved clauses, and anything else gets a refusal |
+| Contradiction question (`agent/advisory.py`) | Compares the statement with the evidence on date, event and crop stage, and asks one question | It's only a question. A new date or event counts only if the check is run again, and the seal stays as it is | "Not available" |
+| Second opinion on images (`agent/advisory.py`) | Reads the before and after images | Labelled advisory, and never fed to the rubric. A disagreement shows as "needs a person to look" and changes nothing | "Not available" |
+| Speech | Reads the testimony aloud | Reads deterministic text | Browser speech |
+| Related reports | Finds them through grounded search | Shown beside the result. They never change a level | Skipped |
+
+**Why the verdict stays off the LLM.** The same evidence has to give the same level, or nothing here can be reproduced. A sealed result has to be checkable by someone who doesn't trust us or a model. And a model asked to help a farmer can talk a weak result up. So the rubric reads measured values only. Advisory output is stored beside the record, outside the sealed core, and the rubric never reads it. Verdict, explanation, testimony and cross-examination text are deterministic templates.
+
+**None of this has been run against the real API.** Tests use stubs and fakes, and the running app reports `gemini: false`. To test it with a key:
+
+```bash
+cd backend && uv run python -m app.agent.llm --selftest
+docker exec -it fasalsaakshi .venv/bin/python -m app.agent.llm --selftest   # in the deployed container
+```
+
+Selftest result: `TODO(gemini)`
 
 ## Architecture
 
@@ -72,11 +96,11 @@ flowchart TB
   tools --> power
   tools --> sachet
   tools --> osm
-  api -. "with a key: parsing, policy answers, speech" .-> gemini
+  api -. "with a key: report parsing, Ask the witness, policy answers, question, image opinion, speech" .-> gemini
   tools -. "with a key: finding related reports" .-> gemini
 ```
 
-Branching is an explicit state graph, written in code. The verdict and its text are deterministic. Gemini understands, explains and questions; code measures and decides. It parses voice and text, answers a farmer's questions from that case's record and the cited clauses, asks one question when the statement and the evidence do not fit, gives an advisory second look at the images, reads testimony aloud and finds related reports. Its text passes the digit check and phrase denylist and is stored outside the sealed core, so it cannot move a level or a hash. All of that is still unverified until a key is tested. The investigation graph, as built in `build_graph` in `backend/app/agent/graph.py`:
+Branching is an explicit state graph, written in code. The verdict and its text are deterministic. The investigation graph, as built in `build_graph` in `backend/app/agent/graph.py`:
 
 ```mermaid
 flowchart LR
@@ -170,7 +194,7 @@ npm run test:e2e                         # needs the app running; see web/playwr
 REAL=1 npm run test:e2e                  # also runs the real end-to-end path, real satellite data
 ```
 
-At the time of writing, the offline suite gave 628 passed, with 6 live tests deselected. Plain `uv run pytest` would include the live tests, so pass the marker. Test fixtures live in `backend/tests/` only.
+Our own last runs gave 684 backend tests passed, with 6 live tests deselected, and 75 mocked UI tests passed. The mocked UI run needs the dev server (`npm run dev`). Plain `uv run pytest` would include the live tests, so pass the marker. Test fixtures live in `backend/tests/` only.
 
 `backend/tests/geo_*.py` are validation scripts on real data, not pytest tests.
 
@@ -216,7 +240,7 @@ Radar alone can reach moderate at most.
 
 **Claim path** (`backend/app/agent/claim_path.py`). Routes by insured status, crop stage, peril and crop before any deadline appears. The 72-hour countdown shows only on the localized and post-harvest add-on routes, and only while the time is open. State notification is always treated as unknown: "confirm with your bank or 14447". Rule text and clause ids are in `backend/data/policy/`.
 
-**The LLM cannot change a number or a level.** The verdict, explanation, testimony and cross-examination come from deterministic templates in Hindi, English and Telugu. `LLM_POLISH=true` turns on rewrites of those, and `LLM_PLANNER=true` the LLM planner; both are off by default, so the same evidence gives the same level with or without an LLM. All LLM text passes `backend/app/agent/validate.py`. Every digit sequence must exist in the evidence, and banned claims and spelled-out percentages are blocked. Otherwise the deterministic template is used.
+**The LLM cannot change a number or a level** (see [How Gen AI is used](#how-gen-ai-is-used)). The verdict, explanation, testimony and cross-examination come from deterministic templates in Hindi, English and Telugu. `LLM_POLISH=true` turns on rewrites of those, and `LLM_PLANNER=true` the LLM planner; both are off by default, so the same evidence gives the same level with or without an LLM. All LLM text passes `backend/app/agent/validate.py`. Every digit sequence must exist in the evidence, and banned claims and spelled-out percentages are blocked. Otherwise the deterministic template is used.
 
 ## Data sources
 
@@ -289,7 +313,7 @@ Measured on the development machine, on a slow link shared with other jobs ([sec
 | Verify: the field's own 20 numbers | 31 to 41 s across the three records |
 | Verify: a full check, re-downloaded | 395 s and 338 s (104 numbers), 281 s (85 numbers) |
 
-The 90 s cold target is not met from this machine. In the built container, on an empty disk and a pin never run before (Kirtan, Hisar), on this link of about 0.39 MB/s: first provisional result at 75 s, everything sealed at 497 s, about 1 GB of memory, and a 552 KB PDF. Section 8 has tool-by-tool cold times.
+The 90 s cold target is not met from this machine. In the built container, on an empty disk and a pin never run before (Kirtan, Hisar), on this link of about 0.39 MB/s: earliest provisional result at 75 s, everything sealed at 497 s, about 1 GB of memory, and a 552 KB PDF. Section 8 has tool-by-tool cold times.
 
 ## Limitations
 

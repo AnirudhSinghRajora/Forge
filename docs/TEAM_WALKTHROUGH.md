@@ -23,6 +23,8 @@ A farmer reports a crop loss and outlines the field. The app compares that field
 
 Three things we never claim: that hail caused it, that an insurer has to accept it, or that anyone gets money.
 
+The Gen AI line: **Gemini understands, explains and questions. Code measures and decides. A model can't talk the verdict up.** None of the Gemini features has been run against the real API yet. Selftest result: `TODO(gemini)`.
+
 ## 2. Guided tour of one request
 
 Follow this with the files open. All paths are from the repo root.
@@ -37,7 +39,7 @@ Follow this with the files open. All paths are from the repo root.
 | Pin check | `check_pin` in `backend/app/agent/plot.py`, which keeps the pin in the service area |
 | Parsing | `parse_text` in `backend/app/agent/parse.py`: keywords and date patterns, no LLM needed. If Gemini is on, `llm.parse_text` or `llm.parse_audio` result is merged in |
 
-If something is missing, the response carries `needs` and `questions`. It never invents a crop or a date. Shortcuts in `web/src/places.ts` only move the map and show a reported date with its source. They set no date, and create no case and no evidence.
+With Gemini on, a clarifying question can come back (`parsed.clarifying_question`, shown on `Confirm.tsx`). It passes the validator and changes no field. If something is missing, the response carries `needs` and `questions`. It never invents a crop or a date. Shortcuts in `web/src/places.ts` only move the map and show a reported date with its source. They set no date, and create no case and no evidence.
 
 ### Step 2. The field and the questions
 
@@ -145,12 +147,14 @@ The demo records never set insured, because Bhiwani is a signal case and insuran
 
 - `agent/explain.py`: headlines, `tests_line` (the two answers in words), templates. Deterministic.
 - `agent/testimony.py`: The Field Testifies. Deterministic.
-- `agent/validate.py`: any LLM text goes through this, such as policy answers. Every digit sequence must match the evidence, and payout talk and banned claims are rejected. On failure the template is used.
+- `agent/witness.py`, `ask`: Ask the witness, through `POST /api/cases/{id}/ask`. `evidence_facts` is the allow-list of what the model may see. `accepted` shows an answer only if it cites what it used and passes the checks, and every check fails closed. With no key, `_deterministic` answers "why this result" and "what next" in the record's fixed words, and rule questions go to retrieved clauses. Anything else gets a refusal.
+- `agent/advisory.py`: `run_statement_check` (the contradiction question) and `run_image_opinion` (second opinion on images). They run on their own threads, read a copy of the evidence, and write only their own entry in `exhibits`. That entry isn't hashed, and the rubric never reads it. The seal doesn't wait for them.
+- `agent/validate.py`: any LLM text goes through this. Every digit sequence must match the evidence, and payout talk and banned claims are rejected. On failure the template is used.
 - `backend/app/disclosures.py`: the selection label ("strongest of 200", "median of the original 40", "strongest of 51 usable"), shown wherever such a plot's result appears, including the PDF. It is not part of the hash.
 
 ### Step 9. What the farmer sees
 
-- `web/src/screens/Verdict.tsx`, with `components/Testimony.tsx`, `components/TwoQuestions.tsx`, `map/Vanishing.tsx`, `components/TenFieldDraw.tsx`, `components/ObjectionCard.tsx`.
+- `web/src/screens/Verdict.tsx`, with `components/WitnessChat.tsx`, `components/Advisories.tsx`, `components/Testimony.tsx`, `components/TwoQuestions.tsx`, `map/Vanishing.tsx`, `components/TenFieldDraw.tsx`, `components/ObjectionCard.tsx`.
 - `web/src/screens/Action.tsx`: route, draft, and "I submitted". `POST /api/cases/{id}/submission` refuses without a reference number, so we never claim a filing that didn't happen.
 - `backend/app/pdf/render.py`: the evidence PDF with the QR code. The QR uses `PUBLIC_WEB_URL`.
 
@@ -248,7 +252,7 @@ Clear cases are stable. Near 0.025, far p moves by a factor of about 4-8, becaus
 We did not change the method, because that would invalidate the locked runs. We also rejected multi-seed runs at seal time, which would multiply slow reads. Instead, a deciding p from 0.01 to 0.075 is labelled **near the threshold**.
 
 Two things to know:
-- The strongest plot's ring p is 0.0597 on its sealed record. The 30 seeds gave 0.0249 to 0.0498. So the sealed draw lies just outside the range those seeds showed. Thirty seeds don't cover every draw. Its verdict rests on the far test, which didn't move.
+- The strongest plot's ring p is 0.0597 on its sealed record. The 30 seeds gave 0.0249 to 0.0498. So the sealed draw lies just outside the range those seeds showed. Thirty seeds don't bound another seed (engine-results 7c). Its verdict rests on the far test, which didn't move, and the level doesn't change.
 - The caveat shows on the typical and Arnab records, because their deciding far p (0.039 and 0.0292) is in the band. It doesn't show on the strongest plot's verdict, because far p 0.005 clearly passes. Its ring answer still reads "No, but near the line".
 
 ### The field's twin
@@ -317,7 +321,9 @@ So the luck of one draw is about ±0.035. On the live records: strongest of 200 
 | Radar alone caps at moderate | It's a less direct signal for crop loss |
 | Verdict before exhibits | A cold run takes minutes on a thin link. Exhibits that can't change the verdict shouldn't hold it up |
 | At most 2 background reads at once | On a thin link, parallel reads meant every exhibit timed out and none landed |
-| Verdict and its text are deterministic; LLM polish and planner off by default | The same evidence gives the same level with or without an LLM. A demo shouldn't depend on one API |
+| Verdict and its text are deterministic; LLM polish and planner off by default | The same evidence gives the same level with or without an LLM. A sealed result must be reproducible. A model asked to help a farmer can talk a weak result up. A demo shouldn't depend on one API |
+| Gemini answers only from an allow-listed record, and has to cite it | A grounded answer can be checked. An answer that can't say what it rests on isn't shown |
+| Contradiction question and image opinion stay outside the seal | They're advice from a model. They can't move a level or a hash, and a disagreement goes to a person |
 | News never changes a level | Search hits carry no reliable date, place or peril check. It's shown as related reports |
 | Report thresholds unchanged, label 0.01-0.075 as near the threshold | Seeds showed results near 0.025 aren't stable. Changing the method would invalidate the locked runs. Multi-seed runs at seal would multiply slow reads |
 | Map shortcuts set no date | A preset date would be our input presented as the farmer's. A different date also re-samples |
@@ -390,7 +396,7 @@ That's a fair worry, and it's disclosed. The far test and post-scene rule came a
 
 ### 11. "Your run took minutes. How does this scale?"
 
-Honestly, we haven't load-tested it. In the built container on an empty disk, on a link of about 0.39 MB/s, a pin never run before gave a first provisional result at 75 s and sealed at 497 s. On one development machine on a slow shared link, a verdict on warm data takes 10 to 20 s, and a warm run with part of the data cached gave verdicts at about 70-75 s. Our 90 s cold target wasn't met from this machine (engine-results 8 has the tool times). Hosted timing isn't in this document until it's measured. Reads are windowed, and each byte is downloaded once per run. Runs, rate limits and the scheduler live in one process, so it's one instance today. Scaling further would mean separate workers and a shared cache, which we haven't built.
+Honestly, we haven't load-tested it. In the built container, on an empty disk and a pin never run before, on our link of about 0.39 MB/s, the earliest provisional result came at 75 s and everything was sealed at 497 s. So a judge's new pin takes minutes from this machine. A warm pin gives a verdict in 10 to 20 s. Hosted timing isn't in this document until it's measured. Reads are windowed, and each byte is downloaded once per run. Runs, rate limits and the scheduler live in one process, so it's one instance today. Scaling further would mean separate workers and a shared cache, which we haven't built.
 
 ### 12. "Weather shows no hail codes. Why say corroborated?"
 
@@ -398,11 +404,13 @@ Corroborated means weather, or an official alert whose hazard matches the report
 
 ### 13. "Isn't this just a pipeline with a chat front end?"
 
-Look at the trace. Decisions change the path: a bad scene gets rejected, radar takes over, a conceded objection triggers a new search, a weather peak on another date triggers a re-run, and late evidence can revise the verdict. The surveyor's objections can be conceded. Branching is an explicit state graph, and it works with no LLM, because the reasoning that matters is code. There's an LLM planner option, and it's off by default. What's fair to say: the agent's value here is in checking itself, not in a model's prose.
+Look at the trace. Decisions change the path: a bad scene gets rejected, radar takes over, a conceded objection triggers a new search, a weather peak on another date triggers a re-run, and late evidence can revise the verdict. The surveyor's objections can be conceded. Branching is an explicit state graph, and it works with no LLM, because the reasoning that matters is code. There's an LLM planner option, and it's off by default. Gemini's role is around that core: see question 23. What's fair to say: the agent's value here is in checking itself, not in a model's prose.
 
 ### 14. "What does Gemini actually do? Have you tested it?"
 
-Parsing voice and text, policy answers under validation, speech, and finding related reports. **It doesn't decide the verdict, and it doesn't write verdict or testimony text.** Those are deterministic. Polish and the planner exist behind `LLM_POLISH` and `LLM_PLANNER`, off by default. **The running app has been on `gemini: false`, and tests use stubs. So these paths are unverified until a key is tested** (`deploy/README.md` has the self-test). Without a key, the verdict, cross-examination and templated Hindi, Telugu and English still run, and the banner says language help is off. Related reports never change a level. Any LLM text must pass a validator: every digit has to exist in the evidence.
+Six things: understanding the report, with a clarifying question; Ask the witness, grounded in the farmer's own record; a contradiction question; an advisory second opinion on images; speech; and finding related reports. **It doesn't decide the verdict, and it doesn't write verdict or testimony text.** Polish and the planner exist behind `LLM_POLISH` and `LLM_PLANNER`, off by default.
+
+**None of this has been run against the real API.** The running app has been on `gemini: false`, and tests use stubs and fakes. The test is `uv run python -m app.agent.llm --selftest`, or `docker exec -it fasalsaakshi .venv/bin/python -m app.agent.llm --selftest` on the server. Result: `TODO(gemini)`. Unless that shows passes, say it's untested. Without a key, the verdict, cross-examination and templated Hindi, Telugu and English still run, and the banner says language help is off. Any LLM text must pass a validator: every digit has to exist in the evidence.
 
 ### 15. "Isn't this what YES-TECH already does?"
 
@@ -458,12 +466,24 @@ The contract's Addendum 8 records the decisions that came out of it. Stick to th
 
 The repo records these decisions, not a separate report of findings, so don't describe more than this.
 
+### 23. "Where's the Gen AI, if code decides?"
+
+"Gemini understands, explains and questions. Code measures and decides. A model can't talk the verdict up."
+
+- **Understands:** Hindi, Telugu and Hinglish voice or text into structured facts, with a clarifying question when the report is ambiguous.
+- **Explains:** Ask the witness answers "why weak?" or "what next?" from that case's record and cited clauses. It must cite what it used, pass the digit check and phrase denylist, and refuse what the record doesn't cover. It also reads the testimony aloud.
+- **Questions:** it compares the statement with the evidence and asks about a mismatch on date, event or crop stage. It also gives an advisory read of the images. If that disagrees with the numbers, it shows "needs a person to look".
+- **Finds:** related reports through grounded search, which never change a level.
+
+Why not let it decide? Because the same evidence has to give the same level, or the seal means nothing. And a farmer-side model asked to help can talk a result up. That's the failure we designed against, not a lack of ambition. Be plain about status: none of this has been run against the real API yet (`TODO(gemini)`), so don't describe a Gemini result you haven't seen.
+
 ## 6. Words to use and words to avoid
 
 | Say | Don't say |
 |---|---|
 | Consistent with hail | Hail caused this |
 | Strongest of 200 scanned; median of the original 40; strongest of 51 usable | Our best case, or the plot, with no label |
+| Gemini understands, explains and questions; code measures and decides | Gemini decides, or the AI verdict |
 | Near the threshold (p from 0.01 to 0.075) | Passed, or failed, with no caveat |
 | Satellite numbers recomputed; verdict and weather checked for tampering | The whole result is verified |
 | The effect does not look limited to your field | All the neighbours were hit |
