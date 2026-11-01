@@ -26,6 +26,10 @@ docker run -d --name fasalsaakshi --restart unless-stopped --network fasalsaaksh
   -e PUBLIC_WEB_URL="https://${DOMAIN}" \
   -e TRUST_PROXY=true \
   -e GEMINI_API_KEY="${GEMINI_API_KEY:-}" \
+  -e GEMINI_MODEL_FLASH="${GEMINI_MODEL_FLASH:-gemini-3.6-flash}" \
+  -e GEMINI_MODEL_PRO="${GEMINI_MODEL_PRO:-gemini-3.6-flash}" \
+  -e GEMINI_MODEL_TTS="${GEMINI_MODEL_TTS:-gemini-3.8-flash-lite-tts}" \
+  -e ENABLE_SCHEDULER=false \
   -e SCHEDULER_TOKEN="$(cat "$TOKEN_FILE")" \
   fasalsaakshi:latest
 
