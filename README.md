@@ -76,7 +76,7 @@ flowchart TB
   tools -. "with a key: finding related reports" .-> gemini
 ```
 
-Branching is an explicit state graph, written in code. The verdict and its text are deterministic. Gemini is used only for parsing voice and text, policy answers under validation, speech, and finding related reports, and all of that is still unverified until a key is tested. The investigation graph, as built in `build_graph` in `backend/app/agent/graph.py`:
+Branching is an explicit state graph, written in code. The verdict and its text are deterministic. Gemini understands, explains and questions; code measures and decides. It parses voice and text, answers a farmer's questions from that case's record and the cited clauses, asks one question when the statement and the evidence do not fit, gives an advisory second look at the images, reads testimony aloud and finds related reports. Its text passes the digit check and phrase denylist and is stored outside the sealed core, so it cannot move a level or a hash. All of that is still unverified until a key is tested. The investigation graph, as built in `build_graph` in `backend/app/agent/graph.py`:
 
 ```mermaid
 flowchart LR
@@ -230,7 +230,7 @@ Radar alone can reach moderate at most.
 | NDMA SACHET | Official alerts | The feed carries current alerts only, so the archive starts when archiving starts |
 | OpenStreetMap Nominatim | District lookup | |
 | PMFBY Operational Guidelines 2023, PIB, Lok Sabha replies | Claim path and policy answers | `backend/data/policy/`, sources in `docs/submission/facts.md` |
-| Gemini (optional) | Audio parsing, policy answers under validation, related reports through Search grounding, TTS, embeddings; narrative polish only under `LLM_POLISH=true` | Not verified. See Limitations |
+| Gemini (optional) | Report parsing, witness answers and policy answers under validation, the statement question, an advisory read of the images, related reports through Search grounding, TTS, embeddings; narrative polish only under `LLM_POLISH=true` | Not verified. See Limitations |
 
 ESA WorldCover 2021 was used to sample validation plots only. It is not in the running engine.
 
@@ -321,7 +321,7 @@ The 90 s cold target is not met from this machine. In the built container, on an
 
 **Not verified**
 
-- **Gemini paths:** parsing voice and text, policy answers under validation, speech, and finding related reports. Tests use stubs, and the running app reports `gemini: false`. All of these stay unverified until a key is tested (`deploy/README.md` has the self-test). The model ids are from a docs page and have not been called. Hindi TTS support was not stated on that page. `LLM_POLISH` and `LLM_PLANNER` are off by default. Without a key, the search for related reports is skipped and the level does not change, audio needs the browser's own speech recognition or typed text, and spoken output uses browser speech.
+- **Gemini paths:** parsing voice and text, witness and policy answers under validation, the statement question, the second opinion on images, speech, and finding related reports. Tests use stubs and fakes, and the running app reports `gemini: false`. All of these stay unverified until a key is tested (`deploy/README.md` has the self-test). The model ids are from a docs page and have not been called. Hindi TTS support was not stated on that page. `LLM_POLISH` and `LLM_PLANNER` are off by default. Without a key, the search for related reports is skipped and the level does not change, audio needs the browser's own speech recognition or typed text, and spoken output uses browser speech.
 - **Telugu text** has not been reviewed by a native speaker.
 - **Postgres** is accepted through `DATABASE_URL`, but this repo's tests run on SQLite.
 - **Hosted performance.** All timings above are from one development machine on a slow link. There is no load test. Runs, rate limits and the scheduler live in one process, so this is one instance, not a cluster.

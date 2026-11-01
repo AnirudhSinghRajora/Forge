@@ -67,3 +67,25 @@ def test_the_pdf_prints_near_the_threshold_only_where_it_applies(tmp_path):
     ev.neighbours.far_placebo, ev.neighbours.placebo = placebo(p=0.005), placebo(p=0.035)
     html = _html(tmp_path, ev, "en")
     assert explain.NEAR_LINE[1] not in html and "near the threshold</b>" in html  # the ring line alone
+
+
+def test_the_pdf_prints_the_telugu_finding_translated_status_and_chart_captions(tmp_path):
+    from tests.conftest import placebo
+
+    ev = evidence(p=placebo(p=0.4), far=placebo(p=0.01))
+    te = _html(tmp_path, ev, "te")
+    finding = next(o for o in ev.cross_examination if o.id == "regional_trend").finding_te
+    assert finding and finding in te
+    assert ">rejected<" not in te and ">accepted<" not in te
+    assert "అంగీకరించింది" in te
+    assert "గీత: మీ పొలం" in te  # the chart's axes, said in the reader's language
+    hi = _html(tmp_path, ev, "hi")
+    assert "रेखा: आपका खेत" in hi and ">स्वीकृत<" in hi
+    en = _html(tmp_path, ev, "en")
+    assert "<figcaption></figcaption>" not in en
+
+
+def test_a_failed_exhibit_is_named_in_words_on_the_pdf(tmp_path):
+    html = render.build_html(evidence(cross=[]), {"district": None, "state": None, "event_time": None}, [], "hi",
+                             tmp_path, {render._in_lang(render.EXHIBIT_NAMES, "village", "hi"): "x"})
+    assert "दस खेतों का ड्रॉ" in html and "village:" not in html

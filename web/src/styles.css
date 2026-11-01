@@ -805,6 +805,7 @@ html[data-lang="en"] .path-route { font-weight: 700; }
 .opinion p { margin: 0 0 6px; }
 .opinion .spinner { margin-inline-end: 6px; }
 .opinion-person { border: 2px solid var(--soil); }
+.opinion-person .small { margin-top: 8px; }
 .opinion-off { border-style: dotted; }
 .clarify { margin: 12px 0; padding: 10px 14px; background: var(--paper-2); border-inline-start: 4px solid var(--ink-2); }
 .understood { margin: 6px 0 0; color: var(--ink-2); }
